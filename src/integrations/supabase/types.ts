@@ -14,7 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      sources: {
+        Row: {
+          collection_method: Database["public"]["Enums"]["collection_method"]
+          created_at: string
+          domain: string
+          id: string
+          institution_class: Database["public"]["Enums"]["institution_class"]
+          is_active: boolean
+          is_official_domain: boolean
+          is_primary_document: boolean
+          name: string
+          notes: string | null
+          robots_checked_at: string | null
+          robots_status: string
+          start_url: string
+          tos_checked_at: string | null
+          tos_status: string
+          tos_url: string | null
+          traceability_level: Database["public"]["Enums"]["traceability_level"]
+          updated_at: string
+        }
+        Insert: {
+          collection_method?: Database["public"]["Enums"]["collection_method"]
+          created_at?: string
+          domain: string
+          id?: string
+          institution_class?: Database["public"]["Enums"]["institution_class"]
+          is_active?: boolean
+          is_official_domain?: boolean
+          is_primary_document?: boolean
+          name: string
+          notes?: string | null
+          robots_checked_at?: string | null
+          robots_status?: string
+          start_url: string
+          tos_checked_at?: string | null
+          tos_status?: string
+          tos_url?: string | null
+          traceability_level?: Database["public"]["Enums"]["traceability_level"]
+          updated_at?: string
+        }
+        Update: {
+          collection_method?: Database["public"]["Enums"]["collection_method"]
+          created_at?: string
+          domain?: string
+          id?: string
+          institution_class?: Database["public"]["Enums"]["institution_class"]
+          is_active?: boolean
+          is_official_domain?: boolean
+          is_primary_document?: boolean
+          name?: string
+          notes?: string | null
+          robots_checked_at?: string | null
+          robots_status?: string
+          start_url?: string
+          tos_checked_at?: string | null
+          tos_status?: string
+          tos_url?: string | null
+          traceability_level?: Database["public"]["Enums"]["traceability_level"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
