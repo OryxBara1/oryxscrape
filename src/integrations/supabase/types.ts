@@ -83,6 +83,69 @@ export type Database = {
           },
         ]
       }
+      raw_items: {
+        Row: {
+          collected_at: string
+          collection_method: Database["public"]["Enums"]["collection_method"]
+          content_hash: string
+          created_at: string
+          id: string
+          institution_class: Database["public"]["Enums"]["institution_class"]
+          is_official_domain: boolean
+          is_primary_document: boolean
+          job_id: string | null
+          raw_payload: Json
+          source_id: string
+          source_url: string
+          traceability_level: Database["public"]["Enums"]["traceability_level"]
+        }
+        Insert: {
+          collected_at?: string
+          collection_method?: Database["public"]["Enums"]["collection_method"]
+          content_hash: string
+          created_at?: string
+          id?: string
+          institution_class: Database["public"]["Enums"]["institution_class"]
+          is_official_domain: boolean
+          is_primary_document: boolean
+          job_id?: string | null
+          raw_payload?: Json
+          source_id: string
+          source_url: string
+          traceability_level: Database["public"]["Enums"]["traceability_level"]
+        }
+        Update: {
+          collected_at?: string
+          collection_method?: Database["public"]["Enums"]["collection_method"]
+          content_hash?: string
+          created_at?: string
+          id?: string
+          institution_class?: Database["public"]["Enums"]["institution_class"]
+          is_official_domain?: boolean
+          is_primary_document?: boolean
+          job_id?: string | null
+          raw_payload?: Json
+          source_id?: string
+          source_url?: string
+          traceability_level?: Database["public"]["Enums"]["traceability_level"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "collection_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "raw_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       research_profile_tier_policies: {
         Row: {
           created_at: string
