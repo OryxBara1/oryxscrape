@@ -24,8 +24,10 @@ Phase 3 — screens (real Supabase data via server functions)
 - [x] Step 18: Collection jobs (read-only)
 - [x] Step 19: Items browser (staff_item_tier_matrix + promotion toggle)
 - [x] Step 20: Audit log (filter by check_type/result)
-Phase 4 — read API (/api/public/v1/items)
+Phase 4 — read API
+- [x] Step 23: GET /api/public/v1/items (bearer key, cursor + updated_since, limit capped at 200) + Consumer keys screen
 Phase 5 — Apify collection, normalization, LogoriOn
+
 
 Blocked on user
 - Disable self-signup in Supabase Auth settings (disable_signup is currently false)
