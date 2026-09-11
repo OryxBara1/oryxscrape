@@ -13,11 +13,40 @@ import {
   formatDate,
   inputClass,
 } from "@/components/data-ui";
-import { listResearchProfiles, listTierMatrix, setItemPromotion } from "@/lib/items.functions";
+import {
+  allowedActionsFor,
+  listResearchProfiles,
+  listTierMatrix,
+  setItemPromotion,
+  setItemReviewState,
+  type ReviewAction,
+} from "@/lib/items.functions";
 import type { Database } from "@/integrations/supabase/types";
 
 type TierLabel = Database["public"]["Enums"]["tier_label"];
+type VerificationStatus = Database["public"]["Enums"]["verification_status"];
+type PublicationStatus = Database["public"]["Enums"]["publication_status"];
 const TIERS: TierLabel[] = ["T1", "T2", "T3", "T4", "T5"];
+
+const ACTION_LABELS: Record<ReviewAction, string> = {
+  review: "Review",
+  reject: "Reject",
+  reopen: "Reopen for review",
+  mark_eligible: "Mark eligible",
+  set_internal_only: "Set internal only",
+};
+
+const VERIFICATION_TONE: Record<VerificationStatus, string> = {
+  unreviewed: "neutral",
+  reviewed: "ok",
+  rejected: "bad",
+};
+
+const PUBLICATION_TONE: Record<PublicationStatus, string> = {
+  internal_only: "neutral",
+  eligible: "live",
+};
+
 
 export const Route = createFileRoute("/_authenticated/items")({
   head: () => ({
