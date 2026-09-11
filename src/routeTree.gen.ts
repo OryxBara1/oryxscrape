@@ -16,6 +16,7 @@ import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/items'
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
+import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
@@ -53,6 +54,11 @@ const AuthenticatedJobsRoute = AuthenticatedJobsRouteImport.update({
   path: '/jobs',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedKeysRoute = AuthenticatedKeysRouteImport.update({
+  id: '/keys',
+  path: '/keys',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSourcesRoute = AuthenticatedSourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
+  '/keys': typeof AuthenticatedKeysRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
+  '/keys': typeof AuthenticatedKeysRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/items': typeof AuthenticatedItemsRoute
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
+  '/_authenticated/keys': typeof AuthenticatedKeysRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/items'
     | '/jobs'
+    | '/keys'
     | '/sources'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/items'
     | '/jobs'
+    | '/keys'
     | '/sources'
     | '/api/public/v1/items'
   id:
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/items'
     | '/_authenticated/jobs'
+    | '/_authenticated/keys'
     | '/_authenticated/sources'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
@@ -188,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedJobsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/keys': {
+      id: '/_authenticated/keys'
+      path: '/keys'
+      fullPath: '/keys'
+      preLoaderRoute: typeof AuthenticatedKeysRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/sources': {
       id: '/_authenticated/sources'
       path: '/sources'
@@ -210,6 +229,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedItemsRoute: typeof AuthenticatedItemsRoute
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
+  AuthenticatedKeysRoute: typeof AuthenticatedKeysRoute
   AuthenticatedSourcesRoute: typeof AuthenticatedSourcesRoute
 }
 
@@ -218,6 +238,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedItemsRoute: AuthenticatedItemsRoute,
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,
+  AuthenticatedKeysRoute: AuthenticatedKeysRoute,
   AuthenticatedSourcesRoute: AuthenticatedSourcesRoute,
 }
 
