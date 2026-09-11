@@ -107,7 +107,18 @@ function ItemsScreen() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const changeState = useMutation({
+    mutationFn: (vars: { normalizedItemId: string; action: ReviewAction }) =>
+      applyReviewState({ data: vars }),
+    onSuccess: (res) => {
+      toast.success(`Status updated: ${res.verificationStatus} / ${res.publicationStatus}.`);
+      queryClient.invalidateQueries({ queryKey: ["tier-matrix"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const rows = matrix.data ?? [];
+
 
   return (
     <section className="space-y-6">
