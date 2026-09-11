@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      research_profile_tier_policies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          exposure: Json
+          id: string
+          is_active: boolean
+          policy: Json
+          profile_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          exposure: Json
+          id?: string
+          is_active?: boolean
+          policy: Json
+          profile_id: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          exposure?: Json
+          id?: string
+          is_active?: boolean
+          policy?: Json
+          profile_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_profile_tier_policies_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "research_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      research_profiles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           collection_method: Database["public"]["Enums"]["collection_method"]
@@ -82,7 +153,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_valid_exposure_policy: { Args: { exposure: Json }; Returns: boolean }
+      is_valid_policy_node: {
+        Args: { depth?: number; node: Json }
+        Returns: boolean
+      }
+      is_valid_tier_policy: { Args: { policy: Json }; Returns: boolean }
     }
     Enums: {
       audit_check_type:
