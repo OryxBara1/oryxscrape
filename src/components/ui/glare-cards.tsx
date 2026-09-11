@@ -5,7 +5,6 @@ import { motion, useMotionTemplate, useMotionValue, useSpring, useReducedMotion 
 import { cn } from "@/lib/utils";
 
 export interface GlareCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "style"> {
-  style?: React.CSSProperties;
   children: React.ReactNode;
   glareColor?: string;
   tiltIntensity?: number;
