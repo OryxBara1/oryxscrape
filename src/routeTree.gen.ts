@@ -18,6 +18,7 @@ import { Route as AuthenticatedExchangeRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/items'
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
+import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
@@ -65,6 +66,11 @@ const AuthenticatedKeysRoute = AuthenticatedKeysRouteImport.update({
   path: '/keys',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLexiconRoute = AuthenticatedLexiconRouteImport.update({
+  id: '/lexicon',
+  path: '/lexicon',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSourcesRoute = AuthenticatedSourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
+  '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
+  '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/_authenticated/items': typeof AuthenticatedItemsRoute
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
+  '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/jobs'
     | '/keys'
+    | '/lexicon'
     | '/sources'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/items'
     | '/jobs'
     | '/keys'
+    | '/lexicon'
     | '/sources'
     | '/api/public/v1/items'
   id:
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/_authenticated/items'
     | '/_authenticated/jobs'
     | '/_authenticated/keys'
+    | '/_authenticated/lexicon'
     | '/_authenticated/sources'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
@@ -226,6 +238,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKeysRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/lexicon': {
+      id: '/_authenticated/lexicon'
+      path: '/lexicon'
+      fullPath: '/lexicon'
+      preLoaderRoute: typeof AuthenticatedLexiconRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/sources': {
       id: '/_authenticated/sources'
       path: '/sources'
@@ -250,6 +269,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedItemsRoute: typeof AuthenticatedItemsRoute
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
   AuthenticatedKeysRoute: typeof AuthenticatedKeysRoute
+  AuthenticatedLexiconRoute: typeof AuthenticatedLexiconRoute
   AuthenticatedSourcesRoute: typeof AuthenticatedSourcesRoute
 }
 
@@ -260,6 +280,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedItemsRoute: AuthenticatedItemsRoute,
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,
   AuthenticatedKeysRoute: AuthenticatedKeysRoute,
+  AuthenticatedLexiconRoute: AuthenticatedLexiconRoute,
   AuthenticatedSourcesRoute: AuthenticatedSourcesRoute,
 }
 
