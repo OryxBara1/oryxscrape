@@ -5,7 +5,7 @@ Phase 1 — schema (one migration per step, confirm after each)
 - [x] Step 2: sources (incl. 4 objective facts)
 - [x] Step 3: research_profiles + research_profile_tier_policies + policy validation
 - [x] Step 4: seed auramaris-legal-compliance policy v1
-- [ ] Step 5: collection_jobs
+- [x] Step 5: collection_jobs
 - [ ] Step 6: raw_items (append-only, snapshotted facts, content hash)
 - [ ] Step 7: normalized_items (+ jurisdiction_hint, category indexes)
 - [ ] Step 8: normalized_item_profile_exposure
