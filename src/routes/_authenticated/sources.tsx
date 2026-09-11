@@ -13,6 +13,7 @@ import {
   formatDate,
   inputClass,
 } from "@/components/data-ui";
+import { AnimatedStatusBadge } from "@/components/ui/animated-status-badge";
 import { createSource, deleteSource, listSources, updateSource } from "@/lib/sources.functions";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -80,6 +81,7 @@ function SourcesScreen() {
 
   const [draft, setDraft] = useState(emptyDraft);
   const [showForm, setShowForm] = useState(false);
+  const [savedPulse, setSavedPulse] = useState(false);
 
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => fetchSources() });
 
@@ -91,6 +93,7 @@ function SourcesScreen() {
       toast.success("Source created.");
       setDraft(emptyDraft);
       setShowForm(false);
+      setSavedPulse(true);
       invalidate();
     },
     onError: (err: Error) => toast.error(err.message),
@@ -119,9 +122,15 @@ function SourcesScreen() {
         title="Sources"
         description="Scrape targets, ToS and robots.txt status, and the four objective provenance facts."
         action={
-          <GlowButton onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Cancel" : "New source"}
-          </GlowButton>
+          <div className="relative">
+            <AnimatedStatusBadge
+              trigger={savedPulse}
+              onAnimationComplete={() => setSavedPulse(false)}
+            />
+            <GlowButton onClick={() => setShowForm((v) => !v)}>
+              {showForm ? "Cancel" : "New source"}
+            </GlowButton>
+          </div>
         }
       />
 

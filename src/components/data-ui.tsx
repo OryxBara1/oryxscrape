@@ -1,6 +1,20 @@
 import type { ReactNode } from "react";
 
+import { Component as GlowRegistryButton } from "@/components/ui/glow-button";
+import { Status as HudStatus } from "@/components/ui/hud-status-1";
+import { Pattern as LoadingPattern } from "@/components/ui/v-skeleton-8";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/v-table-3-utils/table";
+import { CardFrame } from "@/components/ui/v-table-3-utils/card";
 import { cn } from "@/lib/utils";
+
+export { LoadingPattern };
 
 export function ScreenHeader({
   title,
@@ -22,23 +36,36 @@ export function ScreenHeader({
   );
 }
 
+/**
+ * 21st.dev waleedkibhen/glow-button. The registry component only accepts a
+ * string `label` and an onClick, so plain string actions render the registry
+ * component directly; richer children reuse its `.glow-btn` styling.
+ */
 export function GlowButton({
   children,
   className,
   variant = "primary",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" }) {
+  const classes = cn("glow-btn", variant === "ghost" && "glow-btn--ghost", className);
+
+  if (
+    variant === "primary" &&
+    typeof children === "string" &&
+    !props.disabled &&
+    props.type !== "submit"
+  ) {
+    return (
+      <GlowRegistryButton
+        label={children}
+        className={className}
+        {...(props.onClick ? { onClick: () => props.onClick?.({} as never) } : {})}
+      />
+    );
+  }
+
   return (
-    <button
-      {...props}
-      className={cn(
-        "rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:opacity-50",
-        variant === "primary"
-          ? "bg-primary/15 text-foreground shadow-glow hover:bg-primary/25"
-          : "border border-border text-muted-foreground hover:text-foreground",
-        className,
-      )}
-    >
+    <button {...props} className={classes}>
       {children}
     </button>
   );
@@ -64,66 +91,77 @@ export function Field({
 export const inputClass =
   "rounded-lg border border-border bg-black/20 px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:shadow-glow";
 
+const HUD_VARIANT: Record<string, "primary" | "secondary" | "danger" | "warning"> = {
+  ok: "primary",
+  live: "primary",
+  warn: "warning",
+  bad: "danger",
+  neutral: "secondary",
+};
+
+/** 21st.dev isaiahbjork/hud-status-1 */
 export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?: string }) {
-  const tones: Record<string, string> = {
-    ok: "border-emerald-400/40 text-emerald-300",
-    warn: "border-amber-400/40 text-amber-300",
-    bad: "border-rose-400/40 text-rose-300",
-    live: "border-primary/50 text-primary shadow-glow",
-    neutral: "border-border text-muted-foreground",
-  };
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em]",
-        tones[tone] ?? tones["neutral"],
-      )}
-    >
-      {label}
-    </span>
+    <HudStatus
+      variant={HUD_VARIANT[tone] ?? "secondary"}
+      scale={0.72}
+      text={label.toUpperCase()}
+      className="inline-flex"
+    />
   );
 }
 
+/** 21st.dev cnippet-dev/v-table-3 */
 export function DataTable({
   headers,
   children,
   empty,
+  loading,
 }: {
   headers: string[];
   children: ReactNode;
   empty?: boolean;
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <div className="glass-panel p-4">
+        <LoadingPattern />
+      </div>
+    );
+  }
+
   return (
-    <div className="glass-panel overflow-x-auto p-0">
-      <table className="w-full min-w-[720px] text-left text-sm">
-        <thead>
-          <tr className="border-b border-border/60">
+    <CardFrame className="glass-panel w-full overflow-x-auto p-0">
+      <Table variant="card" className="min-w-[720px] text-left text-sm">
+        <TableHeader>
+          <TableRow>
             {headers.map((h) => (
-              <th
+              <TableHead
                 key={h}
                 className="px-4 py-3 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground"
               >
                 {h}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {empty ? (
-            <tr>
-              <td
+            <TableRow>
+              <TableCell
                 colSpan={headers.length}
                 className="px-4 py-10 text-center text-xs text-muted-foreground"
               >
                 No records yet.
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : (
             children
           )}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </CardFrame>
   );
 }
 
