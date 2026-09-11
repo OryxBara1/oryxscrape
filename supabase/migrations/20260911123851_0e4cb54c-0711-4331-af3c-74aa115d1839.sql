@@ -1,0 +1,10 @@
+REVOKE ALL ON public.sources FROM anon;
+REVOKE ALL ON public.research_profiles FROM anon;
+REVOKE ALL ON public.research_profile_tier_policies FROM anon;
+REVOKE ALL ON public.collection_jobs FROM anon;
+REVOKE ALL ON public.raw_items FROM anon;
+REVOKE ALL ON public.normalized_items FROM anon;
+REVOKE ALL ON public.normalized_item_profile_exposure FROM anon;
+REVOKE ALL ON public.consumer_keys FROM anon;
+REVOKE ALL ON public.audit_events FROM anon;
+REVOKE ALL ON public.staff_item_tier_matrix FROM anon;
