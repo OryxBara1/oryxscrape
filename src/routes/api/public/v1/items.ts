@@ -73,11 +73,11 @@ export const Route = createFileRoute("/api/public/v1/items")({
 
         const { data, error } = await supabaseAdmin.rpc("api_list_items", {
           p_profile_id: keyRow.profile_id,
-          p_updated_since: updatedSinceParam ?? undefined,
-          p_cursor_updated_at: cursor?.updatedAt ?? undefined,
-          p_cursor_id: cursor?.id ?? undefined,
           p_limit: limit + 1,
+          ...(updatedSinceParam ? { p_updated_since: updatedSinceParam } : {}),
+          ...(cursor ? { p_cursor_updated_at: cursor.updatedAt, p_cursor_id: cursor.id } : {}),
         });
+
 
 
         if (error) {
