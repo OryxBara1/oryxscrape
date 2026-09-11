@@ -178,7 +178,7 @@ function ItemsScreen() {
       ) : null}
 
       <DataTable
-        headers={["Item", "Profile", "Tier", "Facts", "Promotion", "Updated"]}
+        headers={["Item", "Profile", "Tier", "Facts", "Review", "Promotion", "Updated"]}
         empty={!matrix.isLoading && rows.length === 0}
       >
         {rows.map((row) => (
@@ -210,11 +210,46 @@ function ItemsScreen() {
               {row.institution_class}
             </td>
             <td className="px-4 py-3">
+              <div className="flex flex-col items-start gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  <StatusBadge
+                    label={row.verification_status ?? "—"}
+                    tone={VERIFICATION_TONE[row.verification_status as VerificationStatus] ?? "neutral"}
+                  />
+                  <StatusBadge
+                    label={row.publication_status ?? "—"}
+                    tone={PUBLICATION_TONE[row.publication_status as PublicationStatus] ?? "neutral"}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {allowedActionsFor(
+                    row.verification_status as VerificationStatus,
+                    row.publication_status as PublicationStatus,
+                  ).map((action) => (
+                    <GlowButton
+                      key={action}
+                      variant="ghost"
+                      disabled={changeState.isPending || !row.normalized_item_id}
+                      onClick={() =>
+                        changeState.mutate({
+                          normalizedItemId: row.normalized_item_id as string,
+                          action,
+                        })
+                      }
+                    >
+                      {ACTION_LABELS[action]}
+                    </GlowButton>
+                  ))}
+                </div>
+              </div>
+            </td>
+            <td className="px-4 py-3">
               <StatusBadge
                 label={row.promoted_for_profile ? "promoted" : "not promoted"}
                 tone={row.promoted_for_profile ? "live" : "neutral"}
               />
             </td>
+
             <td className="px-4 py-3 text-xs text-muted-foreground">
               <div className="flex flex-col gap-2">
                 <span>{formatDate(row.updated_at)}</span>
