@@ -77,25 +77,41 @@ async function piste<T>(path: string, body: unknown): Promise<T> {
 
 export type LodaSearchHit = { id: string; cid: string; title: string };
 
-/** Full-text search over LODA (lois, ordonnances, décrets, arrêtés). */
+/**
+ * Splits a concept query into its synonym phrases. Synonyms of the SAME concept
+ * are OR'd inside one query string, e.g. `"permis plaisance" OR "permis bateau"`.
+ */
+export function parseConceptQuery(query: string): string[] {
+  return query
+    .split(/\s+OR\s+/i)
+    .map((part) => part.trim().replace(/^["«»]+|["«»]+$/g, "").trim())
+    .filter((part) => part.length > 0);
+}
+
+/**
+ * Full-text search over LODA (lois, ordonnances, décrets, arrêtés).
+ * All phrases belong to a single concept and are combined with OU.
+ */
 export async function searchLoda(input: {
   query: string;
   pageSize?: number;
 }): Promise<LodaSearchHit[]> {
+  const phrases = parseConceptQuery(input.query);
+  if (!phrases.length) throw new Error("Empty concept query");
+
+  const criteres = phrases.map((phrase, index) => ({
+    typeRecherche: phrase.includes(" ") ? "EXPRESSION_EXACTE" : "UN_DES_MOTS",
+    valeur: phrase,
+    // first critere carries the neutral operator; the rest OR onto it
+    operateur: index === 0 ? "ET" : "OU",
+  }));
+
   const result = await piste<{
     results?: { titles?: LodaSearchHit[] }[];
   }>("/search", {
     fond: "LODA_DATE",
     recherche: {
-      champs: [
-        {
-          typeChamp: "ALL",
-          criteres: [
-            { typeRecherche: "UN_DES_MOTS", valeur: input.query, operateur: "ET" },
-          ],
-          operateur: "ET",
-        },
-      ],
+      champs: [{ typeChamp: "ALL", criteres, operateur: "ET" }],
       filtres: [{ facette: "DATE_VERSION", singleDate: Date.now() }],
       pageNumber: 1,
       pageSize: input.pageSize ?? 10,
@@ -107,6 +123,7 @@ export async function searchLoda(input: {
 
   return (result.results ?? []).flatMap((row) => row.titles ?? []);
 }
+
 
 export type LodaTextArticle = { num?: string | null; content?: string | null };
 export type LodaText = {
