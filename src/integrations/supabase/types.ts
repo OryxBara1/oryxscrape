@@ -83,6 +83,72 @@ export type Database = {
           },
         ]
       }
+      normalized_items: {
+        Row: {
+          category: string | null
+          collected_at: string
+          created_at: string
+          id: string
+          institution_class: Database["public"]["Enums"]["institution_class"]
+          is_official_domain: boolean
+          is_primary_document: boolean
+          jurisdiction_hint: string | null
+          payload: Json
+          raw_item_id: string
+          source_id: string
+          source_url: string
+          traceability_level: Database["public"]["Enums"]["traceability_level"]
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          collected_at: string
+          created_at?: string
+          id?: string
+          institution_class: Database["public"]["Enums"]["institution_class"]
+          is_official_domain: boolean
+          is_primary_document: boolean
+          jurisdiction_hint?: string | null
+          payload?: Json
+          raw_item_id: string
+          source_id: string
+          source_url: string
+          traceability_level: Database["public"]["Enums"]["traceability_level"]
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          collected_at?: string
+          created_at?: string
+          id?: string
+          institution_class?: Database["public"]["Enums"]["institution_class"]
+          is_official_domain?: boolean
+          is_primary_document?: boolean
+          jurisdiction_hint?: string | null
+          payload?: Json
+          raw_item_id?: string
+          source_id?: string
+          source_url?: string
+          traceability_level?: Database["public"]["Enums"]["traceability_level"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "normalized_items_raw_item_id_fkey"
+            columns: ["raw_item_id"]
+            isOneToOne: true
+            referencedRelation: "raw_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "normalized_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       raw_items: {
         Row: {
           collected_at: string
