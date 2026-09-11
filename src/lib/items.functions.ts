@@ -28,10 +28,10 @@ export const listTierMatrix = createServerFn({ method: "GET" })
   )
   .handler(async ({ data, context }) => {
     let query = context.supabase
-      .from("staff_item_tier_matrix")
-      .select("*")
+      .rpc("get_staff_item_tier_matrix")
       .order("updated_at", { ascending: false })
       .limit(200);
+
 
     if (data.profileId) query = query.eq("profile_id", data.profileId);
     if (data.tier) query = query.eq("resolved_tier", data.tier);

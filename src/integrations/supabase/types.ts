@@ -56,13 +56,6 @@ export type Database = {
             referencedRelation: "research_profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "audit_events_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "staff_item_tier_matrix"
-            referencedColumns: ["profile_id"]
-          },
         ]
       }
       collection_jobs: {
@@ -126,13 +119,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "collection_jobs_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "staff_item_tier_matrix"
-            referencedColumns: ["profile_id"]
-          },
-          {
             foreignKeyName: "collection_jobs_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
@@ -189,13 +175,6 @@ export type Database = {
             referencedRelation: "research_profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "consumer_keys_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "staff_item_tier_matrix"
-            referencedColumns: ["profile_id"]
-          },
         ]
       }
       normalized_item_profile_exposure: {
@@ -241,25 +220,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "normalized_item_profile_exposure_normalized_item_id_fkey"
-            columns: ["normalized_item_id"]
-            isOneToOne: false
-            referencedRelation: "staff_item_tier_matrix"
-            referencedColumns: ["normalized_item_id"]
-          },
-          {
             foreignKeyName: "normalized_item_profile_exposure_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "research_profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "normalized_item_profile_exposure_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "staff_item_tier_matrix"
-            referencedColumns: ["profile_id"]
           },
         ]
       }
@@ -464,13 +429,6 @@ export type Database = {
             referencedRelation: "research_profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "research_profile_tier_policies_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "staff_item_tier_matrix"
-            referencedColumns: ["profile_id"]
-          },
         ]
       }
       research_profiles: {
@@ -568,46 +526,7 @@ export type Database = {
       }
     }
     Views: {
-      staff_item_tier_matrix: {
-        Row: {
-          category: string | null
-          collected_at: string | null
-          institution_class:
-            | Database["public"]["Enums"]["institution_class"]
-            | null
-          is_official_domain: boolean | null
-          is_primary_document: boolean | null
-          jurisdiction_hint: string | null
-          normalized_item_id: string | null
-          policy_version: number | null
-          profile_id: string | null
-          profile_slug: string | null
-          promoted_for_profile: boolean | null
-          publication_status:
-            | Database["public"]["Enums"]["publication_status"]
-            | null
-          resolved_tier: Database["public"]["Enums"]["tier_label"] | null
-          reviewed_at: string | null
-          source_id: string | null
-          source_url: string | null
-          traceability_level:
-            | Database["public"]["Enums"]["traceability_level"]
-            | null
-          updated_at: string | null
-          verification_status:
-            | Database["public"]["Enums"]["verification_status"]
-            | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "normalized_items_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       api_list_items: {
@@ -646,6 +565,30 @@ export type Database = {
             }
             Returns: Database["public"]["Enums"]["tier_label"]
           }
+      get_staff_item_tier_matrix: {
+        Args: never
+        Returns: {
+          category: string
+          collected_at: string
+          institution_class: Database["public"]["Enums"]["institution_class"]
+          is_official_domain: boolean
+          is_primary_document: boolean
+          jurisdiction_hint: string
+          normalized_item_id: string
+          policy_version: number
+          profile_id: string
+          profile_slug: string
+          promoted_for_profile: boolean
+          publication_status: Database["public"]["Enums"]["publication_status"]
+          resolved_tier: Database["public"]["Enums"]["tier_label"]
+          reviewed_at: string
+          source_id: string
+          source_url: string
+          traceability_level: Database["public"]["Enums"]["traceability_level"]
+          updated_at: string
+          verification_status: Database["public"]["Enums"]["verification_status"]
+        }[]
+      }
       is_valid_exposure_policy: { Args: { exposure: Json }; Returns: boolean }
       is_valid_policy_node: {
         Args: { depth?: number; node: Json }
