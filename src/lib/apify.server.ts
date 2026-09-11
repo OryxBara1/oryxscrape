@@ -53,6 +53,11 @@ export async function startCrawl(input: {
   startUrl: string;
   maxCrawlPages: number;
   actorId?: string;
+  /**
+   * Lightweight HTTP crawler by default. Hosts that only negotiate legacy TLS
+   * cipher suites (e.g. narodne-novine.nn.hr) need the browser crawler.
+   */
+  crawlerType?: "cheerio" | "playwright:firefox";
   /** Optional link filters so a listing page yields documents, not navigation. */
   includeUrlGlobs?: string[];
   excludeUrlGlobs?: string[];
@@ -62,13 +67,14 @@ export async function startCrawl(input: {
     startUrls: [{ url: input.startUrl }],
     maxCrawlPages: input.maxCrawlPages,
     maxCrawlDepth: 1,
-    crawlerType: "cheerio",
+    crawlerType: input.crawlerType ?? "cheerio",
     saveMarkdown: true,
     saveHtml: true,
     proxyConfiguration: { useApifyProxy: true },
     ...(input.includeUrlGlobs?.length ? { includeUrlGlobs: input.includeUrlGlobs } : {}),
     ...(input.excludeUrlGlobs?.length ? { excludeUrlGlobs: input.excludeUrlGlobs } : {}),
   };
+
   const result = await apify<{ data: ApifyRun }>(`/acts/${actorId}/runs`, {
     method: "POST",
     body: JSON.stringify(body),

@@ -464,9 +464,11 @@ export type Database = {
       sources: {
         Row: {
           collection_method: Database["public"]["Enums"]["collection_method"]
+          crawler_type: string
           created_at: string
           domain: string
           id: string
+          include_url_globs: string[] | null
           institution_class: Database["public"]["Enums"]["institution_class"]
           is_active: boolean
           is_official_domain: boolean
@@ -484,9 +486,11 @@ export type Database = {
         }
         Insert: {
           collection_method?: Database["public"]["Enums"]["collection_method"]
+          crawler_type?: string
           created_at?: string
           domain: string
           id?: string
+          include_url_globs?: string[] | null
           institution_class?: Database["public"]["Enums"]["institution_class"]
           is_active?: boolean
           is_official_domain?: boolean
@@ -504,9 +508,11 @@ export type Database = {
         }
         Update: {
           collection_method?: Database["public"]["Enums"]["collection_method"]
+          crawler_type?: string
           created_at?: string
           domain?: string
           id?: string
+          include_url_globs?: string[] | null
           institution_class?: Database["public"]["Enums"]["institution_class"]
           is_active?: boolean
           is_official_domain?: boolean
