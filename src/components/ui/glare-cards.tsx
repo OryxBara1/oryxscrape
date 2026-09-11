@@ -85,12 +85,11 @@ const GlareCard = React.forwardRef<HTMLDivElement, GlareCardProps>(
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         style={{
-          ...(props.style ?? {}),
           rotateX: prefersReducedMotion ? 0 : rotateX,
           rotateY: prefersReducedMotion ? 0 : rotateY,
           transformStyle: "preserve-3d",
           perspective: 1000,
-        }}
+        } as never}
         className={cn(
           "relative group isolate overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-900/50 backdrop-blur-xl p-8 transition-all duration-500",
           "hover:border-white/20 hover:shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)]",
