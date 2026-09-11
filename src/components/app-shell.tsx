@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Activity, Boxes, Database, Globe2, ScrollText, LogOut } from "lucide-react";
+import { Activity, Boxes, Database, Globe2, KeyRound, ScrollText, LogOut } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -19,6 +19,8 @@ const NAV = [
   { to: "/jobs", label: "Collection jobs", icon: Boxes },
   { to: "/items", label: "Collected items", icon: Database },
   { to: "/audit", label: "Audit log", icon: ScrollText },
+  { to: "/keys", label: "Consumer keys", icon: KeyRound },
+
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
