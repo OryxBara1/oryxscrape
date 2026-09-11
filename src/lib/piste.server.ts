@@ -99,11 +99,14 @@ export async function searchLoda(input: {
   const phrases = parseConceptQuery(input.query);
   if (!phrases.length) throw new Error("Empty concept query");
 
-  const criteres = phrases.map((phrase, index) => ({
-    typeRecherche: phrase.includes(" ") ? "EXPRESSION_EXACTE" : "UN_DES_MOTS",
-    valeur: phrase,
-    // first critere carries the neutral operator; the rest OR onto it
-    operateur: index === 0 ? "ET" : "OU",
+  // Légifrance rejects EXPRESSION_EXACTE / multi-critere OU inside one champ;
+  // the accepted OR shape is one champ per synonym phrase joined with OU.
+  const champs = phrases.map((phrase) => ({
+    typeChamp: "ALL",
+    criteres: [
+      { typeRecherche: "TOUS_LES_MOTS_DANS_UN_CHAMP", valeur: phrase, operateur: "ET" },
+    ],
+    operateur: "OU",
   }));
 
   const result = await piste<{
@@ -111,7 +114,8 @@ export async function searchLoda(input: {
   }>("/search", {
     fond: "LODA_DATE",
     recherche: {
-      champs: [{ typeChamp: "ALL", criteres, operateur: "ET" }],
+      champs,
+
       filtres: [{ facette: "DATE_VERSION", singleDate: Date.now() }],
       pageNumber: 1,
       pageSize: input.pageSize ?? 10,
