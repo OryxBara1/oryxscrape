@@ -34,7 +34,10 @@ function deterministicCanonicalUrl(value?: string | null): string | null {
 
 export const startCollectionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { sourceId: string; profileId?: string | null; maxPages?: number }) => input)
+  .inputValidator(
+    (input: { sourceId: string; profileId?: string | null; maxPages?: number; query?: string }) =>
+      input,
+  )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
@@ -48,10 +51,24 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     if (sourceError) throw new Error(sourceError.message);
     if (!source.is_active) throw new Error("This source is not active.");
 
+    // Authenticated structured APIs (e.g. PISTE / Légifrance) are fetched
+    // synchronously here; there is no external run to poll afterwards.
+    if (source.collection_method === "api") {
+      const { runPisteCollection } = await import("./piste-collect.server");
+      return runPisteCollection({
+        supabase,
+        source,
+        profileId: data.profileId ?? null,
+        query: data.query ?? "permis plaisance",
+        maxItems: Math.min(Math.max(data.maxPages ?? 2, 1), 5),
+      });
+    }
+
     const maxCrawlPages = Math.min(Math.max(data.maxPages ?? 10, 1), MAX_PAGES);
     const crawlerType =
       source.crawler_type === "playwright:firefox" ? "playwright:firefox" : "cheerio";
     const includeUrlGlobs = source.include_url_globs ?? undefined;
+
 
     const { data: job, error: jobError } = await supabase
       .from("collection_jobs")
