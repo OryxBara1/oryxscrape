@@ -13,11 +13,40 @@ import {
   formatDate,
   inputClass,
 } from "@/components/data-ui";
-import { listResearchProfiles, listTierMatrix, setItemPromotion } from "@/lib/items.functions";
+import {
+  allowedActionsFor,
+  listResearchProfiles,
+  listTierMatrix,
+  setItemPromotion,
+  setItemReviewState,
+  type ReviewAction,
+} from "@/lib/items.functions";
 import type { Database } from "@/integrations/supabase/types";
 
 type TierLabel = Database["public"]["Enums"]["tier_label"];
+type VerificationStatus = Database["public"]["Enums"]["verification_status"];
+type PublicationStatus = Database["public"]["Enums"]["publication_status"];
 const TIERS: TierLabel[] = ["T1", "T2", "T3", "T4", "T5"];
+
+const ACTION_LABELS: Record<ReviewAction, string> = {
+  review: "Review",
+  reject: "Reject",
+  reopen: "Reopen for review",
+  mark_eligible: "Mark eligible",
+  set_internal_only: "Set internal only",
+};
+
+const VERIFICATION_TONE: Record<VerificationStatus, string> = {
+  unreviewed: "neutral",
+  reviewed: "ok",
+  rejected: "bad",
+};
+
+const PUBLICATION_TONE: Record<PublicationStatus, string> = {
+  internal_only: "neutral",
+  eligible: "live",
+};
+
 
 export const Route = createFileRoute("/_authenticated/items")({
   head: () => ({
@@ -45,6 +74,7 @@ function ItemsScreen() {
   const fetchProfiles = useServerFn(listResearchProfiles);
   const fetchMatrix = useServerFn(listTierMatrix);
   const togglePromotion = useServerFn(setItemPromotion);
+  const applyReviewState = useServerFn(setItemReviewState);
 
   const [profileId, setProfileId] = useState("");
   const [tier, setTier] = useState("");
@@ -78,7 +108,18 @@ function ItemsScreen() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const changeState = useMutation({
+    mutationFn: (vars: { normalizedItemId: string; action: ReviewAction }) =>
+      applyReviewState({ data: vars }),
+    onSuccess: (res) => {
+      toast.success(`Status updated: ${res.verificationStatus} / ${res.publicationStatus}.`);
+      queryClient.invalidateQueries({ queryKey: ["tier-matrix"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const rows = matrix.data ?? [];
+
 
   return (
     <section className="space-y-6">
@@ -137,7 +178,7 @@ function ItemsScreen() {
       ) : null}
 
       <DataTable
-        headers={["Item", "Profile", "Tier", "Facts", "Promotion", "Updated"]}
+        headers={["Item", "Profile", "Tier", "Facts", "Review", "Promotion", "Updated"]}
         empty={!matrix.isLoading && rows.length === 0}
       >
         {rows.map((row) => (
@@ -169,11 +210,46 @@ function ItemsScreen() {
               {row.institution_class}
             </td>
             <td className="px-4 py-3">
+              <div className="flex flex-col items-start gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  <StatusBadge
+                    label={row.verification_status ?? "—"}
+                    tone={VERIFICATION_TONE[row.verification_status as VerificationStatus] ?? "neutral"}
+                  />
+                  <StatusBadge
+                    label={row.publication_status ?? "—"}
+                    tone={PUBLICATION_TONE[row.publication_status as PublicationStatus] ?? "neutral"}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {allowedActionsFor(
+                    row.verification_status as VerificationStatus,
+                    row.publication_status as PublicationStatus,
+                  ).map((action) => (
+                    <GlowButton
+                      key={action}
+                      variant="ghost"
+                      disabled={changeState.isPending || !row.normalized_item_id}
+                      onClick={() =>
+                        changeState.mutate({
+                          normalizedItemId: row.normalized_item_id as string,
+                          action,
+                        })
+                      }
+                    >
+                      {ACTION_LABELS[action]}
+                    </GlowButton>
+                  ))}
+                </div>
+              </div>
+            </td>
+            <td className="px-4 py-3">
               <StatusBadge
                 label={row.promoted_for_profile ? "promoted" : "not promoted"}
                 tone={row.promoted_for_profile ? "live" : "neutral"}
               />
             </td>
+
             <td className="px-4 py-3 text-xs text-muted-foreground">
               <div className="flex flex-col gap-2">
                 <span>{formatDate(row.updated_at)}</span>

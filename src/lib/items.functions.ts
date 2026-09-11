@@ -82,3 +82,122 @@ export const setItemPromotion = createServerFn({ method: "POST" })
 
     return { ok: true, promoted: data.promoted };
   });
+
+type VerificationStatus = Database["public"]["Enums"]["verification_status"];
+type PublicationStatus = Database["public"]["Enums"]["publication_status"];
+
+export type ReviewAction =
+  | "review"
+  | "reject"
+  | "reopen"
+  | "mark_eligible"
+  | "set_internal_only";
+
+const TRANSITIONS: Record<
+  ReviewAction,
+  {
+    from: Array<{ verification: VerificationStatus; publication: PublicationStatus }>;
+    to: { verification: VerificationStatus; publication: PublicationStatus };
+  }
+> = {
+  review: {
+    from: [{ verification: "unreviewed", publication: "internal_only" }],
+    to: { verification: "reviewed", publication: "internal_only" },
+  },
+  reject: {
+    from: [
+      { verification: "unreviewed", publication: "internal_only" },
+      { verification: "reviewed", publication: "internal_only" },
+    ],
+    to: { verification: "rejected", publication: "internal_only" },
+  },
+  reopen: {
+    from: [{ verification: "rejected", publication: "internal_only" }],
+    to: { verification: "unreviewed", publication: "internal_only" },
+  },
+  mark_eligible: {
+    from: [{ verification: "reviewed", publication: "internal_only" }],
+    to: { verification: "reviewed", publication: "eligible" },
+  },
+  set_internal_only: {
+    from: [{ verification: "reviewed", publication: "eligible" }],
+    to: { verification: "reviewed", publication: "internal_only" },
+  },
+};
+
+export function allowedActionsFor(
+  verification: VerificationStatus,
+  publication: PublicationStatus,
+): ReviewAction[] {
+  return (Object.keys(TRANSITIONS) as ReviewAction[]).filter((action) =>
+    TRANSITIONS[action].from.some(
+      (s) => s.verification === verification && s.publication === publication,
+    ),
+  );
+}
+
+export const setItemReviewState = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { normalizedItemId: string; action: ReviewAction }) => {
+    if (typeof input?.normalizedItemId !== "string" || !input.normalizedItemId) {
+      throw new Error("A normalized item id is required.");
+    }
+    if (!Object.prototype.hasOwnProperty.call(TRANSITIONS, input.action)) {
+      throw new Error("Unknown review action.");
+    }
+    return { normalizedItemId: input.normalizedItemId, action: input.action };
+  })
+  .handler(async ({ data, context }) => {
+    // actor identity comes from the verified session, never from the request body
+    const { supabase, userId } = context;
+
+    const { data: current, error: readError } = await supabase
+      .from("normalized_items")
+      .select("id, verification_status, publication_status")
+      .eq("id", data.normalizedItemId)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!current) throw new Error("Item not found.");
+
+    const rule = TRANSITIONS[data.action];
+    const allowed = rule.from.some(
+      (s) =>
+        s.verification === current.verification_status &&
+        s.publication === current.publication_status,
+    );
+    if (!allowed) {
+      throw new Error(
+        `This action is not allowed from ${current.verification_status}/${current.publication_status}.`,
+      );
+    }
+
+    const patch: {
+      verification_status: VerificationStatus;
+      publication_status: PublicationStatus;
+      reviewed_by: string | null;
+      reviewed_at: string | null;
+    } = {
+      verification_status: rule.to.verification,
+      publication_status: rule.to.publication,
+      reviewed_by: rule.to.verification === "unreviewed" ? null : userId,
+      reviewed_at: rule.to.verification === "unreviewed" ? null : new Date().toISOString(),
+    };
+
+    const { data: updated, error } = await supabase
+      .from("normalized_items")
+      .update(patch)
+      .eq("id", data.normalizedItemId)
+      .eq("verification_status", current.verification_status)
+      .eq("publication_status", current.publication_status)
+      .select("id, verification_status, publication_status, updated_at")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!updated) throw new Error("The item changed before this action could be applied.");
+
+    return {
+      id: updated.id,
+      verificationStatus: updated.verification_status,
+      publicationStatus: updated.publication_status,
+      updatedAt: updated.updated_at,
+    };
+  });
