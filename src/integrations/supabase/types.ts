@@ -83,6 +83,57 @@ export type Database = {
           },
         ]
       }
+      normalized_item_profile_exposure: {
+        Row: {
+          created_at: string
+          id: string
+          normalized_item_id: string
+          note: string | null
+          profile_id: string
+          promoted: boolean
+          promoted_at: string | null
+          promoted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          normalized_item_id: string
+          note?: string | null
+          profile_id: string
+          promoted?: boolean
+          promoted_at?: string | null
+          promoted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          normalized_item_id?: string
+          note?: string | null
+          profile_id?: string
+          promoted?: boolean
+          promoted_at?: string | null
+          promoted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "normalized_item_profile_exposure_normalized_item_id_fkey"
+            columns: ["normalized_item_id"]
+            isOneToOne: false
+            referencedRelation: "normalized_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "normalized_item_profile_exposure_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "research_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       normalized_items: {
         Row: {
           category: string | null
