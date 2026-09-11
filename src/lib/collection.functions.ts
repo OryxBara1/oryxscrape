@@ -35,8 +35,13 @@ function deterministicCanonicalUrl(value?: string | null): string | null {
 export const startCollectionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { sourceId: string; profileId?: string | null; maxPages?: number; query?: string }) =>
-      input,
+    (input: {
+      sourceId: string;
+      profileId?: string | null;
+      maxPages?: number;
+      query?: string;
+      concepts?: { concept_label: string; query: string }[];
+    }) => input,
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -55,14 +60,19 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     // synchronously here; there is no external run to poll afterwards.
     if (source.collection_method === "api") {
       const { runPisteCollection } = await import("./piste-collect.server");
+      const concepts =
+        data.concepts?.length
+          ? data.concepts
+          : [{ concept_label: "default", query: data.query ?? "permis plaisance" }];
       return runPisteCollection({
         supabase,
         source,
         profileId: data.profileId ?? null,
-        query: data.query ?? "permis plaisance",
+        concepts,
         maxItems: Math.min(Math.max(data.maxPages ?? 2, 1), 5),
       });
     }
+
 
     const maxCrawlPages = Math.min(Math.max(data.maxPages ?? 10, 1), MAX_PAGES);
     const crawlerType =
@@ -258,10 +268,18 @@ export const normalizeCollectionJob = createServerFn({ method: "POST" })
       }
       const payload = (item.raw_payload ?? {}) as {
         markdown?: string;
-        text?: string;
+        text?: string | unknown;
         html?: string;
+        plain_text?: string;
+        concept_label?: string;
+        concept_query?: string;
       };
-      const content = payload.markdown ?? payload.text ?? payload.html ?? "";
+      const content =
+        payload.markdown ??
+        payload.plain_text ??
+        (typeof payload.text === "string" ? payload.text : undefined) ??
+        payload.html ??
+        "";
       try {
         const doc = await normalizeWithLogoriOn({ sourceUrl: item.source_url, content });
         const { error } = await supabase.from("normalized_items").insert({
@@ -270,7 +288,13 @@ export const normalizeCollectionJob = createServerFn({ method: "POST" })
           source_url: item.source_url,
           jurisdiction_hint: doc.jurisdiction_hint,
           category: doc.category,
-          payload: doc as unknown as never,
+          payload: {
+            ...doc,
+            ...(payload.concept_label
+              ? { concept_label: payload.concept_label, concept_query: payload.concept_query }
+              : {}),
+          } as unknown as never,
+
           is_official_domain: item.is_official_domain,
           is_primary_document: item.is_primary_document,
           traceability_level: item.traceability_level,

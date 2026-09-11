@@ -77,25 +77,45 @@ async function piste<T>(path: string, body: unknown): Promise<T> {
 
 export type LodaSearchHit = { id: string; cid: string; title: string };
 
-/** Full-text search over LODA (lois, ordonnances, décrets, arrêtés). */
+/**
+ * Splits a concept query into its synonym phrases. Synonyms of the SAME concept
+ * are OR'd inside one query string, e.g. `"permis plaisance" OR "permis bateau"`.
+ */
+export function parseConceptQuery(query: string): string[] {
+  return query
+    .split(/\s+OR\s+/i)
+    .map((part) => part.trim().replace(/^["«»]+|["«»]+$/g, "").trim())
+    .filter((part) => part.length > 0);
+}
+
+/**
+ * Full-text search over LODA (lois, ordonnances, décrets, arrêtés).
+ * All phrases belong to a single concept and are combined with OU.
+ */
 export async function searchLoda(input: {
   query: string;
   pageSize?: number;
 }): Promise<LodaSearchHit[]> {
+  const phrases = parseConceptQuery(input.query);
+  if (!phrases.length) throw new Error("Empty concept query");
+
+  // Légifrance rejects EXPRESSION_EXACTE / multi-critere OU inside one champ;
+  // the accepted OR shape is one champ per synonym phrase joined with OU.
+  const champs = phrases.map((phrase) => ({
+    typeChamp: "ALL",
+    criteres: [
+      { typeRecherche: "TOUS_LES_MOTS_DANS_UN_CHAMP", valeur: phrase, operateur: "ET" },
+    ],
+    operateur: "OU",
+  }));
+
   const result = await piste<{
     results?: { titles?: LodaSearchHit[] }[];
   }>("/search", {
     fond: "LODA_DATE",
     recherche: {
-      champs: [
-        {
-          typeChamp: "ALL",
-          criteres: [
-            { typeRecherche: "UN_DES_MOTS", valeur: input.query, operateur: "ET" },
-          ],
-          operateur: "ET",
-        },
-      ],
+      champs,
+
       filtres: [{ facette: "DATE_VERSION", singleDate: Date.now() }],
       pageNumber: 1,
       pageSize: input.pageSize ?? 10,
@@ -107,6 +127,7 @@ export async function searchLoda(input: {
 
   return (result.results ?? []).flatMap((row) => row.titles ?? []);
 }
+
 
 export type LodaTextArticle = { num?: string | null; content?: string | null };
 export type LodaText = {
