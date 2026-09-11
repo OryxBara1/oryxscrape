@@ -28,6 +28,14 @@ Phase 3 — screens (real Supabase data via server functions)
 Phase 4 — read API
 - [x] Step 23: GET /api/public/v1/items (bearer key, cursor + updated_since, limit capped at 200) + Consumer keys screen
 Phase 5 — Apify collection, normalization, LogoriOn
+- [x] BOE source seeded (boe.es, official/primary/direct-url/government)
+- [x] Apify generic crawler client (server-only, token from secret)
+- [x] Manual "Run collection" + Sync + Normalize on the Collection jobs screen
+- [x] Raw items immutable, deduped by content hash, facts snapshotted
+- [x] LogoriOn normalization into normalized_items
+- [ ] Diff first BOE run against the AuraMaris baseline (Rogerio)
+- [ ] Scheduling (only after the baseline diff is approved)
+
 
 
 Blocked on user
