@@ -19,6 +19,7 @@ import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/j
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as ApiPublicTmpPisteConceptsRouteImport } from './routes/api/public/tmp-piste-concepts'
+import { Route as ApiPublicTmpPisteProbeRouteImport } from './routes/api/public/tmp-piste-probe'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
 const IndexRoute = IndexRouteImport.update({
@@ -71,6 +72,11 @@ const ApiPublicTmpPisteConceptsRoute =
     path: '/api/public/tmp-piste-concepts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicTmpPisteProbeRoute = ApiPublicTmpPisteProbeRouteImport.update({
+  id: '/api/public/tmp-piste-probe',
+  path: '/api/public/tmp-piste-probe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicV1ItemsRoute = ApiPublicV1ItemsRouteImport.update({
   id: '/api/public/v1/items',
   path: '/api/public/v1/items',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/keys': typeof AuthenticatedKeysRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/tmp-piste-concepts': typeof ApiPublicTmpPisteConceptsRoute
+  '/api/public/tmp-piste-probe': typeof ApiPublicTmpPisteProbeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRoutesByTo {
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/tmp-piste-concepts': typeof ApiPublicTmpPisteConceptsRoute
+  '/api/public/tmp-piste-probe': typeof ApiPublicTmpPisteProbeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRoutesById {
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/api/public/tmp-piste-concepts': typeof ApiPublicTmpPisteConceptsRoute
+  '/api/public/tmp-piste-probe': typeof ApiPublicTmpPisteProbeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRouteTypes {
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/sources'
     | '/api/public/tmp-piste-concepts'
+    | '/api/public/tmp-piste-probe'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/sources'
     | '/api/public/tmp-piste-concepts'
+    | '/api/public/tmp-piste-probe'
     | '/api/public/v1/items'
   id:
     | '__root__'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/_authenticated/keys'
     | '/_authenticated/sources'
     | '/api/public/tmp-piste-concepts'
+    | '/api/public/tmp-piste-probe'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
 }
@@ -160,6 +172,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicTmpPisteConceptsRoute: typeof ApiPublicTmpPisteConceptsRoute
+  ApiPublicTmpPisteProbeRoute: typeof ApiPublicTmpPisteProbeRoute
   ApiPublicV1ItemsRoute: typeof ApiPublicV1ItemsRoute
 }
 
@@ -235,6 +248,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTmpPisteConceptsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/tmp-piste-probe': {
+      id: '/api/public/tmp-piste-probe'
+      path: '/api/public/tmp-piste-probe'
+      fullPath: '/api/public/tmp-piste-probe'
+      preLoaderRoute: typeof ApiPublicTmpPisteProbeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/v1/items': {
       id: '/api/public/v1/items'
       path: '/api/public/v1/items'
@@ -271,6 +291,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicTmpPisteConceptsRoute: ApiPublicTmpPisteConceptsRoute,
+  ApiPublicTmpPisteProbeRoute: ApiPublicTmpPisteProbeRoute,
   ApiPublicV1ItemsRoute: ApiPublicV1ItemsRoute,
 }
 export const routeTree = rootRouteImport
