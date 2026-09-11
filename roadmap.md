@@ -18,7 +18,12 @@ Phase 2 — invite-only auth, 21st.dev shell
 - [ ] Step 14: install 8 21st.dev components (BLOCKED: registry returns 401, needs API key)
 - [x] Step 14b: dark glass/glow theme tokens in src/styles.css
 - [x] Step 15: 5 gated screens + navigation (temporary shell until dashboard-sidebar installs)
-Phase 3 — screens
+Phase 3 — screens (real Supabase data via server functions)
+- [x] Step 16: Dashboard metric cards
+- [x] Step 17: Sources CRUD (objective facts, ToS/robots, active toggle)
+- [x] Step 18: Collection jobs (read-only)
+- [x] Step 19: Items browser (staff_item_tier_matrix + promotion toggle)
+- [x] Step 20: Audit log (filter by check_type/result)
 Phase 4 — read API (/api/public/v1/items)
 Phase 5 — Apify collection, normalization, LogoriOn
 
