@@ -20,8 +20,17 @@ export const Route = createFileRoute("/api/public/tmp-exchange-test")({
             .maybeSingle();
           if (!item) throw new Error("no eligible item");
 
+          const { data: raw } = await supabaseAdmin
+            .from("raw_items")
+            .select("canonical_url, raw_payload")
+            .eq("id", item.raw_item_id)
+            .maybeSingle();
+
           const payload = (item.payload ?? {}) as Record<string, unknown>;
-          const text = exchange.extractText(payload);
+          const text = exchange.extractArtifactText(
+            (raw?.raw_payload ?? {}) as Record<string, unknown>,
+            payload,
+          );
           const sha = await exchange.sha256Hex(text);
 
           const { data: row, error } = await supabaseAdmin
@@ -37,12 +46,6 @@ export const Route = createFileRoute("/api/public/tmp-exchange-test")({
             .select("id, exchange_item_id")
             .single();
           if (error) throw new Error(error.message);
-
-          const { data: raw } = await supabaseAdmin
-            .from("raw_items")
-            .select("canonical_url")
-            .eq("id", item.raw_item_id)
-            .maybeSingle();
 
           const concept = exchange.extractConcept(payload);
           const manifest = exchange.buildManifest({
