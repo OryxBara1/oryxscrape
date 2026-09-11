@@ -148,7 +148,9 @@ function ItemsScreen() {
             <td className="px-4 py-3">
               <p className="max-w-80 truncate text-xs">{row.source_url}</p>
               <p className="text-[11px] text-muted-foreground">
-                {row.jurisdiction_hint ?? "—"} · {row.category ?? "—"}
+                {row.jurisdiction_hint ?? <em className="opacity-60">jurisdiction not stated</em>}
+                {" · "}
+                {row.category ?? <em className="opacity-60">category not stated</em>}
               </p>
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">
