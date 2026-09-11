@@ -1,5 +1,15 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Activity, Boxes, Database, Globe2, KeyRound, ScrollText, LogOut } from "lucide-react";
+import {
+  Activity,
+  Boxes,
+  Database,
+  Globe2,
+  KeyRound,
+  ScrollText,
+  Share2,
+  BookMarked,
+  LogOut,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -12,6 +22,8 @@ const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
   { to: "/jobs", label: "Collection jobs", icon: Boxes },
   { to: "/items", label: "Collected items", icon: Database },
   { to: "/audit", label: "Audit log", icon: ScrollText },
+  { to: "/exchange", label: "Exchange handoff", icon: Share2 },
+  { to: "/lexicon", label: "Search lexicon", icon: BookMarked },
   { to: "/keys", label: "Consumer keys", icon: KeyRound },
 ];
 

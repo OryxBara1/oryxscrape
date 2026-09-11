@@ -177,6 +177,163 @@ export type Database = {
           },
         ]
       }
+      exchange_handoffs: {
+        Row: {
+          artifact_filename: string
+          artifact_kind: string
+          artifact_mime_type: string
+          artifact_sha256: string
+          artifact_size_bytes: number
+          auramaris_decision: string | null
+          auramaris_decision_at: string | null
+          content_integrity_scope: string
+          country_code: string | null
+          created_at: string
+          created_by: string | null
+          drive_ack_file_id: string | null
+          drive_artifact_file_id: string | null
+          drive_feedback_file_id: string | null
+          drive_folder_id: string | null
+          drive_metadata_file_id: string | null
+          error_reason: string | null
+          exchange_item_id: string
+          id: string
+          language_code: string | null
+          last_synced_at: string | null
+          normalized_item_id: string
+          original_artifact_available: boolean
+          reason_code: string | null
+          reason_detail: string | null
+          sent_at: string | null
+          state: Database["public"]["Enums"]["exchange_handoff_state"]
+          updated_at: string
+        }
+        Insert: {
+          artifact_filename: string
+          artifact_kind?: string
+          artifact_mime_type?: string
+          artifact_sha256: string
+          artifact_size_bytes: number
+          auramaris_decision?: string | null
+          auramaris_decision_at?: string | null
+          content_integrity_scope?: string
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          drive_ack_file_id?: string | null
+          drive_artifact_file_id?: string | null
+          drive_feedback_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_metadata_file_id?: string | null
+          error_reason?: string | null
+          exchange_item_id?: string
+          id?: string
+          language_code?: string | null
+          last_synced_at?: string | null
+          normalized_item_id: string
+          original_artifact_available?: boolean
+          reason_code?: string | null
+          reason_detail?: string | null
+          sent_at?: string | null
+          state?: Database["public"]["Enums"]["exchange_handoff_state"]
+          updated_at?: string
+        }
+        Update: {
+          artifact_filename?: string
+          artifact_kind?: string
+          artifact_mime_type?: string
+          artifact_sha256?: string
+          artifact_size_bytes?: number
+          auramaris_decision?: string | null
+          auramaris_decision_at?: string | null
+          content_integrity_scope?: string
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          drive_ack_file_id?: string | null
+          drive_artifact_file_id?: string | null
+          drive_feedback_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_metadata_file_id?: string | null
+          error_reason?: string | null
+          exchange_item_id?: string
+          id?: string
+          language_code?: string | null
+          last_synced_at?: string | null
+          normalized_item_id?: string
+          original_artifact_available?: boolean
+          reason_code?: string | null
+          reason_detail?: string | null
+          sent_at?: string | null
+          state?: Database["public"]["Enums"]["exchange_handoff_state"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exchange_handoffs_normalized_item_id_fkey"
+            columns: ["normalized_item_id"]
+            isOneToOne: false
+            referencedRelation: "normalized_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exchange_suppressions: {
+        Row: {
+          concept_code: string | null
+          country_code: string | null
+          created_at: string
+          exchange_item_id: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          match_value: string
+          reason_code: string | null
+          reason_detail: string | null
+          rule_kind: Database["public"]["Enums"]["exchange_suppression_kind"]
+          strength: string
+          updated_at: string
+        }
+        Insert: {
+          concept_code?: string | null
+          country_code?: string | null
+          created_at?: string
+          exchange_item_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          match_value: string
+          reason_code?: string | null
+          reason_detail?: string | null
+          rule_kind: Database["public"]["Enums"]["exchange_suppression_kind"]
+          strength?: string
+          updated_at?: string
+        }
+        Update: {
+          concept_code?: string | null
+          country_code?: string | null
+          created_at?: string
+          exchange_item_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          match_value?: string
+          reason_code?: string | null
+          reason_detail?: string | null
+          rule_kind?: Database["public"]["Enums"]["exchange_suppression_kind"]
+          strength?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exchange_suppressions_exchange_item_id_fkey"
+            columns: ["exchange_item_id"]
+            isOneToOne: false
+            referencedRelation: "exchange_handoffs"
+            referencedColumns: ["exchange_item_id"]
+          },
+        ]
+      }
       normalized_item_profile_exposure: {
         Row: {
           created_at: string
@@ -461,6 +618,75 @@ export type Database = {
         }
         Relationships: []
       }
+      search_terms: {
+        Row: {
+          attempt_count: number
+          concept_code: string
+          concept_label: string
+          cooldown_until: string | null
+          country_code: string | null
+          created_at: string
+          credit_cost_estimate: number | null
+          false_positive_count: number
+          id: string
+          language_code: string | null
+          last_run_at: string | null
+          lifecycle_state: Database["public"]["Enums"]["search_term_lifecycle"]
+          notes: string | null
+          reactivation_reason: string | null
+          retry_after: string | null
+          synonym_group: string | null
+          target_domain: string | null
+          term: string
+          updated_at: string
+          useful_count: number
+        }
+        Insert: {
+          attempt_count?: number
+          concept_code: string
+          concept_label: string
+          cooldown_until?: string | null
+          country_code?: string | null
+          created_at?: string
+          credit_cost_estimate?: number | null
+          false_positive_count?: number
+          id?: string
+          language_code?: string | null
+          last_run_at?: string | null
+          lifecycle_state?: Database["public"]["Enums"]["search_term_lifecycle"]
+          notes?: string | null
+          reactivation_reason?: string | null
+          retry_after?: string | null
+          synonym_group?: string | null
+          target_domain?: string | null
+          term: string
+          updated_at?: string
+          useful_count?: number
+        }
+        Update: {
+          attempt_count?: number
+          concept_code?: string
+          concept_label?: string
+          cooldown_until?: string | null
+          country_code?: string | null
+          created_at?: string
+          credit_cost_estimate?: number | null
+          false_positive_count?: number
+          id?: string
+          language_code?: string | null
+          last_run_at?: string | null
+          lifecycle_state?: Database["public"]["Enums"]["search_term_lifecycle"]
+          notes?: string | null
+          reactivation_reason?: string | null
+          retry_after?: string | null
+          synonym_group?: string | null
+          target_domain?: string | null
+          term?: string
+          updated_at?: string
+          useful_count?: number
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           collection_method: Database["public"]["Enums"]["collection_method"]
@@ -611,6 +837,18 @@ export type Database = {
         | "robots_recheck"
         | "review_status_change"
       collection_method: "apify" | "http" | "api" | "manual"
+      exchange_handoff_state:
+        | "pending"
+        | "feedback_received"
+        | "accepted"
+        | "rejected"
+        | "error"
+      exchange_suppression_kind:
+        | "sha256"
+        | "normalized_url"
+        | "identifier_date"
+        | "title_issuer_date"
+        | "weak_filename"
       institution_class:
         | "government"
         | "intergovernmental"
@@ -622,6 +860,15 @@ export type Database = {
         | "unknown"
       job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
       publication_status: "internal_only" | "eligible"
+      search_term_lifecycle:
+        | "candidate"
+        | "promising"
+        | "validated"
+        | "ambiguous"
+        | "cooldown"
+        | "disabled_auto"
+        | "manual_only"
+        | "deprecated"
       tier_label: "T1" | "T2" | "T3" | "T4" | "T5"
       traceability_level:
         | "direct_url"
@@ -765,6 +1012,20 @@ export const Constants = {
         "review_status_change",
       ],
       collection_method: ["apify", "http", "api", "manual"],
+      exchange_handoff_state: [
+        "pending",
+        "feedback_received",
+        "accepted",
+        "rejected",
+        "error",
+      ],
+      exchange_suppression_kind: [
+        "sha256",
+        "normalized_url",
+        "identifier_date",
+        "title_issuer_date",
+        "weak_filename",
+      ],
       institution_class: [
         "government",
         "intergovernmental",
@@ -777,6 +1038,16 @@ export const Constants = {
       ],
       job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
       publication_status: ["internal_only", "eligible"],
+      search_term_lifecycle: [
+        "candidate",
+        "promising",
+        "validated",
+        "ambiguous",
+        "cooldown",
+        "disabled_auto",
+        "manual_only",
+        "deprecated",
+      ],
       tier_label: ["T1", "T2", "T3", "T4", "T5"],
       traceability_level: [
         "direct_url",
