@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedExchangeRouteImport } from './routes/_authenticated/exchange'
 import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/items'
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
@@ -42,6 +43,11 @@ const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedExchangeRoute = AuthenticatedExchangeRouteImport.update({
+  id: '/exchange',
+  path: '/exchange',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedItemsRoute = AuthenticatedItemsRouteImport.update({
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/exchange': typeof AuthenticatedExchangeRoute
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/exchange': typeof AuthenticatedExchangeRoute
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/exchange': typeof AuthenticatedExchangeRoute
   '/_authenticated/items': typeof AuthenticatedItemsRoute
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
@@ -112,6 +121,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/audit'
     | '/dashboard'
+    | '/exchange'
     | '/items'
     | '/jobs'
     | '/keys'
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/audit'
     | '/dashboard'
+    | '/exchange'
     | '/items'
     | '/jobs'
     | '/keys'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/audit'
     | '/_authenticated/dashboard'
+    | '/_authenticated/exchange'
     | '/_authenticated/items'
     | '/_authenticated/jobs'
     | '/_authenticated/keys'
@@ -186,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/exchange': {
+      id: '/_authenticated/exchange'
+      path: '/exchange'
+      fullPath: '/exchange'
+      preLoaderRoute: typeof AuthenticatedExchangeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/items': {
       id: '/_authenticated/items'
       path: '/items'
@@ -227,6 +246,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedExchangeRoute: typeof AuthenticatedExchangeRoute
   AuthenticatedItemsRoute: typeof AuthenticatedItemsRoute
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
   AuthenticatedKeysRoute: typeof AuthenticatedKeysRoute
@@ -236,6 +256,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedExchangeRoute: AuthenticatedExchangeRoute,
   AuthenticatedItemsRoute: AuthenticatedItemsRoute,
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,
   AuthenticatedKeysRoute: AuthenticatedKeysRoute,
