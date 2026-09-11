@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_events: {
+        Row: {
+          check_type: Database["public"]["Enums"]["audit_check_type"]
+          created_at: string
+          findings: Json
+          id: string
+          profile_id: string | null
+          result: string
+          run_at: string
+          target_id: string | null
+          target_table: string | null
+        }
+        Insert: {
+          check_type: Database["public"]["Enums"]["audit_check_type"]
+          created_at?: string
+          findings?: Json
+          id?: string
+          profile_id?: string | null
+          result?: string
+          run_at?: string
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Update: {
+          check_type?: Database["public"]["Enums"]["audit_check_type"]
+          created_at?: string
+          findings?: Json
+          id?: string
+          profile_id?: string | null
+          result?: string
+          run_at?: string
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_events_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "research_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collection_jobs: {
         Row: {
           apify_run_id: string | null
@@ -79,6 +123,56 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consumer_keys: {
+        Row: {
+          consumer_app: string
+          created_at: string
+          id: string
+          is_active: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          note: string | null
+          profile_id: string
+          revoked_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          consumer_app: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          note?: string | null
+          profile_id: string
+          revoked_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          consumer_app?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          note?: string | null
+          profile_id?: string
+          revoked_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consumer_keys_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "research_profiles"
             referencedColumns: ["id"]
           },
         ]
