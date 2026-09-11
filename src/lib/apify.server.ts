@@ -53,6 +53,9 @@ export async function startCrawl(input: {
   startUrl: string;
   maxCrawlPages: number;
   actorId?: string;
+  /** Optional link filters so a listing page yields documents, not navigation. */
+  includeUrlGlobs?: string[];
+  excludeUrlGlobs?: string[];
 }): Promise<ApifyRun> {
   const actorId = input.actorId ?? DEFAULT_ACTOR_ID;
   const body = {
@@ -63,6 +66,8 @@ export async function startCrawl(input: {
     saveMarkdown: true,
     saveHtml: true,
     proxyConfiguration: { useApifyProxy: true },
+    ...(input.includeUrlGlobs?.length ? { includeUrlGlobs: input.includeUrlGlobs } : {}),
+    ...(input.excludeUrlGlobs?.length ? { excludeUrlGlobs: input.excludeUrlGlobs } : {}),
   };
   const result = await apify<{ data: ApifyRun }>(`/acts/${actorId}/runs`, {
     method: "POST",
