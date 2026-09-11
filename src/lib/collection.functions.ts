@@ -134,6 +134,7 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
         continue;
       }
       const contentHash = await sha256Hex(content);
+      const headers = page.metadata?.headers ?? {};
       const { error } = await supabase.from("raw_items").insert({
         job_id: job.id,
         source_id: job.source_id,
@@ -147,7 +148,16 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
         is_primary_document: facts.is_primary_document,
         traceability_level: facts.traceability_level,
         institution_class: facts.institution_class,
+        // provenance: only what the provider objectively supplies, else NULL
+        canonical_url: deterministicCanonicalUrl(page.metadata?.canonicalUrl),
+        http_status: page.crawl?.httpStatusCode ?? null,
+        content_type: headers["content-type"] ?? null,
+        language: page.metadata?.languageCode ?? null,
+        apify_actor_id: actorId,
+        apify_run_id: job.apify_run_id,
+        collector_version: COLLECTOR_VERSION,
       });
+
       if (error) {
         if (error.code === "23505") duplicates += 1;
         else failed += 1;
