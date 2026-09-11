@@ -5,8 +5,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { DataTable, GlowButton, ScreenHeader, StatusBadge, formatDate } from "@/components/data-ui";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { listCollectionJobs } from "@/lib/jobs.functions";
 import { listSources } from "@/lib/sources.functions";
+
 import {
   normalizeCollectionJob,
   startCollectionJob,
@@ -89,18 +97,27 @@ function JobsScreen() {
       />
 
       <div className="glass-panel flex flex-wrap items-center gap-3 p-5">
-        <select
-          value={sourceId}
-          onChange={(event) => setSourceId(event.target.value)}
-          className="h-10 min-w-64 rounded-md border border-border/60 bg-background/60 px-3 text-sm"
-        >
-          <option value="">Select a source…</option>
-          {activeSources.map((source) => (
-            <option key={source.id} value={source.id}>
-              {source.name}
-            </option>
-          ))}
-        </select>
+        <Select value={sourceId} onValueChange={setSourceId}>
+          <SelectTrigger
+            aria-label="Source"
+            className="h-10 min-w-64 rounded-md border-border/60 bg-background/60"
+          >
+            <SelectValue placeholder="Select a source…" />
+          </SelectTrigger>
+          <SelectContent className="z-50">
+            {activeSources.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                No active sources. Activate one on the Sources screen.
+              </div>
+            ) : (
+              activeSources.map((source) => (
+                <SelectItem key={source.id} value={source.id}>
+                  {source.name}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
         <GlowButton
           disabled={!sourceId || busy === "start"}
           onClick={() =>
@@ -110,6 +127,7 @@ function JobsScreen() {
           {busy === "start" ? "Starting…" : "Run collection"}
         </GlowButton>
       </div>
+
 
       {error ? (
         <div className="glass-panel p-5 text-sm text-rose-300">{(error as Error).message}</div>
