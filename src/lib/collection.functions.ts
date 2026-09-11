@@ -41,7 +41,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     const { data: source, error: sourceError } = await supabase
       .from("sources")
       .select(
-        "id, start_url, collection_method, is_active, is_official_domain, is_primary_document, traceability_level, institution_class",
+        "id, start_url, collection_method, is_active, crawler_type, include_url_globs, is_official_domain, is_primary_document, traceability_level, institution_class",
       )
       .eq("id", data.sourceId)
       .single();
@@ -49,6 +49,9 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     if (!source.is_active) throw new Error("This source is not active.");
 
     const maxCrawlPages = Math.min(Math.max(data.maxPages ?? 10, 1), MAX_PAGES);
+    const crawlerType =
+      source.crawler_type === "playwright:firefox" ? "playwright:firefox" : "cheerio";
+    const includeUrlGlobs = source.include_url_globs ?? undefined;
 
     const { data: job, error: jobError } = await supabase
       .from("collection_jobs")
@@ -57,7 +60,12 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         profile_id: data.profileId ?? null,
         status: "running",
         started_at: new Date().toISOString(),
-        run_params: { actor: "apify~website-content-crawler", maxCrawlPages },
+        run_params: {
+          actor: "apify~website-content-crawler",
+          maxCrawlPages,
+          crawlerType,
+          ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
+        },
       })
       .select("id")
       .single();
@@ -65,13 +73,19 @@ export const startCollectionJob = createServerFn({ method: "POST" })
 
     try {
       const { startCrawl } = await import("./apify.server");
-      const run = await startCrawl({ startUrl: source.start_url, maxCrawlPages });
+      const run = await startCrawl({
+        startUrl: source.start_url,
+        maxCrawlPages,
+        crawlerType,
+        includeUrlGlobs,
+      });
       const { error } = await supabase
         .from("collection_jobs")
         .update({ apify_run_id: run.id })
         .eq("id", job.id);
       if (error) throw new Error(error.message);
       return { jobId: job.id, apifyRunId: run.id };
+
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to start the crawl.";
       await supabase
