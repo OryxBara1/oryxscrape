@@ -9,52 +9,24 @@ export const Route = createFileRoute("/api/public/tmp-piste-probe")({
         const phrases = ["permis plaisance", "permis bateau"];
 
         const variants: Record<string, unknown> = {
-          a_single_exact: {
-            champs: [
-              {
-                typeChamp: "ALL",
-                criteres: [
-                  { typeRecherche: "EXPRESSION_EXACTE", valeur: phrases[0], operateur: "ET" },
-                ],
-                operateur: "ET",
-              },
-            ],
-          },
-          b_two_undesmots_ou: {
-            champs: [
-              {
-                typeChamp: "ALL",
-                criteres: phrases.map((p) => ({
-                  typeRecherche: "UN_DES_MOTS",
-                  valeur: p,
-                  operateur: "OU",
-                })),
-                operateur: "ET",
-              },
-            ],
-          },
-          c_two_exact_prox: {
-            champs: [
-              {
-                typeChamp: "ALL",
-                criteres: phrases.map((p) => ({
-                  typeRecherche: "EXPRESSION_EXACTE",
-                  valeur: p,
-                  operateur: "OU",
-                  proximite: 2,
-                })),
-                operateur: "ET",
-              },
-            ],
-          },
-          d_two_champs_ou: {
+          e_champs_exact_ou: {
             champs: phrases.map((p) => ({
               typeChamp: "ALL",
-              criteres: [{ typeRecherche: "UN_DES_MOTS", valeur: p, operateur: "ET" }],
+              criteres: [{ typeRecherche: "EXPRESSION_EXACTE", valeur: p, operateur: "ET" }],
+              operateur: "OU",
+            })),
+          },
+          f_champs_tous_mots_ou: {
+            champs: phrases.map((p) => ({
+              typeChamp: "ALL",
+              criteres: [
+                { typeRecherche: "TOUS_LES_MOTS_DANS_UN_CHAMP", valeur: p, operateur: "ET" },
+              ],
               operateur: "OU",
             })),
           },
         };
+
 
 
         const out: Record<string, unknown> = {};
