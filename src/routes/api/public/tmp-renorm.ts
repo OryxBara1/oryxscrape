@@ -12,7 +12,7 @@ export const Route = createFileRoute("/api/public/tmp-renorm")({
         });
         const { data: raw, error } = await admin
           .from("raw_items")
-          .select("id, source_url, content")
+          .select("id, source_url, raw_payload")
           .eq("id", "6627656d-71fc-47de-a4b6-c93b305ea42f")
           .single();
         if (error || !raw) {
@@ -22,9 +22,14 @@ export const Route = createFileRoute("/api/public/tmp-renorm")({
           const { normalizeWithLogoriOn } = await import(
             "@/lib/logorion.server"
           );
+          const payload = (raw.raw_payload ?? {}) as {
+            markdown?: string;
+            text?: string;
+            html?: string;
+          };
           const doc = await normalizeWithLogoriOn({
             sourceUrl: raw.source_url,
-            content: raw.content ?? "",
+            content: payload.markdown ?? payload.text ?? payload.html ?? "",
           });
           return Response.json({ ok: true, doc });
         } catch (e) {
