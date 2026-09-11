@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
 import { ScreenHeader, StatusBadge, formatDate } from "@/components/data-ui";
+import { GlareCard } from "@/components/ui/glare-cards";
+import { GlowingCard } from "@/components/ui/glowing-card";
 import { getDashboardMetrics } from "@/lib/dashboard.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -36,13 +38,10 @@ function MetricCard({
   hint?: string;
 }) {
   return (
-    <div className="glass-panel p-5">
-      <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="glow-text mt-3 text-3xl font-semibold tracking-tight">{value}</p>
-      {hint ? <p className="mt-2 text-xs text-muted-foreground">{hint}</p> : null}
-    </div>
+    <GlareCard className="rounded-xl">
+      <GlowingCard value={value} label={label} />
+      {hint ? <p className="px-1 pt-2 text-xs text-muted-foreground">{hint}</p> : null}
+    </GlareCard>
   );
 }
 

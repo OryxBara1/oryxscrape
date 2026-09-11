@@ -15,7 +15,8 @@ Phase 1 — schema (one migration per step, confirm after each)
 
 Phase 2 — invite-only auth, 21st.dev shell
 - [x] Step 12/13: invite-only auth (invite sent, sign-in page, all routes gated)
-- [ ] Step 14: install 8 21st.dev components (BLOCKED: registry returns 401, needs API key)
+- [x] Step 14: 8 21st.dev components installed with the project API key (API_KEY_21ST secret)
+- [x] Step 15b: temporary shell replaced by the real dashboard-sidebar + registry components
 - [x] Step 14b: dark glass/glow theme tokens in src/styles.css
 - [x] Step 15: 5 gated screens + navigation (temporary shell until dashboard-sidebar installs)
 Phase 3 — screens (real Supabase data via server functions)
@@ -31,6 +32,5 @@ Phase 5 — Apify collection, normalization, LogoriOn
 
 Blocked on user
 - Disable self-signup in Supabase Auth settings (disable_signup is currently false)
-- 21st.dev registry API key / authenticated CLI login
 - GitHub connection
 - APIFY_API_TOKEN added in Supabase dashboard
