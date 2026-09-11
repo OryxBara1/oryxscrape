@@ -9,7 +9,31 @@ export const Route = createFileRoute("/api/public/tmp-piste-probe")({
         const phrases = ["permis plaisance", "permis bateau"];
 
         const variants: Record<string, unknown> = {
-          v1_all_ou: {
+          a_single_exact: {
+            champs: [
+              {
+                typeChamp: "ALL",
+                criteres: [
+                  { typeRecherche: "EXPRESSION_EXACTE", valeur: phrases[0], operateur: "ET" },
+                ],
+                operateur: "ET",
+              },
+            ],
+          },
+          b_two_undesmots_ou: {
+            champs: [
+              {
+                typeChamp: "ALL",
+                criteres: phrases.map((p) => ({
+                  typeRecherche: "UN_DES_MOTS",
+                  valeur: p,
+                  operateur: "OU",
+                })),
+                operateur: "ET",
+              },
+            ],
+          },
+          c_two_exact_prox: {
             champs: [
               {
                 typeChamp: "ALL",
@@ -17,32 +41,21 @@ export const Route = createFileRoute("/api/public/tmp-piste-probe")({
                   typeRecherche: "EXPRESSION_EXACTE",
                   valeur: p,
                   operateur: "OU",
+                  proximite: 2,
                 })),
-                operateur: "OU",
+                operateur: "ET",
               },
             ],
           },
-          v2_first_et: {
-            champs: [
-              {
-                typeChamp: "ALL",
-                criteres: phrases.map((p, i) => ({
-                  typeRecherche: "EXPRESSION_EXACTE",
-                  valeur: p,
-                  operateur: i === 0 ? "ET" : "OU",
-                })),
-                operateur: "OU",
-              },
-            ],
-          },
-          v3_two_champs: {
-            champs: phrases.map((p, i) => ({
+          d_two_champs_ou: {
+            champs: phrases.map((p) => ({
               typeChamp: "ALL",
-              criteres: [{ typeRecherche: "EXPRESSION_EXACTE", valeur: p, operateur: "ET" }],
-              operateur: i === 0 ? "ET" : "OU",
+              criteres: [{ typeRecherche: "UN_DES_MOTS", valeur: p, operateur: "ET" }],
+              operateur: "OU",
             })),
           },
         };
+
 
         const out: Record<string, unknown> = {};
         for (const [name, part] of Object.entries(variants)) {
