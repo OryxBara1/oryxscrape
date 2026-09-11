@@ -82,8 +82,16 @@ export type CrawledPage = {
   markdown?: string;
   text?: string;
   html?: string;
-  metadata?: { title?: string; description?: string; languageCode?: string };
+  crawl?: { httpStatusCode?: number; loadedUrl?: string };
+  metadata?: {
+    title?: string;
+    description?: string;
+    languageCode?: string;
+    canonicalUrl?: string;
+    headers?: Record<string, string>;
+  };
 };
+
 
 export async function getDatasetItems(
   datasetId: string,
