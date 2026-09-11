@@ -4,7 +4,7 @@ import React, { useRef, useState } from "react";
 import { motion, useMotionTemplate, useMotionValue, useSpring, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-export interface GlareCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "style"> {
+export interface GlareCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onAnimationStart" | "onDrag" | "onDragStart" | "onDragEnd"> {
   children: React.ReactNode;
   glareColor?: string;
   tiltIntensity?: number;
