@@ -36,9 +36,20 @@ Phase 5 — Apify collection, normalization, LogoriOn
 - [ ] Diff first BOE run against the AuraMaris baseline (Rogerio)
 - [ ] Scheduling (only after the baseline diff is approved)
 
-
+Phase 6 — Drive handoff to AuraMaris (approved, OryxScrape side only)
+- [ ] Pre-implementation build spec (tables/migration, files, permissions, tests, rollback)
+- [ ] Migration: exchange_handoffs, exchange_suppressions, search_terms + enums
+- [ ] Handoff packaging (extracted_text_only artifact + metadata.json)
+- [ ] Drive staging upload to 01_Pending_Review
+- [ ] Manual feedback sync + ACK generation
+- [ ] Exact SHA-256 suppression only
+- [ ] Passive Search Lexicon screen
+- [ ] 8-12 document pilot
 
 Blocked on user
 - Disable self-signup in Supabase Auth settings (disable_signup is currently false)
 - GitHub connection
 - APIFY_API_TOKEN added in Supabase dashboard
+- Google-side setup: two technical Drive identities + Shared Drive membership (no build until confirmed)
+- Post-pilot acceptance scenario: local/island/port-authority source case
+
