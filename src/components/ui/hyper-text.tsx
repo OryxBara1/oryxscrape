@@ -54,7 +54,7 @@ export function HyperText({
                 ? l
                 : i <= interations.current
                   ? (text[i] ?? l)
-                  : alphabets[getRandomInt(26)],
+                  : (alphabets[getRandomInt(26)] ?? l),
             ),
           );
           interations.current = interations.current + 0.1;

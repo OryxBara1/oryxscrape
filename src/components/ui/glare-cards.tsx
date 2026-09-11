@@ -4,7 +4,8 @@ import React, { useRef, useState } from "react";
 import { motion, useMotionTemplate, useMotionValue, useSpring, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-export interface GlareCardProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface GlareCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "style"> {
+  style?: React.CSSProperties;
   children: React.ReactNode;
   glareColor?: string;
   tiltIntensity?: number;
@@ -84,7 +85,7 @@ const GlareCard = React.forwardRef<HTMLDivElement, GlareCardProps>(
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         style={{
-          // biome-ignore lint: motion values
+          ...(props.style ?? {}),
           rotateX: prefersReducedMotion ? 0 : rotateX,
           rotateY: prefersReducedMotion ? 0 : rotateY,
           transformStyle: "preserve-3d",
