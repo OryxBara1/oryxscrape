@@ -74,6 +74,7 @@ function ItemsScreen() {
   const fetchProfiles = useServerFn(listResearchProfiles);
   const fetchMatrix = useServerFn(listTierMatrix);
   const togglePromotion = useServerFn(setItemPromotion);
+  const applyReviewState = useServerFn(setItemReviewState);
 
   const [profileId, setProfileId] = useState("");
   const [tier, setTier] = useState("");
