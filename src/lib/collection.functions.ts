@@ -11,6 +11,27 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const MAX_PAGES = 25;
 
+/** Bumped by hand whenever the collector's extraction behaviour changes. */
+const COLLECTOR_VERSION = "apify-boe-static-url@1.0.0";
+
+/**
+ * Deterministic, server-side only. Never inferred by LogoriOn: we take the
+ * provider-reported canonical link and accept it only when it is an absolute
+ * http(s) URL, then normalise it. Anything else stays NULL.
+ */
+function deterministicCanonicalUrl(value?: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+
 export const startCollectionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { sourceId: string; profileId?: string | null; maxPages?: number }) => input)
