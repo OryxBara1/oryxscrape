@@ -26,6 +26,7 @@ export function extractText(payload: NormalizedPayload): string {
     "extracted_text",
     "content",
     "body",
+    "body_excerpt",
     "summary",
   ]);
   if (!text) throw new Error("This item has no extracted text to package.");
@@ -37,7 +38,7 @@ export function extractReference(payload: NormalizedPayload): string | null {
 }
 
 export function extractPublicationDate(payload: NormalizedPayload): string | null {
-  return pickString(payload, ["publication_date", "date", "published_at"]);
+  return pickString(payload, ["publication_date", "issued_at", "date", "published_at"]);
 }
 
 export function extractConcept(payload: NormalizedPayload): {
@@ -45,7 +46,7 @@ export function extractConcept(payload: NormalizedPayload): {
   label: string | null;
 } {
   return {
-    code: pickString(payload, ["concept_code", "conceptCode"]),
+    code: pickString(payload, ["concept_code", "conceptCode", "concept_query"]),
     label: pickString(payload, ["concept_label", "conceptLabel"]),
   };
 }
