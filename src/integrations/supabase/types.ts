@@ -23,7 +23,29 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      audit_check_type:
+        | "duplicate"
+        | "consistency"
+        | "tier_drift"
+        | "tos_recheck"
+        | "robots_recheck"
+      collection_method: "apify" | "http" | "api" | "manual"
+      institution_class:
+        | "government"
+        | "intergovernmental"
+        | "court"
+        | "academic"
+        | "professional_body"
+        | "registered_media"
+        | "commercial"
+        | "unknown"
+      job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
+      tier_label: "T1" | "T2" | "T3" | "T4" | "T5"
+      traceability_level:
+        | "direct_url"
+        | "domain_indicated"
+        | "third_party_hosted"
+        | "untraceable"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +172,33 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      audit_check_type: [
+        "duplicate",
+        "consistency",
+        "tier_drift",
+        "tos_recheck",
+        "robots_recheck",
+      ],
+      collection_method: ["apify", "http", "api", "manual"],
+      institution_class: [
+        "government",
+        "intergovernmental",
+        "court",
+        "academic",
+        "professional_body",
+        "registered_media",
+        "commercial",
+        "unknown",
+      ],
+      job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
+      tier_label: ["T1", "T2", "T3", "T4", "T5"],
+      traceability_level: [
+        "direct_url",
+        "domain_indicated",
+        "third_party_hosted",
+        "untraceable",
+      ],
+    },
   },
 } as const
