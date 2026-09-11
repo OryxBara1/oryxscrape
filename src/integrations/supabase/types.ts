@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      collection_jobs: {
+        Row: {
+          apify_run_id: string | null
+          created_at: string
+          duplicate_count: number
+          error_text: string | null
+          failed_count: number
+          fetched_count: number
+          finished_at: string | null
+          id: string
+          new_count: number
+          profile_id: string | null
+          run_params: Json
+          source_id: string
+          started_at: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          updated_at: string
+        }
+        Insert: {
+          apify_run_id?: string | null
+          created_at?: string
+          duplicate_count?: number
+          error_text?: string | null
+          failed_count?: number
+          fetched_count?: number
+          finished_at?: string | null
+          id?: string
+          new_count?: number
+          profile_id?: string | null
+          run_params?: Json
+          source_id: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          updated_at?: string
+        }
+        Update: {
+          apify_run_id?: string | null
+          created_at?: string
+          duplicate_count?: number
+          error_text?: string | null
+          failed_count?: number
+          fetched_count?: number
+          finished_at?: string | null
+          id?: string
+          new_count?: number
+          profile_id?: string | null
+          run_params?: Json
+          source_id?: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_jobs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "research_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_jobs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       research_profile_tier_policies: {
         Row: {
           created_at: string
