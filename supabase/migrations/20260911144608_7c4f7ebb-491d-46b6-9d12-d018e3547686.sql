@@ -1,0 +1,1 @@
+REVOKE ALL ON public.staff_item_tier_matrix FROM anon;

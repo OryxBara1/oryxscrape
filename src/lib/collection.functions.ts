@@ -11,6 +11,27 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const MAX_PAGES = 25;
 
+/** Bumped by hand whenever the collector's extraction behaviour changes. */
+const COLLECTOR_VERSION = "apify-boe-static-url@1.0.0";
+
+/**
+ * Deterministic, server-side only. Never inferred by LogoriOn: we take the
+ * provider-reported canonical link and accept it only when it is an absolute
+ * http(s) URL, then normalise it. Anything else stays NULL.
+ */
+function deterministicCanonicalUrl(value?: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+
 export const startCollectionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { sourceId: string; profileId?: string | null; maxPages?: number }) => input)
@@ -69,7 +90,7 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
 
     const { data: job, error: jobError } = await supabase
       .from("collection_jobs")
-      .select("id, status, apify_run_id, source_id, sources(is_official_domain, is_primary_document, traceability_level, institution_class)")
+      .select("id, status, apify_run_id, source_id, run_params, sources(is_official_domain, is_primary_document, traceability_level, institution_class)")
       .eq("id", data.jobId)
       .single();
     if (jobError) throw new Error(jobError.message);
@@ -100,6 +121,9 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
     const pages = await getDatasetItems(run.defaultDatasetId, MAX_PAGES);
     const { sha256Hex } = await import("./consumer-keys.server");
     const facts = job.sources!;
+    const runParams = (job.run_params ?? {}) as { actor?: string };
+    const actorId = runParams.actor ?? null;
+
 
     let ingested = 0;
     let duplicates = 0;
@@ -113,6 +137,7 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
         continue;
       }
       const contentHash = await sha256Hex(content);
+      const headers = page.metadata?.headers ?? {};
       const { error } = await supabase.from("raw_items").insert({
         job_id: job.id,
         source_id: job.source_id,
@@ -126,7 +151,16 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
         is_primary_document: facts.is_primary_document,
         traceability_level: facts.traceability_level,
         institution_class: facts.institution_class,
+        // provenance: only what the provider objectively supplies, else NULL
+        canonical_url: deterministicCanonicalUrl(page.metadata?.canonicalUrl),
+        http_status: page.crawl?.httpStatusCode ?? null,
+        content_type: headers["content-type"] ?? null,
+        language: page.metadata?.languageCode ?? null,
+        apify_actor_id: actorId,
+        apify_run_id: job.apify_run_id,
+        collector_version: COLLECTOR_VERSION,
       });
+
       if (error) {
         if (error.code === "23505") duplicates += 1;
         else failed += 1;
