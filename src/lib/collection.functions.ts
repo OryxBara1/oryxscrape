@@ -90,7 +90,7 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
 
     const { data: job, error: jobError } = await supabase
       .from("collection_jobs")
-      .select("id, status, apify_run_id, source_id, sources(is_official_domain, is_primary_document, traceability_level, institution_class)")
+      .select("id, status, apify_run_id, source_id, run_params, sources(is_official_domain, is_primary_document, traceability_level, institution_class)")
       .eq("id", data.jobId)
       .single();
     if (jobError) throw new Error(jobError.message);
