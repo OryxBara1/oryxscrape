@@ -11,6 +11,7 @@ interface HyperTextProps {
   framerProps?: Variants;
   className?: string;
   animateOnLoad?: boolean;
+  trigger?: boolean;
 }
 
 const alphabets = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -52,7 +53,7 @@ export function HyperText({
               l === " "
                 ? l
                 : i <= interations.current
-                  ? text[i]
+                  ? (text[i] ?? l)
                   : alphabets[getRandomInt(26)],
             ),
           );

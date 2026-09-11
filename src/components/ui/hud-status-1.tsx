@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { HyperText } from "@/components/ui/hyper-text";
@@ -99,10 +99,10 @@ export function Status({
       scale: scale,
       transition: {
         duration: 0.8,
-        ease: "easeOut"
+        ease: "easeOut" as const
       }
     }
-  };
+  } satisfies Variants;
 
   return (
     <motion.div 

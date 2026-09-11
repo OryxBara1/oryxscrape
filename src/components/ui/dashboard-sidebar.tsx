@@ -94,7 +94,7 @@ const mockBottomItems: NavItemData[] = [
   { id: 'logout', title: 'Log out', icon: LogOut },
 ];
 
-function WorkspaceSwitcher({ selected, onSelect }: { selected?: string, onSelect?: (ws: string) => void }) {
+function WorkspaceSwitcher({ selected, onSelect }: { selected?: string | undefined, onSelect?: ((ws: string) => void) | undefined }) {
   const [isOpen, setIsOpen] = useState(false);
   const [internalSelected, setInternalSelected] = useState('Acme Corp');
   

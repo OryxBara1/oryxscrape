@@ -84,6 +84,7 @@ const GlareCard = React.forwardRef<HTMLDivElement, GlareCardProps>(
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         style={{
+          // biome-ignore lint: motion values
           rotateX: prefersReducedMotion ? 0 : rotateX,
           rotateY: prefersReducedMotion ? 0 : rotateY,
           transformStyle: "preserve-3d",
