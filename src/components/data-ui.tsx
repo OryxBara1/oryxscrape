@@ -58,7 +58,7 @@ export function GlowButton({
     return (
       <GlowRegistryButton
         label={children}
-        className={className}
+        {...(className ? { className } : {})}
         {...(props.onClick ? { onClick: () => props.onClick?.({} as never) } : {})}
       />
     );
