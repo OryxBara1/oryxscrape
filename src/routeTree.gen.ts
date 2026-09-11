@@ -20,7 +20,6 @@ import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/j
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
 import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
-import { Route as ApiPublicTmpExchangeTestRouteImport } from './routes/api/public/tmp-exchange-test'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
 const IndexRoute = IndexRouteImport.update({
@@ -77,12 +76,6 @@ const AuthenticatedSourcesRoute = AuthenticatedSourcesRouteImport.update({
   path: '/sources',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiPublicTmpExchangeTestRoute =
-  ApiPublicTmpExchangeTestRouteImport.update({
-    id: '/api/public/tmp-exchange-test',
-    path: '/api/public/tmp-exchange-test',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicV1ItemsRoute = ApiPublicV1ItemsRouteImport.update({
   id: '/api/public/v1/items',
   path: '/api/public/v1/items',
@@ -100,7 +93,6 @@ export interface FileRoutesByFullPath {
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
-  '/api/public/tmp-exchange-test': typeof ApiPublicTmpExchangeTestRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRoutesByTo {
@@ -114,7 +106,6 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
-  '/api/public/tmp-exchange-test': typeof ApiPublicTmpExchangeTestRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRoutesById {
@@ -130,7 +121,6 @@ export interface FileRoutesById {
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
   '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
-  '/api/public/tmp-exchange-test': typeof ApiPublicTmpExchangeTestRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRouteTypes {
@@ -146,7 +136,6 @@ export interface FileRouteTypes {
     | '/keys'
     | '/lexicon'
     | '/sources'
-    | '/api/public/tmp-exchange-test'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -160,7 +149,6 @@ export interface FileRouteTypes {
     | '/keys'
     | '/lexicon'
     | '/sources'
-    | '/api/public/tmp-exchange-test'
     | '/api/public/v1/items'
   id:
     | '__root__'
@@ -175,7 +163,6 @@ export interface FileRouteTypes {
     | '/_authenticated/keys'
     | '/_authenticated/lexicon'
     | '/_authenticated/sources'
-    | '/api/public/tmp-exchange-test'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
 }
@@ -183,7 +170,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicTmpExchangeTestRoute: typeof ApiPublicTmpExchangeTestRoute
   ApiPublicV1ItemsRoute: typeof ApiPublicV1ItemsRoute
 }
 
@@ -266,13 +252,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSourcesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/tmp-exchange-test': {
-      id: '/api/public/tmp-exchange-test'
-      path: '/api/public/tmp-exchange-test'
-      fullPath: '/api/public/tmp-exchange-test'
-      preLoaderRoute: typeof ApiPublicTmpExchangeTestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/v1/items': {
       id: '/api/public/v1/items'
       path: '/api/public/v1/items'
@@ -312,7 +291,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicTmpExchangeTestRoute: ApiPublicTmpExchangeTestRoute,
   ApiPublicV1ItemsRoute: ApiPublicV1ItemsRoute,
 }
 export const routeTree = rootRouteImport
