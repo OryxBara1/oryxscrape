@@ -77,8 +77,9 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         startUrl: source.start_url,
         maxCrawlPages,
         crawlerType,
-        includeUrlGlobs,
+        ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
       });
+
       const { error } = await supabase
         .from("collection_jobs")
         .update({ apify_run_id: run.id })
