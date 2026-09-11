@@ -79,18 +79,6 @@ export async function uploadTextFile(params: {
   return (await res.json()) as DriveFile;
 }
 
-export async function listFolder(folderId: string): Promise<DriveFile[]> {
-  const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
-  const res = await fetch(
-    `${API}/files?q=${q}&${SHARED_DRIVE_PARAMS}&corpora=drive&driveId=${encodeURIComponent(
-      process.env["EXCHANGE_DRIVE_ID"] ?? "",
-    )}&fields=files(id,name,mimeType,createdTime)&pageSize=200`,
-    { headers: authHeaders() },
-  );
-  if (!res.ok) await readError(res, "folder listing");
-  const json = (await res.json()) as { files?: DriveFile[] };
-  return json.files ?? [];
-}
 
 export async function listFolderInDrive(folderId: string, driveId: string): Promise<DriveFile[]> {
   const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
