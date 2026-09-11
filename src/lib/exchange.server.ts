@@ -126,10 +126,10 @@ export function buildManifest(input: ManifestInput) {
 export type ExchangeFeedback = {
   exchange_item_id: string;
   decision: "accepted" | "rejected";
-  decided_at?: string;
-  reason_code?: string;
-  reason_detail?: string;
-  artifact_sha256?: string;
+  decided_at?: string | undefined;
+  reason_code?: string | undefined;
+  reason_detail?: string | undefined;
+  artifact_sha256?: string | undefined;
 };
 
 export function parseFeedback(raw: string): ExchangeFeedback {
@@ -168,7 +168,7 @@ export function buildAck(params: {
   feedbackFileId: string;
   feedbackFileName: string;
   status: "processed" | "failed";
-  detail?: string;
+  detail?: string | undefined;
 }) {
   return {
     ack_version: MANIFEST_VERSION,
