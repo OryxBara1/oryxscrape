@@ -103,12 +103,15 @@ export const packageAndSendHandoff = createServerFn({ method: "POST" })
 
     const { data: raw } = await supabase
       .from("raw_items")
-      .select("canonical_url")
+      .select("canonical_url, raw_payload")
       .eq("id", item.raw_item_id)
       .maybeSingle();
 
     const payload = (item.payload ?? {}) as Record<string, unknown>;
-    const text = exchange.extractText(payload);
+    const text = exchange.extractArtifactText(
+      (raw?.raw_payload ?? {}) as Record<string, unknown>,
+      payload,
+    );
     const artifactSha256 = await exchange.sha256Hex(text);
 
     const { data: blocked } = await supabase

@@ -19,6 +19,17 @@ export function extractTitle(payload: NormalizedPayload): string | null {
   return pickString(payload, ["title", "document_title", "heading"]);
 }
 
+// Artifact text comes from the immutable raw evidence; the normalized payload
+// only carries metadata. Falls back to the normalized payload when present.
+export function extractArtifactText(
+  rawPayload: NormalizedPayload,
+  normalizedPayload: NormalizedPayload,
+): string {
+  const raw = pickString(rawPayload, ["plain_text", "text", "extracted_text", "content", "body"]);
+  if (raw) return raw;
+  return extractText(normalizedPayload);
+}
+
 export function extractText(payload: NormalizedPayload): string {
   const text = pickString(payload, [
     "text",
