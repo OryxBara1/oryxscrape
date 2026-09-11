@@ -76,10 +76,8 @@ export async function normalizeWithLogoriOn(input: {
       body: JSON.stringify({
         prompt_id: PROMPT_ID,
         feature_tag: "oryxscrape.document_normalize",
-        variables: {
-          source_url: input.sourceUrl,
-          content: input.content.slice(0, 12000),
-        },
+        prompt: input.content.slice(0, 64000),
+        metadata: { source_url: input.sourceUrl },
       }),
     });
   } catch (error) {
