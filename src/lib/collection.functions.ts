@@ -35,8 +35,13 @@ function deterministicCanonicalUrl(value?: string | null): string | null {
 export const startCollectionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (input: { sourceId: string; profileId?: string | null; maxPages?: number; query?: string }) =>
-      input,
+    (input: {
+      sourceId: string;
+      profileId?: string | null;
+      maxPages?: number;
+      query?: string;
+      concepts?: { concept_label: string; query: string }[];
+    }) => input,
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -55,14 +60,19 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     // synchronously here; there is no external run to poll afterwards.
     if (source.collection_method === "api") {
       const { runPisteCollection } = await import("./piste-collect.server");
+      const concepts =
+        data.concepts?.length
+          ? data.concepts
+          : [{ concept_label: "default", query: data.query ?? "permis plaisance" }];
       return runPisteCollection({
         supabase,
         source,
         profileId: data.profileId ?? null,
-        query: data.query ?? "permis plaisance",
+        concepts,
         maxItems: Math.min(Math.max(data.maxPages ?? 2, 1), 5),
       });
     }
+
 
     const maxCrawlPages = Math.min(Math.max(data.maxPages ?? 10, 1), MAX_PAGES);
     const crawlerType =
