@@ -268,10 +268,18 @@ export const normalizeCollectionJob = createServerFn({ method: "POST" })
       }
       const payload = (item.raw_payload ?? {}) as {
         markdown?: string;
-        text?: string;
+        text?: string | unknown;
         html?: string;
+        plain_text?: string;
+        concept_label?: string;
+        concept_query?: string;
       };
-      const content = payload.markdown ?? payload.text ?? payload.html ?? "";
+      const content =
+        payload.markdown ??
+        payload.plain_text ??
+        (typeof payload.text === "string" ? payload.text : undefined) ??
+        payload.html ??
+        "";
       try {
         const doc = await normalizeWithLogoriOn({ sourceUrl: item.source_url, content });
         const { error } = await supabase.from("normalized_items").insert({
@@ -280,7 +288,13 @@ export const normalizeCollectionJob = createServerFn({ method: "POST" })
           source_url: item.source_url,
           jurisdiction_hint: doc.jurisdiction_hint,
           category: doc.category,
-          payload: doc as unknown as never,
+          payload: {
+            ...doc,
+            ...(payload.concept_label
+              ? { concept_label: payload.concept_label, concept_query: payload.concept_query }
+              : {}),
+          } as unknown as never,
+
           is_official_domain: item.is_official_domain,
           is_primary_document: item.is_primary_document,
           traceability_level: item.traceability_level,
