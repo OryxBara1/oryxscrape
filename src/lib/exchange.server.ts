@@ -382,3 +382,84 @@ export function deriveLocaleFromSourceName(
   if (n.includes("gesetze im internet")) return { countryCode: "DE", languageCode: "de" };
   return null;
 }
+
+export type BatchRow = {
+  normalizedItemId: string;
+  source: string;
+  exchangeItemId: string | null;
+  countryCode: string | null;
+  languageCode: string | null;
+  result: "sent" | "error" | "skipped-suppressed" | "skipped-unknown-source";
+  detail?: string;
+};
+
+export async function runBatchHandoff(supabase: ExchangeDb, userId: string | null) {
+  const { data: items, error } = await supabase
+    .from("normalized_items")
+    .select("id, source_id, sources(name)")
+    .eq("verification_status", "reviewed")
+    .eq("publication_status", "eligible")
+    .order("updated_at", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const { data: handoffs } = await supabase
+    .from("exchange_handoffs")
+    .select("normalized_item_id, state");
+  const taken = new Set(
+    (handoffs ?? []).filter((h) => h.state !== "error").map((h) => h.normalized_item_id),
+  );
+
+  const rows: BatchRow[] = [];
+  for (const item of items ?? []) {
+    if (taken.has(item.id)) continue;
+    const src = item.sources as unknown as { name: string } | null;
+    const sourceName = src?.name ?? "";
+    const locale = deriveLocaleFromSourceName(sourceName);
+    if (!locale) {
+      rows.push({
+        normalizedItemId: item.id,
+        source: sourceName,
+        exchangeItemId: null,
+        countryCode: null,
+        languageCode: null,
+        result: "skipped-unknown-source",
+      });
+      continue;
+    }
+    try {
+      const sent = await packageAndSend(supabase, userId, {
+        normalizedItemId: item.id,
+        ...locale,
+      });
+      rows.push({
+        normalizedItemId: item.id,
+        source: sourceName,
+        exchangeItemId: sent.exchangeItemId,
+        countryCode: locale.countryCode,
+        languageCode: locale.languageCode,
+        result: "sent",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const suppressed = message.includes("suppressed");
+      const { data: row } = await supabase
+        .from("exchange_handoffs")
+        .select("exchange_item_id")
+        .eq("normalized_item_id", item.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      rows.push({
+        normalizedItemId: item.id,
+        source: sourceName,
+        exchangeItemId: row?.exchange_item_id ?? null,
+        countryCode: locale.countryCode,
+        languageCode: locale.languageCode,
+        result: suppressed ? "skipped-suppressed" : "error",
+        detail: message,
+      });
+    }
+  }
+
+  return { total: rows.length, sent: rows.filter((r) => r.result === "sent").length, rows };
+}
