@@ -140,6 +140,18 @@ function ItemsScreen() {
 
   const rows = matrix.data ?? [];
 
+  const openSourceWindow = (url: string | null) => {
+    if (!url) return;
+    const width = 900;
+    const height = 800;
+    const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+    const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+    window.open(
+      url,
+      "_blank",
+      `noopener,noreferrer,width=${width},height=${height},left=${left},top=${top}`,
+    );
+  };
 
   return (
     <section className="space-y-6">
