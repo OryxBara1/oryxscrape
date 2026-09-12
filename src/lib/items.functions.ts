@@ -32,7 +32,6 @@ export const listTierMatrix = createServerFn({ method: "GET" })
       .order("updated_at", { ascending: false })
       .limit(200);
 
-
     if (data.profileId) query = query.eq("profile_id", data.profileId);
     if (data.tier) query = query.eq("resolved_tier", data.tier);
     if (data.jurisdiction) query = query.ilike("jurisdiction_hint", `%${data.jurisdiction}%`);
@@ -41,6 +40,89 @@ export const listTierMatrix = createServerFn({ method: "GET" })
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
     return rows;
+  });
+
+export const getItemDetail = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { normalizedItemId: string }) => {
+    if (typeof input?.normalizedItemId !== "string" || !input.normalizedItemId) {
+      throw new Error("A normalized item id is required.");
+    }
+    return { normalizedItemId: input.normalizedItemId };
+  })
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("normalized_items")
+      .select(
+        `
+        id,
+        source_url,
+        jurisdiction_hint,
+        category,
+        payload,
+        is_official_domain,
+        is_primary_document,
+        traceability_level,
+        institution_class,
+        verification_status,
+        publication_status,
+        updated_at,
+        raw_items (
+          raw_payload,
+          canonical_url,
+          language,
+          content_type,
+          http_status,
+          collector_version
+        )
+      `,
+      )
+      .eq("id", data.normalizedItemId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Item not found.");
+
+    const raw = Array.isArray(row.raw_items) ? row.raw_items[0] : row.raw_items;
+    const rawPayload = (raw?.raw_payload as Record<string, unknown> | null) ?? {};
+    const normalizedPayload = (row.payload as Record<string, unknown> | null) ?? {};
+
+    const title =
+      typeof normalizedPayload.title === "string" && normalizedPayload.title
+        ? normalizedPayload.title
+        : typeof rawPayload.title === "string" && rawPayload.title
+          ? rawPayload.title
+          : null;
+
+    const extractedText =
+      typeof rawPayload.text === "string" && rawPayload.text
+        ? rawPayload.text
+        : typeof normalizedPayload.body_excerpt === "string" && normalizedPayload.body_excerpt
+          ? normalizedPayload.body_excerpt
+          : typeof normalizedPayload.text === "string" && normalizedPayload.text
+            ? normalizedPayload.text
+            : null;
+
+    return {
+      id: row.id,
+      title,
+      sourceUrl: row.source_url,
+      canonicalUrl: raw?.canonical_url ?? null,
+      jurisdictionHint: row.jurisdiction_hint,
+      category: row.category,
+      language: raw?.language ?? null,
+      contentType: raw?.content_type ?? null,
+      httpStatus: raw?.http_status ?? null,
+      collectorVersion: raw?.collector_version ?? null,
+      isOfficialDomain: row.is_official_domain,
+      isPrimaryDocument: row.is_primary_document,
+      traceabilityLevel: row.traceability_level,
+      institutionClass: row.institution_class,
+      verificationStatus: row.verification_status,
+      publicationStatus: row.publication_status,
+      updatedAt: row.updated_at,
+      extractedText,
+    };
   });
 
 export const setItemPromotion = createServerFn({ method: "POST" })
