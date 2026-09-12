@@ -88,19 +88,19 @@ export const getItemDetail = createServerFn({ method: "GET" })
     const normalizedPayload = (row.payload as Record<string, unknown> | null) ?? {};
 
     const title =
-      typeof normalizedPayload.title === "string" && normalizedPayload.title
-        ? normalizedPayload.title
-        : typeof rawPayload.title === "string" && rawPayload.title
-          ? rawPayload.title
+      typeof normalizedPayload["title"] === "string" && normalizedPayload["title"]
+        ? normalizedPayload["title"]
+        : typeof rawPayload["title"] === "string" && rawPayload["title"]
+          ? rawPayload["title"]
           : null;
 
     const extractedText =
-      typeof rawPayload.text === "string" && rawPayload.text
-        ? rawPayload.text
-        : typeof normalizedPayload.body_excerpt === "string" && normalizedPayload.body_excerpt
-          ? normalizedPayload.body_excerpt
-          : typeof normalizedPayload.text === "string" && normalizedPayload.text
-            ? normalizedPayload.text
+      typeof rawPayload["text"] === "string" && rawPayload["text"]
+        ? rawPayload["text"]
+        : typeof normalizedPayload["body_excerpt"] === "string" && normalizedPayload["body_excerpt"]
+          ? normalizedPayload["body_excerpt"]
+          : typeof normalizedPayload["text"] === "string" && normalizedPayload["text"]
+            ? normalizedPayload["text"]
             : null;
 
     return {
