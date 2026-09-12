@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Eye } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -14,7 +15,15 @@ import {
   inputClass,
 } from "@/components/data-ui";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   allowedActionsFor,
+  getItemDetail,
   listResearchProfiles,
   listTierMatrix,
   setItemPromotion,
@@ -73,6 +82,7 @@ function ItemsScreen() {
   const queryClient = useQueryClient();
   const fetchProfiles = useServerFn(listResearchProfiles);
   const fetchMatrix = useServerFn(listTierMatrix);
+  const fetchDetail = useServerFn(getItemDetail);
   const togglePromotion = useServerFn(setItemPromotion);
   const applyReviewState = useServerFn(setItemReviewState);
 
@@ -80,6 +90,7 @@ function ItemsScreen() {
   const [tier, setTier] = useState("");
   const [jurisdiction, setJurisdiction] = useState("");
   const [category, setCategory] = useState("");
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const profiles = useQuery({
     queryKey: ["research-profiles"],
@@ -98,6 +109,12 @@ function ItemsScreen() {
     queryFn: () => fetchMatrix({ data: filters }),
   });
 
+  const detail = useQuery({
+    queryKey: ["item-detail", detailId],
+    queryFn: () => fetchDetail({ data: { normalizedItemId: detailId! } }),
+    enabled: !!detailId,
+  });
+
   const promote = useMutation({
     mutationFn: (vars: { normalizedItemId: string; profileId: string; promoted: boolean }) =>
       togglePromotion({ data: vars }),
@@ -114,6 +131,9 @@ function ItemsScreen() {
     onSuccess: (res) => {
       toast.success(`Status updated: ${res.verificationStatus} / ${res.publicationStatus}.`);
       queryClient.invalidateQueries({ queryKey: ["tier-matrix"] });
+      if (detailId) {
+        queryClient.invalidateQueries({ queryKey: ["item-detail", detailId] });
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -187,12 +207,24 @@ function ItemsScreen() {
             className="border-b border-border/40 last:border-0"
           >
             <td className="px-4 py-3">
-              <p className="max-w-80 truncate text-xs">{row.source_url}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {row.jurisdiction_hint ?? <em className="opacity-60">jurisdiction not stated</em>}
-                {" · "}
-                {row.category ?? <em className="opacity-60">category not stated</em>}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="max-w-80 truncate text-xs">{row.source_url}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {row.jurisdiction_hint ?? <em className="opacity-60">jurisdiction not stated</em>}
+                    {" · "}
+                    {row.category ?? <em className="opacity-60">category not stated</em>}
+                  </p>
+                </div>
+                <GlowButton
+                  variant="ghost"
+                  aria-label="View item detail"
+                  disabled={!row.normalized_item_id}
+                  onClick={() => setDetailId(row.normalized_item_id as string)}
+                >
+                  <Eye className="h-4 w-4" />
+                </GlowButton>
+              </div>
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">
               {row.profile_slug}
@@ -270,6 +302,98 @@ function ItemsScreen() {
           </tr>
         ))}
       </DataTable>
+
+      <Dialog open={!!detailId} onOpenChange={(open) => !open && setDetailId(null)}>
+        <DialogContent className="glass-panel max-h-[85vh] w-full max-w-3xl overflow-hidden border-glass-border p-0">
+          {detail.isLoading ? (
+            <div className="p-6">
+              <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+              <div className="mt-4 h-32 animate-pulse rounded bg-muted" />
+            </div>
+          ) : detail.error ? (
+            <div className="p-6 text-sm text-rose-300">{(detail.error as Error).message}</div>
+          ) : detail.data ? (
+            <>
+              <DialogHeader className="border-b border-border/40 p-6 pb-4 text-left">
+                <DialogTitle className="glow-text text-xl font-semibold tracking-tight">
+                  {detail.data.title ?? "Untitled item"}
+                </DialogTitle>
+                <DialogDescription asChild>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <a
+                      href={detail.data.sourceUrl ?? "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="max-w-md truncate text-primary hover:underline"
+                      title={detail.data.sourceUrl ?? undefined}
+                    >
+                      {detail.data.sourceUrl ?? "No source URL"}
+                    </a>
+                    {detail.data.language ? <span>· {detail.data.language}</span> : null}
+                    {detail.data.httpStatus ? <span>· HTTP {detail.data.httpStatus}</span> : null}
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 p-6 pt-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge
+                    label={detail.data.verificationStatus}
+                    tone={VERIFICATION_TONE[detail.data.verificationStatus] ?? "neutral"}
+                  />
+                  <StatusBadge
+                    label={detail.data.publicationStatus}
+                    tone={PUBLICATION_TONE[detail.data.publicationStatus] ?? "neutral"}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {detail.data.isOfficialDomain ? "official" : "non-official"} ·{" "}
+                    {detail.data.isPrimaryDocument ? "primary" : "secondary"} ·{" "}
+                    {detail.data.traceabilityLevel} · {detail.data.institutionClass}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.22em]">Category</span>
+                    <p className="text-foreground">
+                      {detail.data.category ?? <em className="opacity-60">not stated</em>}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.22em]">Jurisdiction</span>
+                    <p className="text-foreground">
+                      {detail.data.jurisdictionHint ?? <em className="opacity-60">not stated</em>}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.22em]">Collector</span>
+                    <p className="text-foreground">{detail.data.collectorVersion ?? "—"}</p>
+                  </div>
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.22em]">Updated</span>
+                    <p className="text-foreground">{formatDate(detail.data.updatedAt)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    Extracted text
+                  </span>
+                  <div className="glass-panel mt-1 max-h-[40vh] overflow-auto rounded-lg border border-border/40 p-4">
+                    {detail.data.extractedText ? (
+                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground">
+                        {detail.data.extractedText}
+                      </pre>
+                    ) : (
+                      <p className="text-sm italic text-muted-foreground">No extracted text available.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
