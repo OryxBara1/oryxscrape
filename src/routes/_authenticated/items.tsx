@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Eye } from "lucide-react";
+import { Eye, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -140,6 +140,18 @@ function ItemsScreen() {
 
   const rows = matrix.data ?? [];
 
+  const openSourceWindow = (url: string | null) => {
+    if (!url) return;
+    const width = 900;
+    const height = 800;
+    const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+    const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+    window.open(
+      url,
+      "_blank",
+      `noopener,noreferrer,width=${width},height=${height},left=${left},top=${top}`,
+    );
+  };
 
   return (
     <section className="space-y-6">
@@ -329,6 +341,15 @@ function ItemsScreen() {
                     >
                       {detail.data.sourceUrl ?? "No source URL"}
                     </a>
+                    <GlowButton
+                      variant="ghost"
+                      aria-label="Open source in window"
+                      disabled={!detail.data.sourceUrl}
+                      onClick={() => openSourceWindow(detail.data.sourceUrl)}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span className="sr-only">Open source in window</span>
+                    </GlowButton>
                     {detail.data.language ? <span>· {detail.data.language}</span> : null}
                     {detail.data.httpStatus ? <span>· HTTP {detail.data.httpStatus}</span> : null}
                   </div>
