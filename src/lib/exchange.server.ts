@@ -193,3 +193,273 @@ export function buildAck(params: {
     acknowledged_by: "oryxscrape",
   };
 }
+
+// ---------------------------------------------------------------------------
+// Shared packaging + send pipeline (used by the Exchange screen and batch runs).
+// ---------------------------------------------------------------------------
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+
+export type ExchangeDb = SupabaseClient<Database>;
+
+export type SendResult = {
+  exchangeItemId: string;
+  driveFolderId: string;
+  driveArtifactFileId: string;
+  driveMetadataFileId: string;
+};
+
+export async function packageAndSend(
+  supabase: ExchangeDb,
+  userId: string | null,
+  input: { normalizedItemId: string; countryCode: string; languageCode: string },
+): Promise<SendResult> {
+  const drive = await import("./drive.server");
+  const { EXCHANGE_FOLDERS } = await import("./exchange-config");
+
+  const { data: item, error } = await supabase
+    .from("normalized_items")
+    .select(
+      "id, source_url, jurisdiction_hint, category, payload, collected_at, verification_status, publication_status, raw_item_id",
+    )
+    .eq("id", input.normalizedItemId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!item) throw new Error("Item not found.");
+  if (item.verification_status !== "reviewed" || item.publication_status !== "eligible") {
+    throw new Error("Only reviewed items marked eligible for external handoff can be packaged.");
+  }
+
+  const { data: raw } = await supabase
+    .from("raw_items")
+    .select("canonical_url, raw_payload")
+    .eq("id", item.raw_item_id)
+    .maybeSingle();
+
+  const payload = (item.payload ?? {}) as Record<string, unknown>;
+  const text = extractArtifactText((raw?.raw_payload ?? {}) as Record<string, unknown>, payload);
+  const artifactSha256 = await sha256Hex(text);
+
+  const { data: blocked } = await supabase
+    .from("exchange_suppressions")
+    .select("id, reason_code")
+    .eq("rule_kind", "sha256")
+    .eq("match_value", artifactSha256)
+    .eq("strength", "hard_skip")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (blocked) {
+    throw new Error("This exact artifact was previously rejected by AuraMaris and is suppressed.");
+  }
+
+  const { data: existing } = await supabase
+    .from("exchange_handoffs")
+    .select(
+      "id, exchange_item_id, drive_folder_id, drive_artifact_file_id, drive_metadata_file_id, state",
+    )
+    .eq("normalized_item_id", item.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing && existing.state !== "error") {
+    throw new Error("This item has already been handed off.");
+  }
+
+  const artifactFilename = "artifact.txt";
+  const artifactMimeType = "text/plain; charset=utf-8";
+  const artifactSizeBytes = byteLength(text);
+
+  let row = existing;
+  if (!row) {
+    const { data: inserted, error: insertError } = await supabase
+      .from("exchange_handoffs")
+      .insert({
+        normalized_item_id: item.id,
+        artifact_sha256: artifactSha256,
+        artifact_filename: artifactFilename,
+        artifact_mime_type: artifactMimeType,
+        artifact_size_bytes: artifactSizeBytes,
+        country_code: input.countryCode,
+        language_code: input.languageCode,
+        state: "pending",
+        created_by: userId,
+      })
+      .select(
+        "id, exchange_item_id, drive_folder_id, drive_artifact_file_id, drive_metadata_file_id, state",
+      )
+      .single();
+    if (insertError) throw new Error(insertError.message);
+    row = inserted;
+  }
+
+  const concept = extractConcept(payload);
+  const manifest = buildManifest({
+    exchangeItemId: row.exchange_item_id,
+    sourceUrl: item.source_url,
+    canonicalUrl: raw?.canonical_url ?? null,
+    countryCode: input.countryCode,
+    languageCode: input.languageCode,
+    title: extractTitle(payload),
+    reference: extractReference(payload),
+    publicationDate: extractPublicationDate(payload),
+    category: item.category,
+    jurisdictionHint: item.jurisdiction_hint,
+    conceptCode: concept.code,
+    conceptLabel: concept.label,
+    collectedAt: item.collected_at,
+    artifactFilename,
+    artifactSha256,
+    artifactSizeBytes,
+    artifactMimeType,
+  });
+
+  try {
+    const folderId =
+      row.drive_folder_id ??
+      (await drive.createFolder(row.exchange_item_id, EXCHANGE_FOLDERS.pendingReview)).id;
+
+    const artifactFile = row.drive_artifact_file_id
+      ? { id: row.drive_artifact_file_id }
+      : await drive.uploadTextFile({
+          name: artifactFilename,
+          parentId: folderId,
+          mimeType: "text/plain",
+          content: text,
+        });
+
+    const metadataFile = row.drive_metadata_file_id
+      ? { id: row.drive_metadata_file_id }
+      : await drive.uploadTextFile({
+          name: "metadata.json",
+          parentId: folderId,
+          mimeType: "application/json",
+          content: JSON.stringify(manifest, null, 2),
+        });
+
+    const { error: updateError } = await supabase
+      .from("exchange_handoffs")
+      .update({
+        drive_folder_id: folderId,
+        drive_artifact_file_id: artifactFile.id,
+        drive_metadata_file_id: metadataFile.id,
+        state: "pending",
+        sent_at: new Date().toISOString(),
+        artifact_sha256: artifactSha256,
+        artifact_size_bytes: artifactSizeBytes,
+        country_code: input.countryCode,
+        language_code: input.languageCode,
+        error_reason: null,
+      })
+      .eq("id", row.id);
+    if (updateError) throw new Error(updateError.message);
+
+    return {
+      exchangeItemId: row.exchange_item_id,
+      driveFolderId: folderId,
+      driveArtifactFileId: artifactFile.id,
+      driveMetadataFileId: metadataFile.id,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await supabase
+      .from("exchange_handoffs")
+      .update({ state: "error", error_reason: message })
+      .eq("id", row.id);
+    throw new Error(message);
+  }
+}
+
+// Fixed per-source country/language mapping for batch handoffs.
+export function deriveLocaleFromSourceName(
+  name: string,
+): { countryCode: string; languageCode: string } | null {
+  const n = name.toLowerCase();
+  if (n.includes("boe")) return { countryCode: "ES", languageCode: "es" };
+  if (n.includes("légifrance") || n.includes("legifrance"))
+    return { countryCode: "FR", languageCode: "fr" };
+  if (n.includes("narodne novine")) return { countryCode: "HR", languageCode: "hr" };
+  if (n.includes("gesetze im internet")) return { countryCode: "DE", languageCode: "de" };
+  return null;
+}
+
+export type BatchRow = {
+  normalizedItemId: string;
+  source: string;
+  exchangeItemId: string | null;
+  countryCode: string | null;
+  languageCode: string | null;
+  result: "sent" | "error" | "skipped-suppressed" | "skipped-unknown-source";
+  detail?: string;
+};
+
+export async function runBatchHandoff(supabase: ExchangeDb, userId: string | null) {
+  const { data: items, error } = await supabase
+    .from("normalized_items")
+    .select("id, source_id, sources(name)")
+    .eq("verification_status", "reviewed")
+    .eq("publication_status", "eligible")
+    .order("updated_at", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const { data: handoffs } = await supabase
+    .from("exchange_handoffs")
+    .select("normalized_item_id, state");
+  const taken = new Set(
+    (handoffs ?? []).filter((h) => h.state !== "error").map((h) => h.normalized_item_id),
+  );
+
+  const rows: BatchRow[] = [];
+  for (const item of items ?? []) {
+    if (taken.has(item.id)) continue;
+    const src = item.sources as unknown as { name: string } | null;
+    const sourceName = src?.name ?? "";
+    const locale = deriveLocaleFromSourceName(sourceName);
+    if (!locale) {
+      rows.push({
+        normalizedItemId: item.id,
+        source: sourceName,
+        exchangeItemId: null,
+        countryCode: null,
+        languageCode: null,
+        result: "skipped-unknown-source",
+      });
+      continue;
+    }
+    try {
+      const sent = await packageAndSend(supabase, userId, {
+        normalizedItemId: item.id,
+        ...locale,
+      });
+      rows.push({
+        normalizedItemId: item.id,
+        source: sourceName,
+        exchangeItemId: sent.exchangeItemId,
+        countryCode: locale.countryCode,
+        languageCode: locale.languageCode,
+        result: "sent",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const suppressed = message.includes("suppressed");
+      const { data: row } = await supabase
+        .from("exchange_handoffs")
+        .select("exchange_item_id")
+        .eq("normalized_item_id", item.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      rows.push({
+        normalizedItemId: item.id,
+        source: sourceName,
+        exchangeItemId: row?.exchange_item_id ?? null,
+        countryCode: locale.countryCode,
+        languageCode: locale.languageCode,
+        result: suppressed ? "skipped-suppressed" : "error",
+        detail: message,
+      });
+    }
+  }
+
+  return { total: rows.length, sent: rows.filter((r) => r.result === "sent").length, rows };
+}

@@ -83,162 +83,17 @@ export const packageAndSendHandoff = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
     const exchange = await import("./exchange.server");
-    const drive = await import("./drive.server");
-    const { EXCHANGE_FOLDERS } = await import("./exchange-config");
-
-    const { data: item, error } = await supabase
-      .from("normalized_items")
-      .select(
-        "id, source_url, jurisdiction_hint, category, payload, collected_at, verification_status, publication_status, raw_item_id",
-      )
-      .eq("id", data.normalizedItemId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!item) throw new Error("Item not found.");
-    if (item.verification_status !== "reviewed" || item.publication_status !== "eligible") {
-      throw new Error("Only reviewed items marked eligible for external handoff can be packaged.");
-    }
-
-    const { data: raw } = await supabase
-      .from("raw_items")
-      .select("canonical_url, raw_payload")
-      .eq("id", item.raw_item_id)
-      .maybeSingle();
-
-    const payload = (item.payload ?? {}) as Record<string, unknown>;
-    const text = exchange.extractArtifactText(
-      (raw?.raw_payload ?? {}) as Record<string, unknown>,
-      payload,
-    );
-    const artifactSha256 = await exchange.sha256Hex(text);
-
-    const { data: blocked } = await supabase
-      .from("exchange_suppressions")
-      .select("id, reason_code")
-      .eq("rule_kind", "sha256")
-      .eq("match_value", artifactSha256)
-      .eq("strength", "hard_skip")
-      .eq("is_active", true)
-      .maybeSingle();
-    if (blocked) {
-      throw new Error("This exact artifact was previously rejected by AuraMaris and is suppressed.");
-    }
-
-    // Reuse an existing errored row for the same item so retries keep one identity.
-    const { data: existing } = await supabase
-      .from("exchange_handoffs")
-      .select("id, exchange_item_id, drive_folder_id, drive_artifact_file_id, drive_metadata_file_id, state")
-      .eq("normalized_item_id", item.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (existing && existing.state !== "error") {
-      throw new Error("This item has already been handed off.");
-    }
-
-    const artifactFilename = "artifact.txt";
-    const artifactMimeType = "text/plain; charset=utf-8";
-    const artifactSizeBytes = exchange.byteLength(text);
-
-    let row = existing;
-    if (!row) {
-      const { data: inserted, error: insertError } = await supabase
-        .from("exchange_handoffs")
-        .insert({
-          normalized_item_id: item.id,
-          artifact_sha256: artifactSha256,
-          artifact_filename: artifactFilename,
-          artifact_mime_type: artifactMimeType,
-          artifact_size_bytes: artifactSizeBytes,
-          country_code: data.countryCode,
-          language_code: data.languageCode,
-          state: "pending",
-          created_by: userId,
-        })
-        .select("id, exchange_item_id, drive_folder_id, drive_artifact_file_id, drive_metadata_file_id, state")
-        .single();
-      if (insertError) throw new Error(insertError.message);
-      row = inserted;
-    }
-
-    const concept = exchange.extractConcept(payload);
-    const manifest = exchange.buildManifest({
-      exchangeItemId: row.exchange_item_id,
-      sourceUrl: item.source_url,
-      canonicalUrl: raw?.canonical_url ?? null,
-      countryCode: data.countryCode,
-      languageCode: data.languageCode,
-      title: exchange.extractTitle(payload),
-      reference: exchange.extractReference(payload),
-      publicationDate: exchange.extractPublicationDate(payload),
-      category: item.category,
-      jurisdictionHint: item.jurisdiction_hint,
-      conceptCode: concept.code,
-      conceptLabel: concept.label,
-      collectedAt: item.collected_at,
-      artifactFilename,
-      artifactSha256,
-      artifactSizeBytes,
-      artifactMimeType,
-    });
-
-    try {
-      const folderId =
-        row.drive_folder_id ??
-        (await drive.createFolder(row.exchange_item_id, EXCHANGE_FOLDERS.pendingReview)).id;
-
-      const artifactFile = row.drive_artifact_file_id
-        ? { id: row.drive_artifact_file_id }
-        : await drive.uploadTextFile({
-            name: artifactFilename,
-            parentId: folderId,
-            mimeType: "text/plain",
-            content: text,
-          });
-
-      const metadataFile = row.drive_metadata_file_id
-        ? { id: row.drive_metadata_file_id }
-        : await drive.uploadTextFile({
-            name: "metadata.json",
-            parentId: folderId,
-            mimeType: "application/json",
-            content: JSON.stringify(manifest, null, 2),
-          });
-
-      const { error: updateError } = await supabase
-        .from("exchange_handoffs")
-        .update({
-          drive_folder_id: folderId,
-          drive_artifact_file_id: artifactFile.id,
-          drive_metadata_file_id: metadataFile.id,
-          state: "pending",
-          sent_at: new Date().toISOString(),
-          artifact_sha256: artifactSha256,
-          artifact_size_bytes: artifactSizeBytes,
-          country_code: data.countryCode,
-          language_code: data.languageCode,
-          error_reason: null,
-        })
-        .eq("id", row.id);
-      if (updateError) throw new Error(updateError.message);
-
-      return {
-        exchangeItemId: row.exchange_item_id,
-        driveFolderId: folderId,
-        driveArtifactFileId: artifactFile.id,
-        driveMetadataFileId: metadataFile.id,
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      await supabase
-        .from("exchange_handoffs")
-        .update({ state: "error", error_reason: message })
-        .eq("id", row.id);
-      throw new Error(message);
-    }
+    return exchange.packageAndSend(context.supabase, context.userId, data);
   });
+
+export const batchSendHandoffs = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const exchange = await import("./exchange.server");
+    return exchange.runBatchHandoff(context.supabase, context.userId);
+  });
+
 
 export const syncExchangeFeedback = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
