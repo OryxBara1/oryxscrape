@@ -341,6 +341,15 @@ function ItemsScreen() {
                     >
                       {detail.data.sourceUrl ?? "No source URL"}
                     </a>
+                    <GlowButton
+                      variant="ghost"
+                      aria-label="Open source in window"
+                      disabled={!detail.data.sourceUrl}
+                      onClick={() => openSourceWindow(detail.data.sourceUrl)}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span className="sr-only">Open source in window</span>
+                    </GlowButton>
                     {detail.data.language ? <span>· {detail.data.language}</span> : null}
                     {detail.data.httpStatus ? <span>· HTTP {detail.data.httpStatus}</span> : null}
                   </div>
