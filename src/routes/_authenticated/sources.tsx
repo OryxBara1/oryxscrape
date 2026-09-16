@@ -229,7 +229,7 @@ function SourcesScreen() {
       ) : null}
 
       <DataTable
-        headers={["Source", "Objective facts", "Compliance", "Active", "Created", ""]}
+        headers={["Source", "Objective facts", "Compliance", "Active", "Weekly", "Created", ""]}
         empty={!sources.isLoading && rows.length === 0}
       >
         {rows.map((source) => (
@@ -365,6 +365,28 @@ function SourcesScreen() {
                   tone={source.is_active ? "live" : "neutral"}
                 />
               </button>
+            </td>
+            <td className="px-4 py-3">
+              <button
+                type="button"
+                title="Weekly automatic collection"
+                onClick={() =>
+                  updateMutation.mutate({
+                    id: source.id,
+                    patch: { schedule_enabled: !source.schedule_enabled },
+                  })
+                }
+              >
+                <StatusBadge
+                  label={source.schedule_enabled ? "weekly" : "manual"}
+                  tone={source.schedule_enabled ? "ok" : "neutral"}
+                />
+              </button>
+              {source.last_scheduled_run_at ? (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  last {formatDate(source.last_scheduled_run_at)}
+                </p>
+              ) : null}
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">
               {formatDate(source.created_at)}

@@ -38,7 +38,7 @@ Phase 5 — Apify collection, normalization, LogoriOn
 
 Phase 6 — Drive handoff to AuraMaris (approved, OryxScrape side only)
 - [ ] Pre-implementation build spec (tables/migration, files, permissions, tests, rollback)
-- [ ] Migration: exchange_handoffs, exchange_suppressions, search_terms + enums
+- [x] Migration: exchange_handoffs, exchange_suppressions, search_terms + enums
 - [ ] Handoff packaging (extracted_text_only artifact + metadata.json)
 - [ ] Drive staging upload to 01_Pending_Review
 - [ ] Manual feedback sync + ACK generation
@@ -53,3 +53,16 @@ Blocked on user
 - Google-side setup: two technical Drive identities + Shared Drive membership (no build until confirmed)
 - Post-pilot acceptance scenario: local/island/port-authority source case
 
+
+Phase 7 — Greece source + weekly scheduled collection (approved 2026-09-16)
+- [x] Migration: sources.schedule_enabled/schedule_notes/last_scheduled_run_at
+- [x] fek.server.ts + fek-collect.server.ts (et.gr ΦΕΚ Β', last 4 issues rolling)
+- [x] scheduler.server.ts reusing existing collection internals
+- [x] /api/public/cron/collect + /api/public/cron/finalize (LOVABLE_CRON_SECRET)
+- [x] Sources screen weekly-schedule toggle
+- [x] Slack link (#auramaris-compliance): weekly summary + per-failure alert
+- [x] Greek search_terms rows from the taxonomy
+- [x] Targeted hunts: ES RD 1188/2025, GR ΦΕΚ Β' 4559/2026; duplicate re-run test
+- [x] Weekly flag enabled: Spain, Croatia, Germany, France, Greece
+- [ ] BLOCKED: timer itself — pg_cron HTTP callbacks unsupported on user-managed Supabase; needs an external scheduler calling /api/public/cron/*
+- [ ] Italy: listing is JS-paginated, no automatic discovery of new ordinances yet
