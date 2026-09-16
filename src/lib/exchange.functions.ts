@@ -136,17 +136,21 @@ export const syncExchangeFeedback = createServerFn({ method: "POST" })
 
         const { data: handoff } = await supabase
           .from("exchange_handoffs")
-          .select("id, artifact_sha256")
+          .select("id, artifact_sha256, normalized_item_id")
           .eq("exchange_item_id", feedback.exchange_item_id)
           .maybeSingle();
         if (!handoff) throw new Error("Unknown exchange_item_id.");
 
+        const decidedAt = feedback.decided_at ?? new Date().toISOString();
+        // Each decision keeps its own state — duplicate/superseded are not folded into rejected.
+        const state = feedback.decision;
+
         await supabase
           .from("exchange_handoffs")
           .update({
-            state: feedback.decision === "accepted" ? "accepted" : "rejected",
+            state,
             auramaris_decision: feedback.decision,
-            auramaris_decision_at: feedback.decided_at ?? new Date().toISOString(),
+            auramaris_decision_at: decidedAt,
             reason_code: feedback.reason_code ?? null,
             reason_detail: feedback.reason_detail ?? null,
             drive_feedback_file_id: file.id,
@@ -154,14 +158,33 @@ export const syncExchangeFeedback = createServerFn({ method: "POST" })
           })
           .eq("id", handoff.id);
 
-        if (feedback.decision === "rejected") {
+        if (exchange.NEGATIVE_DECISIONS.includes(feedback.decision)) {
+          // Hard-skip the exact artifact, labelled with the real decision value.
           await supabase.from("exchange_suppressions").insert({
             exchange_item_id: feedback.exchange_item_id,
             rule_kind: "sha256",
             match_value: feedback.artifact_sha256 ?? handoff.artifact_sha256,
             strength: "hard_skip",
-            reason_code: feedback.reason_code ?? null,
+            reason_code: feedback.reason_code ?? `auramaris_${feedback.decision}`,
             reason_detail: feedback.reason_detail ?? null,
+          });
+
+          // Record the downstream disposition as history only — our own review
+          // state on the normalized item is deliberately left untouched.
+          await supabase.from("audit_events").insert({
+            check_type: "exchange_feedback",
+            target_table: "normalized_items",
+            target_id: handoff.normalized_item_id,
+            result: feedback.decision,
+            findings: {
+              exchange_item_id: feedback.exchange_item_id,
+              decision: feedback.decision,
+              reason_code: feedback.reason_code ?? null,
+              reason_detail: feedback.reason_detail ?? null,
+              auramaris_document_ref: feedback.auramaris_document_ref ?? null,
+              decided_at: decidedAt,
+              note: "AuraMaris downstream disposition; OryxScrape review state unchanged.",
+            },
           });
         }
         processed += 1;
