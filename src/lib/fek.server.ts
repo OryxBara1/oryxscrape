@@ -96,7 +96,7 @@ export async function latestFekIssues(input: {
   issue?: string;
   limit: number;
 }): Promise<FekEntry[]> {
-  const entries = await searchFek({ year: input.year, issue: input.issue });
+  const entries = await searchFek({ year: input.year, issue: input.issue ?? FEK_ISSUE_B });
   return entries
     .sort((a, b) => {
       const byDate = parseDate(b.issueDate) - parseDate(a.issueDate);
