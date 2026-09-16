@@ -41,8 +41,12 @@ export const startCollectionJob = createServerFn({ method: "POST" })
       maxPages?: number;
       query?: string;
       concepts?: { concept_label: string; query: string }[];
+      /** Direct document URLs, used by `http` sources (e.g. PDF-only portals). */
+      documents?: { url: string; document_label?: string }[];
+      language?: string | null;
     }) => input,
   )
+
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
