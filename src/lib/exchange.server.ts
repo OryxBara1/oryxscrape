@@ -135,13 +135,31 @@ export function buildManifest(input: ManifestInput) {
   };
 }
 
+export const FEEDBACK_DECISIONS = [
+  "accepted",
+  "rejected",
+  "duplicate",
+  "superseded",
+] as const;
+
+export type FeedbackDecision = (typeof FEEDBACK_DECISIONS)[number];
+
+// Every decision other than "accepted" means AuraMaris will not take this exact
+// artifact — each keeps its own distinguishable state and suppression label.
+export const NEGATIVE_DECISIONS: readonly FeedbackDecision[] = [
+  "rejected",
+  "duplicate",
+  "superseded",
+];
+
 export type ExchangeFeedback = {
   exchange_item_id: string;
-  decision: "accepted" | "rejected";
+  decision: FeedbackDecision;
   decided_at?: string | undefined;
   reason_code?: string | undefined;
   reason_detail?: string | undefined;
   artifact_sha256?: string | undefined;
+  auramaris_document_ref?: string | undefined;
 };
 
 export function parseFeedback(raw: string): ExchangeFeedback {
@@ -158,8 +176,10 @@ export function parseFeedback(raw: string): ExchangeFeedback {
   if (typeof id !== "string" || !uuid.test(id)) {
     throw new Error("Feedback is missing a valid exchange_item_id.");
   }
-  if (decision !== "accepted" && decision !== "rejected") {
-    throw new Error("Feedback decision must be 'accepted' or 'rejected'.");
+  if (!FEEDBACK_DECISIONS.includes(decision as FeedbackDecision)) {
+    throw new Error(
+      `Feedback decision must be one of ${FEEDBACK_DECISIONS.join(", ")}.`,
+    );
   }
   const str = (key: string) => {
     const value = obj[key];
