@@ -53,12 +53,23 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     const { data: source, error: sourceError } = await supabase
       .from("sources")
       .select(
-        "id, start_url, collection_method, is_active, crawler_type, include_url_globs, is_official_domain, is_primary_document, traceability_level, institution_class",
+        "id, domain, start_url, collection_method, is_active, crawler_type, include_url_globs, is_official_domain, is_primary_document, traceability_level, institution_class",
       )
       .eq("id", data.sourceId)
       .single();
     if (sourceError) throw new Error(sourceError.message);
     if (!source.is_active) throw new Error("This source is not active.");
+
+    // Greek gazette: open JSON search API + public PDF blobs.
+    if (source.collection_method === "api" && source.domain.includes("et.gr")) {
+      const { runFekCollection } = await import("./fek-collect.server");
+      return runFekCollection({
+        supabase,
+        source,
+        profileId: data.profileId ?? null,
+        limit: data.maxPages ?? 4,
+      });
+    }
 
     // Authenticated structured APIs (e.g. PISTE / Légifrance) are fetched
     // synchronously here; there is no external run to poll afterwards.
