@@ -485,3 +485,139 @@ export async function runBatchHandoff(supabase: ExchangeDb, userId: string | nul
 
   return { total: rows.length, sent: rows.filter((r) => r.result === "sent").length, rows };
 }
+
+// Shared feedback sync: reads 04_Rejection_Feedback, applies decisions, writes acks.
+// Used by the staff "Sync exchange feedback" action and by one-off runs.
+export async function runFeedbackSync(supabase: ExchangeDb) {
+  const drive = await import("./drive.server");
+  const { EXCHANGE_FOLDERS, EXCHANGE_SHARED_DRIVE_ID } = await import("./exchange-config");
+
+  const files = await drive.listFolderInDrive(
+    EXCHANGE_FOLDERS.rejectionFeedback,
+    EXCHANGE_SHARED_DRIVE_ID,
+  );
+  const feedbackFiles = files.filter(
+    (f) => f.name.endsWith(".json") && !f.name.endsWith(".ack.json"),
+  );
+
+  let processed = 0;
+  let failed = 0;
+  let skipped = 0;
+  const outcomes: Array<{ file: string; exchangeItemId: string | null; decision: string | null; status: string }> = [];
+
+  for (const file of feedbackFiles) {
+    const { data: seen } = await supabase
+      .from("exchange_handoffs")
+      .select("id")
+      .eq("drive_feedback_file_id", file.id)
+      .maybeSingle();
+    if (seen) {
+      skipped += 1;
+      outcomes.push({ file: file.name, exchangeItemId: null, decision: null, status: "already-handled" });
+      continue;
+    }
+
+    let ackStatus: "processed" | "failed" = "processed";
+    let ackDetail: string | undefined;
+    let exchangeItemId: string | null = null;
+    let decisionSeen: string | null = null;
+
+    try {
+      const feedback = parseFeedback(await drive.getFileText(file.id));
+      exchangeItemId = feedback.exchange_item_id;
+      decisionSeen = feedback.decision;
+
+      const { data: handoff } = await supabase
+        .from("exchange_handoffs")
+        .select("id, artifact_sha256, normalized_item_id")
+        .eq("exchange_item_id", feedback.exchange_item_id)
+        .maybeSingle();
+      if (!handoff) throw new Error("Unknown exchange_item_id.");
+
+      const decidedAt = feedback.decided_at ?? new Date().toISOString();
+
+      // Each decision keeps its own state — duplicate/superseded are not folded into rejected.
+      await supabase
+        .from("exchange_handoffs")
+        .update({
+          state: feedback.decision,
+          auramaris_decision: feedback.decision,
+          auramaris_decision_at: decidedAt,
+          reason_code: feedback.reason_code ?? null,
+          reason_detail: feedback.reason_detail ?? null,
+          drive_feedback_file_id: file.id,
+          error_reason: null,
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", handoff.id);
+
+      if (NEGATIVE_DECISIONS.includes(feedback.decision)) {
+        // Hard-skip the exact artifact, labelled with the real decision value.
+        await supabase.from("exchange_suppressions").insert({
+          exchange_item_id: feedback.exchange_item_id,
+          rule_kind: "sha256",
+          match_value: feedback.artifact_sha256 ?? handoff.artifact_sha256,
+          strength: "hard_skip",
+          reason_code: feedback.reason_code ?? `auramaris_${feedback.decision}`,
+          reason_detail: feedback.reason_detail ?? null,
+        });
+
+        // History only — our own review state on the normalized item is left untouched.
+        await supabase.from("audit_events").insert({
+          check_type: "exchange_feedback",
+          target_table: "normalized_items",
+          target_id: handoff.normalized_item_id,
+          result: feedback.decision,
+          findings: {
+            exchange_item_id: feedback.exchange_item_id,
+            decision: feedback.decision,
+            reason_code: feedback.reason_code ?? null,
+            reason_detail: feedback.reason_detail ?? null,
+            auramaris_document_ref: feedback.auramaris_document_ref ?? null,
+            decided_at: decidedAt,
+            note: "AuraMaris downstream disposition; OryxScrape review state unchanged.",
+          },
+        });
+      }
+      processed += 1;
+    } catch (err) {
+      ackStatus = "failed";
+      ackDetail = err instanceof Error ? err.message : String(err);
+      failed += 1;
+      if (exchangeItemId) {
+        await supabase
+          .from("exchange_handoffs")
+          .update({
+            state: "error",
+            error_reason: ackDetail,
+            last_synced_at: new Date().toISOString(),
+          })
+          .eq("exchange_item_id", exchangeItemId);
+      }
+    }
+
+    const ack = buildAck({
+      exchangeItemId,
+      feedbackFileId: file.id,
+      feedbackFileName: file.name,
+      status: ackStatus,
+      detail: ackDetail,
+    });
+    const ackFile = await drive.uploadTextFile({
+      name: `${file.name.replace(/\.json$/, "")}.ack.json`,
+      parentId: EXCHANGE_FOLDERS.rejectionFeedback,
+      mimeType: "application/json",
+      content: JSON.stringify(ack, null, 2),
+    });
+    if (ackStatus === "processed" && exchangeItemId) {
+      await supabase
+        .from("exchange_handoffs")
+        .update({ drive_ack_file_id: ackFile.id })
+        .eq("exchange_item_id", exchangeItemId);
+    }
+
+    outcomes.push({ file: file.name, exchangeItemId, decision: decisionSeen, status: ackStatus });
+  }
+
+  return { seen: feedbackFiles.length, processed, failed, skipped, outcomes };
+}
