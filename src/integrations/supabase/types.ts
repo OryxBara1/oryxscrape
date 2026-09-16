@@ -845,6 +845,7 @@ export type Database = {
         | "tos_recheck"
         | "robots_recheck"
         | "review_status_change"
+        | "exchange_feedback"
       collection_method: "apify" | "http" | "api" | "manual"
       exchange_handoff_state:
         | "pending"
@@ -852,6 +853,8 @@ export type Database = {
         | "accepted"
         | "rejected"
         | "error"
+        | "duplicate"
+        | "superseded"
       exchange_suppression_kind:
         | "sha256"
         | "normalized_url"
@@ -1019,6 +1022,7 @@ export const Constants = {
         "tos_recheck",
         "robots_recheck",
         "review_status_change",
+        "exchange_feedback",
       ],
       collection_method: ["apify", "http", "api", "manual"],
       exchange_handoff_state: [
@@ -1027,6 +1031,8 @@ export const Constants = {
         "accepted",
         "rejected",
         "error",
+        "duplicate",
+        "superseded",
       ],
       exchange_suppression_kind: [
         "sha256",
