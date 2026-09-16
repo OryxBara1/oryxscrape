@@ -699,10 +699,13 @@ export type Database = {
           is_active: boolean
           is_official_domain: boolean
           is_primary_document: boolean
+          last_scheduled_run_at: string | null
           name: string
           notes: string | null
           robots_checked_at: string | null
           robots_status: string
+          schedule_enabled: boolean
+          schedule_notes: string | null
           start_url: string
           tos_checked_at: string | null
           tos_status: string
@@ -721,10 +724,13 @@ export type Database = {
           is_active?: boolean
           is_official_domain?: boolean
           is_primary_document?: boolean
+          last_scheduled_run_at?: string | null
           name: string
           notes?: string | null
           robots_checked_at?: string | null
           robots_status?: string
+          schedule_enabled?: boolean
+          schedule_notes?: string | null
           start_url: string
           tos_checked_at?: string | null
           tos_status?: string
@@ -743,10 +749,13 @@ export type Database = {
           is_active?: boolean
           is_official_domain?: boolean
           is_primary_document?: boolean
+          last_scheduled_run_at?: string | null
           name?: string
           notes?: string | null
           robots_checked_at?: string | null
           robots_status?: string
+          schedule_enabled?: boolean
+          schedule_notes?: string | null
           start_url?: string
           tos_checked_at?: string | null
           tos_status?: string
