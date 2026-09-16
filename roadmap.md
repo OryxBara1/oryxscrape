@@ -53,3 +53,14 @@ Blocked on user
 - Google-side setup: two technical Drive identities + Shared Drive membership (no build until confirmed)
 - Post-pilot acceptance scenario: local/island/port-authority source case
 
+
+Phase 7 — Greece source + weekly scheduled collection (approved 2026-09-16)
+- [ ] Migration: sources.schedule_enabled/schedule_notes/last_scheduled_run_at
+- [ ] fek.server.ts + fek-collect.server.ts (et.gr ΦΕΚ Β', last 4 issues rolling)
+- [ ] scheduler.server.ts reusing existing collection internals
+- [ ] /api/public/cron/collect + /api/public/cron/finalize (LOVABLE_CRON_SECRET)
+- [ ] Sources screen weekly-schedule toggle
+- [ ] Slack link (#auramaris-compliance): weekly summary + per-failure alert
+- [ ] Greek search_terms rows from the taxonomy
+- [ ] Targeted hunts: ES RD 1188/2025, GR ΦΕΚ Β' 4559/2026; duplicate re-run test
+- [ ] Enable weekly schedules for the 6 countries (Croatia per-act sources excluded)
