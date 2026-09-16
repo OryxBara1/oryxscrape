@@ -7,7 +7,8 @@
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/slack/api";
 
-export const SLACK_ALERT_CHANNEL = "#auramaris-compliance";
+/** #auramaris-compliance — resolved once; IDs are stable, names are not. */
+export const SLACK_ALERT_CHANNEL = "C0C0SS9B4KT";
 
 export async function postSlack(text: string): Promise<{ ok: boolean; error?: string }> {
   const lovableKey = process.env["LOVABLE_API_KEY"];
