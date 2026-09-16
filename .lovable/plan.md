@@ -1,144 +1,101 @@
-# Build spec — OryxScrape → AuraMaris Drive handoff (pilot)
+# Phase 7 — Greece source + weekly scheduled collection
 
-Approved decisions folded in. Nothing is created in Google Drive and no migration runs until you confirm the two Google identities.
+OryxScrape takes over weekly monitoring of the 5 MVP primary sources and adds Greece as the 6th. Only the collection step becomes automatic. Everything after it stays exactly as today.
 
-## 1. Exact affected tables and migration
+## 1. Greece (et.gr / ΦΕΚ) — findings
 
-One migration, additive only. No existing table, RPC, trigger or public response shape is modified. `api_list_items` is untouched, so the public API keeps returning only `reviewed + eligible` items and AuraMaris still gets no key.
+Investigated live, not assumed:
 
-**New enums**
-- `exchange_handoff_state`: `pending | feedback_received | accepted | rejected | error`
-- `exchange_suppression_kind`: `sha256 | normalized_url | identifier_date | title_issuer_date | weak_filename`
-- `search_term_lifecycle`: `candidate | promising | validated | ambiguous | cooldown | disabled_auto | manual_only | deprecated`
+- The modern gazette portal `search.et.gr` is backed by a genuine open JSON API: `POST https://searchetv99.azurewebsites.net/api/simplesearch`, body e.g. `{"selectYear":["2026"],"selectIssue":["2"]}`. Returns HTTP 200 `application/json`; the result array arrives as a JSON string inside the `data` field. No key, no login, CORS-open (send an `Origin: https://search.et.gr` header).
+- PDFs live in public Azure Blob storage with a fully predictable, stable URL: `https://ia37rg02wpsa01.blob.core.windows.net/fek/{issue:02}/{year}/{year}{issue:02}{docnum:05}.pdf`. No session tokens or hashes. Wrong padding gives a 404 XML error.
+- No anti-bot protection and no legacy-TLS quirk. Plain fetch works, even without a browser user agent. Modern TLS required (fine for us).
+- PDFs from 2000 onward carry a real text layer (verified on a 2008 and a 2026 file) — no OCR needed. Pre-2000 issues are scans and would need the LlamaParse fallback.
+- The document AuraMaris flagged was located and verified: ΦΕΚ Β' 4559, published 24-07-**2026** (not 2024), `.../fek/02/2026/20260204559.pdf`, 4 pages — ratification of the amendment to General Port Regulation 20, including the inflatable "Θαλάσσια Παιδική Χαρά" definition and the satellite-tracking/remote-control requirement. Exactly the target.
+- No mirror of the Greek gazette exists elsewhere worth using; et.gr is the primary and only source.
 
-**`public.exchange_handoffs`**
+Implication: Greece is an `api` source (search by year/issue, then direct PDF fetch + text extraction), not a crawler source. It reuses the existing PDF text-extraction path rather than Apify.
+
+## 2. Scheduling mechanism for this stack
+
+Checked what actually exists here:
+
+- The project already ships a cron authentication helper (`src/integrations/supabase/cron-auth.ts`) and the `LOVABLE_CRON_SECRET` value is present in the runtime. So the idiomatic pattern is available today: a public server route protected by that shared secret.
+- `pg_cron` and `pg_net` are **available but not yet installed** in this Supabase project (`pg_cron` 1.6.4, `pg_net` 0.20.4). One migration enables both.
+
+Proposed mechanism:
+
+```text
+pg_cron (weekly, Mon 03:00 UTC)
+   -> pg_net POST https://project--df887a9c-...-dev.lovable.app/api/public/cron/collect
+      Authorization: Bearer <LOVABLE_CRON_SECRET>
+   -> route authenticates via authenticateCronRequest(), then for every
+      source with schedule_enabled = true starts a collection job
+      (exactly the same internals the "Run collection" button calls)
 ```
-id uuid pk default gen_random_uuid()
-exchange_item_id uuid not null unique default gen_random_uuid()
-normalized_item_id uuid not null references public.normalized_items(id)
-artifact_kind text not null default 'extracted_text_only'
-original_artifact_available boolean not null default false
-content_integrity_scope text not null default 'normalized_extracted_text'
-artifact_sha256 text not null
-artifact_filename text not null
-artifact_mime_type text not null default 'text/plain; charset=utf-8'
-artifact_size_bytes bigint not null
-country_code text            -- confirmed by a human at packaging time
-language_code text           -- confirmed by a human at packaging time
-drive_folder_id text, drive_artifact_file_id text, drive_metadata_file_id text
-state exchange_handoff_state not null default 'pending'
-sent_at timestamptz, auramaris_decision text, auramaris_decision_at timestamptz
-reason_code text, reason_detail text
-drive_feedback_file_id text, drive_ack_file_id text
-last_synced_at timestamptz, error_reason text
-created_at/updated_at timestamptz not null default now()
-```
-Indexes: `unique (normalized_item_id) where state <> 'error'`; `unique (drive_feedback_file_id) where drive_feedback_file_id is not null`; index on `state`.
 
-**`public.exchange_suppressions`**
-```
-id uuid pk, exchange_item_id uuid references public.exchange_handoffs(exchange_item_id)
-rule_kind exchange_suppression_kind not null
-match_value text not null
-strength text not null            -- 'hard_skip' only for sha256; else 'review_signal'
-country_code text, concept_code text
-reason_code text, reason_detail text
-is_active boolean not null default true, expires_at timestamptz
-created_at/updated_at
-```
-`unique (rule_kind, match_value) where is_active`. Per decision 5, only `rule_kind='sha256'` may carry `strength='hard_skip'`; a CHECK enforces that every other kind is `review_signal`.
+Apify runs are asynchronous, so collection needs a follow-up pass. Rather than a permanent polling sweeper, two bounded follow-up crons run the same morning (Mon 04:00 and Mon 06:00 UTC) against `/api/public/cron/finalize`, which syncs any still-running job of the day and normalizes what landed. Three scheduled executions per week in total — no continuous polling, negligible recurring cost, worst-case delay for a slow crawl is until the next weekly run, which matches AuraMaris's own weekly rhythm.
 
-**`public.search_terms`** (passive lexicon)
-```
-id uuid pk, concept_code text not null, concept_label text not null
-country_code text, language_code text
-term text not null, synonym_group text, target_domain text
-attempt_count int not null default 0, useful_count int not null default 0
-false_positive_count int not null default 0, credit_cost_estimate numeric
-lifecycle_state search_term_lifecycle not null default 'candidate'
-cooldown_until timestamptz, retry_after timestamptz
-reactivation_reason text, last_run_at timestamptz, notes text
-created_at/updated_at
-unique (concept_code, term, coalesce(country_code,''))
-```
-Seed inside the same migration from the historical France runs already in `collection_jobs.run_params` (15 concepts) — counts derived from existing jobs/normalized items, no re-crawling. Passive only: nothing in the codebase reads `lifecycle_state` to skip a query in this pilot.
+Manual triggering stays exactly as it is; the scheduler is an additional caller of the same code.
 
-All three tables: `GRANT SELECT, INSERT, UPDATE ON ... TO authenticated`, `GRANT ALL ... TO service_role`, no `anon` grant, RLS enabled, staff-only policies mirroring the existing tables, no DELETE policy. Each gets the existing `set_updated_at` trigger.
+## 3. Exact changes
 
-**Not added:** no `country_code`/`language_code` on `normalized_items` (decision 3) — they live only on the handoff row, derived at packaging and human-confirmed.
-
-## 2. Exact UI / routes / files to change
+**Migration (one, additive)**
+- `create extension pg_cron`, `create extension pg_net`.
+- `sources`: add `schedule_enabled boolean not null default false`, `schedule_notes text`, `last_scheduled_run_at timestamptz`.
+- `cron.schedule` for `oryxscrape-weekly-collect` (Mon 03:00 UTC) and the two bounded finalize passes.
+- The cron secret is read from Vault, never inlined.
 
 **New files**
-- `src/lib/drive.server.ts` — Drive v3 through the connector gateway, `supportsAllDrives=true`; create folder, upload file, list folder, get file content. Server-only.
-- `src/lib/exchange.server.ts` — artifact building (extracted text from `normalized_items.payload`), sha256, `metadata.json` assembly, feedback Zod schema, ack assembly.
-- `src/lib/exchange.functions.ts` — authenticated server functions: `listHandoffCandidates`, `packageAndSendHandoff` (staff-confirmed country/language), `listHandoffs`, `syncExchangeFeedback` (manual, idempotent), `listSuppressions`.
-- `src/lib/search-terms.functions.ts` — `listSearchTerms`, `setSearchTermLifecycle` (human-set cooldown/manual_only/disabled_auto), `exportSearchTerms` to `05_Search_Terms_Shared`.
-- `src/routes/_authenticated/exchange.tsx` — Exchange screen: candidate list (reviewed + eligible only), send dialog with country/language confirmation, handoff table with state badges, "Sync exchange feedback" button, suppression list.
-- `src/routes/_authenticated/lexicon.tsx` — Search Lexicon table with lifecycle badges + manual state controls + export button.
+- `src/lib/fek.server.ts` — et.gr `simplesearch` client + blob PDF URL builder.
+- `src/lib/fek-collect.server.ts` — collects Greek documents: search by issue/year (and by concept terms from the lexicon where a keyword search applies), fetch PDF, extract text via the existing `unpdf` path, insert `raw_items` with `collector_version = 'etgr-fek-api@1.0.0'`, Apify columns NULL.
+- `src/routes/api/public/cron/collect.ts` and `src/routes/api/public/cron/finalize.ts` — secret-authenticated, no PII, no user data returned.
+- `src/lib/scheduler.server.ts` — shared loop reusing `startCollectionJob`/`runPdfCollection`/`runPisteCollection`/`runNormalizeJob` internals. No duplicated collection logic.
 
 **Changed files**
-- `src/components/app-shell.tsx` — two nav entries (Exchange, Lexicon).
-- `src/lib/items.functions.ts` — add `eligible_for_handoff` wording to the returned status labels only; **no enum rename**, no transition-matrix change.
-- `src/routes/_authenticated/items.tsx` — label "eligible" as "eligible for external handoff" and add a "Send to exchange" link for eligible items.
-- `roadmap.md` — Phase 6 progress.
+- `src/lib/collection.functions.ts` — Greek branch dispatch, no behaviour change for existing sources.
+- `src/lib/sources.functions.ts` + Sources screen — a per-source "weekly schedule" toggle (read/write of the new column only).
+- `src/lib/normalize.server.ts` — unchanged logic, called from the scheduler too.
 
-**No jobs/schedulers.** Feedback sync is a button only (decision 4). No changes to `src/routes/api/public/v1/items.ts`, `api_list_items`, consumer keys, Apify, PISTE or LogoriOn code.
+**Data**
+- One new source row: "Εθνικό Τυπογραφείο — ΦΕΚ (Greece)", `et.gr`, `collection_method = 'api'`, official / primary document / direct URL / government.
+- Greek terms added to `search_terms` from the existing multilingual taxonomy (currently 18 terms across 15 concepts, all one country — Greek rows are additive, lifecycle `candidate`).
 
-**Manifest additions** beyond the agreed shape, per decision 2:
-```json
-"artifact": { "...": "...", "artifact_kind": "extracted_text_only",
-              "original_artifact_available": false,
-              "content_integrity_scope": "normalized_extracted_text" },
-"handoff": { "oryx_verification_status": "reviewed",
-             "oryx_publication_status": "eligible_for_handoff",
-             "do_not_auto_import": true,
-             "official_artifact_verified": false,
-             "automation_eligible": false }
-```
+**First run, targeted hunts (manual, before enabling the schedule)**
+- Spain: RD 1188/2025 amending RD 875/2014 (in force 01-10-2026) — via BOE.
+- Greece: ΦΕΚ Β' 4559/24-07-2026 — URL already verified above.
 
-## 3. Permission setup checklist (you do this in Google, I build nothing until confirmed)
+## 4. Nothing downstream changes
 
-1. Create Shared Drive `OryxScrape-AuraMaris Exchange` (Shared Drive, not My Drive).
-2. Create two technical identities — Google Cloud service accounts are preferred (`oryxscrape-exchange@<project>.iam.gserviceaccount.com`, `auramaris-intake@<project>.iam.gserviceaccount.com`); Workspace user accounts work equally well if service accounts are not available.
-3. Add both to the Shared Drive: OryxScrape identity as **Contributor**, AuraMaris identity as **Contributor**. Neither may be Manager.
-4. Create the five top-level folders exactly as specified. Apply per-folder overrides: OryxScrape identity → Contributor on `01_Pending_Review`, `04_Rejection_Feedback`, `05_Search_Terms_Shared`; Viewer on `02_Accepted`, `03_Rejected`. AuraMaris identity → Viewer on `01_Pending_Review` and `05_Search_Terms_Shared`; Contributor on `02_Accepted`, `03_Rejected`, `04_Rejection_Feedback`.
-5. Shared Drive settings: only Managers may move/delete content; sharing outside the organisation off; download/copy restricted to members.
-6. The existing connected "Auramaris Google Drive" account acts **only as human administrator** (Manager) — it is not used as either system identity.
-7. Send me: the Shared Drive ID, the five folder IDs, and confirmation that the OryxScrape identity's credential is available as a project secret (I will name it `GOOGLE_DRIVE_EXCHANGE_CREDENTIALS`).
+Confirmed against the code and schema: the scheduler stops at `raw_items` + `normalized_items`. `normalized_items` keeps `verification_status = 'unreviewed'` and `publication_status = 'internal_only'` defaults; no scheduled path writes those columns, calls `setItemReviewState`, touches profile promotion, or calls the Exchange/Drive handoff. Review and handoff remain human-gated clicks. The public read API is untouched.
 
-Until step 7 lands, I build and test everything except live Drive calls, which stay behind an explicit "not configured" error.
+## 5. Re-collection without re-ingesting unchanged content
 
-## 4. Test matrix
+`raw_items` already has `UNIQUE (source_id, content_hash)`, and the collectors treat error code 23505 as a duplicate (counted, not failed). So a repeat weekly visit to an unchanged page or PDF inserts nothing and reports a duplicate — this works correctly as-is, no adjustment needed.
 
-| # | Test | Expected |
-|---|---|---|
-| 1 | Package an `unreviewed` or `rejected` item | Refused server-side |
-| 2 | Package a `reviewed + eligible` item | Folder + `artifact.txt` + `metadata.json` created; row `pending` |
-| 3 | Send the same item twice | Blocked by the partial unique index; no second Drive folder |
-| 4 | Retry after simulated Drive failure | Same `exchange_item_id` reused; no duplicate files; `error_reason` cleared on success |
-| 5 | `metadata.json` inspection | No tier, policy, profile, reviewer, credential, prompt or raw payload; correct `artifact_kind`/`official_artifact_verified: false` |
-| 6 | sha256 in manifest vs uploaded bytes | Identical |
-| 7 | Country/language left unconfirmed | Send button disabled |
-| 8 | Valid rejection feedback | State `rejected`, one `sha256` hard-skip suppression, one `.ack.json` with `status: processed` |
-| 9 | Feedback for unknown `exchange_item_id` / bad schema | State `error`, ack `status: failed`, no suppression |
-| 10 | Sync run twice | Idempotent on `drive_feedback_file_id`; ack written once |
-| 11 | Re-send a suppressed artifact | Blocked by exact sha256 |
-| 12 | Re-send same document with different bytes | Allowed (no hard block from URL/title/size) |
-| 13 | Term with a rejected document | Lifecycle unchanged; only `false_positive_count` increments |
-| 14 | Public API before/after | `/api/public/v1/items` response byte-identical |
-| 15 | anon / authenticated direct RPC | Still denied; security linter clean |
-| 16 | Lexicon export | CSV+JSON in `05_Search_Terms_Shared`, no prompts/credentials/live logic |
+One honest caveat to accept or address: the hash covers the extracted text, so a page whose text contains a volatile element (a rendered timestamp, a visit counter) would hash differently each week and create a near-duplicate row. Of our current sources this risk applies mainly to listing pages, not to the documents themselves. Proposal: leave the hashing rule unchanged and watch the weekly duplicate/new counts during the first month; only then decide whether any source needs a normalisation tweak.
 
-## 5. Rollback plan
+## 6. Operational visibility
 
-Additive-only, so rollback is cheap and cannot affect collection, review or the public API:
-1. Hide the Exchange and Lexicon nav entries and revert the two touched item files (label + link only).
-2. Set any open handoffs to `error` with an explicit reason; Drive files stay in place as evidence (nothing is deleted).
-3. If a full revert is wanted, a follow-up migration drops the three new tables and three enums — no existing object depends on them.
-4. Suppression rows are the only thing that could change future collection behaviour; deactivating them (`is_active = false`) restores prior behaviour without data loss.
+- Every scheduled run writes `collection_jobs` rows with `run_params.trigger = 'scheduled'`, already visible on the Collection jobs screen; failures keep `error_text`.
+- A blocked or failing source (HTTP 403, TLS failure, Apify failure) additionally writes an `audit_events` row so it is queryable and visible on the Audit screen.
+- Slack: two workspace Slack connections ("Auramaris Lovable") already exist but are **not linked to this project**. Proposal: link one and post a single weekly summary message plus an immediate alert per failed/blocked source. Nothing is built from scratch. If you prefer no Slack for now, the audit log + jobs screen already carry the information.
 
-## 6. Remaining blockers before I write code
+## 7. Test plan
 
-- Google-side setup confirmed (checklist §3, item 7).
-- Which 8–12 of the 43 items form the pilot. All 43 are currently `unreviewed`, so each pilot item must first be reviewed and marked eligible by you in the Collected items screen. The local/island/port-authority case is recorded as a post-pilot acceptance scenario.
+1. Greece client: search 2026 issue Β returns results; PDF URL builder produces the verified 4559 URL; wrong padding handled as a clean error.
+2. Greek collection of ΦΕΚ Β' 4559/2026 → one `raw_items` row with real Greek text, normalized through LogoriOn, left unreviewed/internal_only.
+3. Re-run the same collection immediately → 0 new, 1 duplicate; no second raw row.
+4. Spain RD 1188/2025 hunt → found and normalized, or reported honestly as not found.
+5. Cron route auth: no bearer → 401; wrong bearer → 401; correct bearer → 200 and jobs created.
+6. Dry run of the weekly pass with schedules enabled on two sources only, verifying job rows, duplicate counts, and that no `normalized_items` row changed review/publication state.
+7. Failure path: temporarily point one source at an unreachable URL, confirm the job is marked failed with `error_text`, an audit row exists, and (if Slack is approved) an alert fires.
+8. Full weekly pass across all 6 sources, then a second pass a week later to confirm dedup behaviour over time.
+
+## 8. Open questions for you
+
+1. **Slack**: link the existing "Auramaris Lovable" Slack connection for failure alerts, or keep visibility in-app only for now? If Slack, which channel?
+2. **Greek scope per weekly run**: monitor only ΦΕΚ Β' (regulatory issue) or also Α' (laws)? And how far back should each weekly run look — current year only, or a rolling window of recent issues?
+3. **Schedule ownership**: enable weekly scheduling for all 6 countries at once, or start with Greece + Spain for two weeks and then extend?
+4. **Croatia's 7 per-act sources**: those are fixed historical consolidations that will never change. Leave them off the schedule (my recommendation) or include them?
+5. **Environment target for the cron URL**: preview (`-dev`) or published project URL?
+6. **Pre-2000 Greek scans**: out of scope for now (no OCR in the scheduled path), confirm.
