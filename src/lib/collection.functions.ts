@@ -77,6 +77,24 @@ export const startCollectionJob = createServerFn({ method: "POST" })
       });
     }
 
+    // PDF-only portals: the documents are fetched directly and their text layer
+    // extracted server-side, because no crawler can parse application/pdf.
+    if (source.collection_method === "http") {
+      const { runPdfCollection } = await import("./pdf-collect.server");
+      const targets = data.documents?.length
+        ? data.documents
+        : [{ url: source.start_url }];
+      return runPdfCollection({
+        supabase,
+        source,
+        profileId: data.profileId ?? null,
+        targets,
+        language: data.language ?? null,
+      });
+    }
+
+
+
 
     const maxCrawlPages = Math.min(Math.max(data.maxPages ?? 10, 1), MAX_PAGES);
     const crawlerType =
