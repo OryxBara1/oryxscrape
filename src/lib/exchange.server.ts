@@ -187,11 +187,13 @@ export function parseFeedback(raw: string): ExchangeFeedback {
   };
   return {
     exchange_item_id: id,
-    decision,
+    decision: decision as FeedbackDecision,
     decided_at: str("decided_at"),
     reason_code: str("reason_code"),
     reason_detail: str("reason_detail"),
     artifact_sha256: str("artifact_sha256"),
+    auramaris_document_ref:
+      str("auramaris_document_ref") ?? str("auramaris_document_id") ?? str("document_ref"),
   };
 }
 
