@@ -166,7 +166,7 @@ export async function runPdfCollection(input: {
           language: input.language ?? null,
           apify_actor_id: null,
           apify_run_id: null,
-          collector_version: PDF_COLLECTOR_VERSION,
+          collector_version: isPdf ? PDF_COLLECTOR_VERSION : HTML_COLLECTOR_VERSION,
         });
 
         if (error) {
