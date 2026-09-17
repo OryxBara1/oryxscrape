@@ -148,7 +148,7 @@ function ExchangeScreen() {
             <select
               className={inputClass}
               value={selectedId ?? ""}
-              onChange={(e) => setSelectedId(e.target.value || null)}
+              onChange={(e) => selectCandidate(e.target.value || null)}
             >
               <option value="">Select a reviewed + eligible item…</option>
               {(candidates.data ?? [])
