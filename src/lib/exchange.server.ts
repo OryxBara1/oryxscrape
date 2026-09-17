@@ -497,7 +497,7 @@ export async function updateHandoffLocale(
     check_type: "exchange_metadata_correction",
     target_table: "exchange_handoffs",
     target_id: row.id,
-    result: "corrected",
+    result: "ok",
     findings: {
       exchange_item_id: row.exchange_item_id,
       normalized_item_id: row.normalized_item_id,
@@ -681,7 +681,8 @@ export async function runFeedbackSync(supabase: ExchangeDb) {
           check_type: "exchange_feedback",
           target_table: "normalized_items",
           target_id: handoff.normalized_item_id,
-          result: feedback.decision,
+          // audit_events.result is constrained to ok/warning/failed; the decision lives in findings.
+          result: "ok",
           findings: {
             exchange_item_id: feedback.exchange_item_id,
             decision: feedback.decision,
