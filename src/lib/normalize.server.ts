@@ -73,7 +73,11 @@ export async function runNormalizeJob(input: {
         payload: {
           ...doc,
           ...(payload.concept_label
-            ? { concept_label: payload.concept_label, concept_query: payload.concept_query }
+            ? {
+                concept_label: payload.concept_label,
+                concept_code: payload.concept_code ?? null,
+                concept_query: payload.concept_query ?? null,
+              }
             : {}),
           ...(payload.document_label ? { document_label: payload.document_label } : {}),
         } as unknown as never,
