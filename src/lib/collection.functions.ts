@@ -95,6 +95,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         source,
         profileId: data.profileId ?? null,
         limit: data.maxPages ?? 4,
+        ...(runConcept ? { concept: runConcept } : {}),
       });
     }
 
@@ -119,9 +120,10 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     // extracted server-side, because no crawler can parse application/pdf.
     if (source.collection_method === "http") {
       const { runPdfCollection } = await import("./pdf-collect.server");
-      const targets = data.documents?.length
-        ? data.documents
-        : [{ url: source.start_url }];
+      // Per-document concept wins; otherwise the run-level concept applies.
+      const targets = (data.documents?.length ? data.documents : [{ url: source.start_url }]).map(
+        (target) => ({ ...runConcept, ...target }),
+      );
       return runPdfCollection({
         supabase,
         source,
