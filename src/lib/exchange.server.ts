@@ -493,7 +493,7 @@ export async function updateHandoffLocale(
     .eq("state", "pending");
   if (updateError) throw new Error(updateError.message);
 
-  await supabase.from("audit_events").insert({
+  const { error: auditError } = await supabase.from("audit_events").insert({
     check_type: "exchange_metadata_correction",
     target_table: "exchange_handoffs",
     target_id: row.id,
@@ -509,6 +509,7 @@ export async function updateHandoffLocale(
       note: "metadata.json rewritten in place while still pending; artifact untouched.",
     },
   });
+  if (auditError) throw new Error(`Correction applied but audit logging failed: ${auditError.message}`);
 
   return {
     exchangeItemId: row.exchange_item_id,
