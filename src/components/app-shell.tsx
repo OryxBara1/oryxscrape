@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { SidebarNav, type NavGroupData, type NavItemData } from "@/components/ui/dashboard-sidebar";
+import { UsageGuide } from "@/components/usage-guide";
 import { supabase } from "@/integrations/supabase/client";
 
 const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
@@ -71,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full">
+      <UsageGuide />
       <aside className="glass-panel m-3 hidden overflow-hidden rounded-2xl md:block">
         <SidebarNav
           className="h-full border-r-0 bg-transparent"
