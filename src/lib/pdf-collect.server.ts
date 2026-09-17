@@ -1,11 +1,12 @@
 /**
- * Direct PDF document collection (server-only, collection_method 'http').
+ * Direct document collection (server-only, collection_method 'http').
  *
- * Some official portals publish their acts only as PDF files. The Apify
- * website-content-crawler cannot parse those (cheerio skips `application/pdf`,
- * the browser crawler aborts on the download), so those documents are fetched
- * here directly and their text layer is extracted with unpdf. Apify columns
- * stay NULL because no actor/run is involved.
+ * Some official portals publish their acts only as PDF files, others as a
+ * single consolidated HTML page. The Apify website-content-crawler cannot
+ * parse PDFs (cheerio skips `application/pdf`, the browser crawler aborts on
+ * the download), so those documents are fetched here directly: PDFs go through
+ * unpdf, HTML pages are reduced to their text content. Apify columns stay NULL
+ * because no actor/run is involved.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -15,6 +16,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { sha256Hex } from "./consumer-keys.server";
 
 export const PDF_COLLECTOR_VERSION = "http-pdf-fetch@1.0.0";
+export const HTML_COLLECTOR_VERSION = "http-html-fetch@1.0.0";
+
 
 type SourceFacts = {
   id: string;
