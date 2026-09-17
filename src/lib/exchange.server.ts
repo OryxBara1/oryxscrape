@@ -3,6 +3,7 @@ import {
   ARTIFACT_KIND,
   CONTENT_INTEGRITY_SCOPE,
   MANIFEST_VERSION,
+  suggestLocale,
 } from "./exchange-config";
 
 export type NormalizedPayload = Record<string, unknown>;
