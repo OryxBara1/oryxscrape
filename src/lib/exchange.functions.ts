@@ -29,14 +29,23 @@ export const listHandoffCandidates = createServerFn({ method: "GET" })
     return (items ?? []).map((item) => {
       const payload = (item.payload ?? {}) as Record<string, unknown>;
       const title = typeof payload["title"] === "string" ? (payload["title"] as string) : null;
+      const source = item.sources as unknown as { name?: string; domain?: string } | null;
+      const locale = suggestLocale({
+        sourceName: source?.name ?? null,
+        sourceDomain: source?.domain ?? null,
+        sourceUrl: item.source_url,
+      });
       return {
         id: item.id,
         sourceUrl: item.source_url,
+        sourceName: source?.name ?? null,
         title,
         category: item.category,
         jurisdictionHint: item.jurisdiction_hint,
         collectedAt: item.collected_at,
         alreadySent: taken.has(item.id),
+        suggestedCountryCode: locale?.countryCode ?? null,
+        suggestedLanguageCode: locale?.languageCode ?? null,
       };
     });
   });
