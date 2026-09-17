@@ -1,11 +1,12 @@
 /**
- * Direct PDF document collection (server-only, collection_method 'http').
+ * Direct document collection (server-only, collection_method 'http').
  *
- * Some official portals publish their acts only as PDF files. The Apify
- * website-content-crawler cannot parse those (cheerio skips `application/pdf`,
- * the browser crawler aborts on the download), so those documents are fetched
- * here directly and their text layer is extracted with unpdf. Apify columns
- * stay NULL because no actor/run is involved.
+ * Some official portals publish their acts only as PDF files, others as a
+ * single consolidated HTML page. The Apify website-content-crawler cannot
+ * parse PDFs (cheerio skips `application/pdf`, the browser crawler aborts on
+ * the download), so those documents are fetched here directly: PDFs go through
+ * unpdf, HTML pages are reduced to their text content. Apify columns stay NULL
+ * because no actor/run is involved.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -15,6 +16,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { sha256Hex } from "./consumer-keys.server";
 
 export const PDF_COLLECTOR_VERSION = "http-pdf-fetch@1.0.0";
+export const HTML_COLLECTOR_VERSION = "http-html-fetch@1.0.0";
+
 
 type SourceFacts = {
   id: string;
@@ -44,6 +47,32 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   const { text } = await extractText(pdf, { mergePages: true });
   return (Array.isArray(text) ? text.join("\n") : text).replace(/\u0000/g, "").trim();
 }
+
+/** Minimal HTML-to-text reduction; no DOM parser exists in the Worker runtime. */
+function extractHtmlText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|li|tr|h[1-6]|section|article)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t\u00a0]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\u0000/g, "")
+    .trim();
+}
+
+function looksLikePdf(bytes: Uint8Array, contentType: string | null): boolean {
+  if (contentType?.toLowerCase().includes("pdf")) return true;
+  return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+}
+
 
 export async function runPdfCollection(input: {
   supabase: SupabaseClient<Database>;
@@ -86,7 +115,10 @@ export async function runPdfCollection(input: {
       const label = target.document_label ?? null;
       try {
         const response = await fetch(target.url, {
-          headers: { Accept: "application/pdf,*/*" },
+          headers: {
+            Accept: "application/pdf,text/html;q=0.9,*/*;q=0.8",
+            "User-Agent": "OryxScrape/1.0 (+official document collection)",
+          },
           redirect: "follow",
         });
         const contentType = response.headers.get("content-type");
@@ -94,8 +126,16 @@ export async function runPdfCollection(input: {
           throw new Error(`HTTP ${response.status}`);
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const content = await extractPdfText(bytes);
-        if (!content) throw new Error("PDF has no extractable text layer.");
+        const isPdf = looksLikePdf(bytes, contentType);
+        const content = isPdf
+          ? await extractPdfText(bytes)
+          : extractHtmlText(new TextDecoder("utf-8").decode(bytes));
+        if (!content) {
+          throw new Error(
+            isPdf ? "PDF has no extractable text layer." : "Document has no extractable text.",
+          );
+        }
+
 
         const { error } = await supabase.from("raw_items").insert({
           job_id: job.id,
@@ -126,7 +166,7 @@ export async function runPdfCollection(input: {
           language: input.language ?? null,
           apify_actor_id: null,
           apify_run_id: null,
-          collector_version: PDF_COLLECTOR_VERSION,
+          collector_version: isPdf ? PDF_COLLECTOR_VERSION : HTML_COLLECTOR_VERSION,
         });
 
         if (error) {
