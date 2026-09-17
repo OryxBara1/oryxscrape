@@ -18,6 +18,65 @@ export const WRITABLE_FOLDER_IDS: readonly string[] = [
   EXCHANGE_FOLDERS.searchTermsShared,
 ];
 
+// Each source publishes for exactly one jurisdiction, so country/language can be
+// suggested from the source. "EU" is reserved for EU-level instruments collected
+// directly (not national transpositions).
+type Locale = { countryCode: string; languageCode: string };
+
+const DOMAIN_LOCALES: Array<[string, Locale]> = [
+  ["boe.es", { countryCode: "ES", languageCode: "es" }],
+  ["legifrance.gouv.fr", { countryCode: "FR", languageCode: "fr" }],
+  ["piste.gouv.fr", { countryCode: "FR", languageCode: "fr" }],
+  ["nn.hr", { countryCode: "HR", languageCode: "hr" }],
+  ["narodne-novine.nn.hr", { countryCode: "HR", languageCode: "hr" }],
+  ["gesetze-im-internet.de", { countryCode: "DE", languageCode: "de" }],
+  ["guardiacostiera.gov.it", { countryCode: "IT", languageCode: "it" }],
+  ["gazzettaufficiale.it", { countryCode: "IT", languageCode: "it" }],
+  ["diariodarepublica.pt", { countryCode: "PT", languageCode: "pt" }],
+  ["dre.pt", { countryCode: "PT", languageCode: "pt" }],
+  ["wetten.overheid.nl", { countryCode: "NL", languageCode: "nl" }],
+  ["overheid.nl", { countryCode: "NL", languageCode: "nl" }],
+  ["legislation.mt", { countryCode: "MT", languageCode: "en" }],
+  ["cylaw.org", { countryCode: "CY", languageCode: "el" }],
+  ["et.gr", { countryCode: "GR", languageCode: "el" }],
+  ["europa.eu", { countryCode: "EU", languageCode: "en" }],
+];
+
+const NAME_LOCALES: Array<[string, Locale]> = [
+  ["boe", { countryCode: "ES", languageCode: "es" }],
+  ["légifrance", { countryCode: "FR", languageCode: "fr" }],
+  ["legifrance", { countryCode: "FR", languageCode: "fr" }],
+  ["narodne novine", { countryCode: "HR", languageCode: "hr" }],
+  ["gesetze im internet", { countryCode: "DE", languageCode: "de" }],
+  ["guardia costiera", { countryCode: "IT", languageCode: "it" }],
+  ["diário da república", { countryCode: "PT", languageCode: "pt" }],
+  ["diario da republica", { countryCode: "PT", languageCode: "pt" }],
+  ["wetten", { countryCode: "NL", languageCode: "nl" }],
+  ["legislation.mt", { countryCode: "MT", languageCode: "en" }],
+  ["malta", { countryCode: "MT", languageCode: "en" }],
+  ["cylaw", { countryCode: "CY", languageCode: "el" }],
+  ["cyprus", { countryCode: "CY", languageCode: "el" }],
+  ["et.gr", { countryCode: "GR", languageCode: "el" }],
+  ["εφημερίδα", { countryCode: "GR", languageCode: "el" }],
+  ["eur-lex", { countryCode: "EU", languageCode: "en" }],
+];
+
+export function suggestLocale(input: {
+  sourceName?: string | null;
+  sourceDomain?: string | null;
+  sourceUrl?: string | null;
+}): Locale | null {
+  const haystack = `${input.sourceDomain ?? ""} ${input.sourceUrl ?? ""}`.toLowerCase();
+  for (const [domain, locale] of DOMAIN_LOCALES) {
+    if (haystack.includes(domain)) return locale;
+  }
+  const name = (input.sourceName ?? "").toLowerCase();
+  for (const [key, locale] of NAME_LOCALES) {
+    if (name.includes(key)) return locale;
+  }
+  return null;
+}
+
 export const ARTIFACT_KIND = "extracted_text_only";
 export const CONTENT_INTEGRITY_SCOPE = "normalized_extracted_text";
 export const MANIFEST_VERSION = "1.0";
