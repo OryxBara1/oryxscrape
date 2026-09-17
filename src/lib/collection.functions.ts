@@ -156,6 +156,8 @@ export const startCollectionJob = createServerFn({ method: "POST" })
           maxCrawlPages,
           crawlerType,
           ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
+          // Read back at sync time and stamped onto every crawled row.
+          ...(runConcept ? { concept: runConcept } : {}),
         },
       })
       .select("id")
