@@ -113,3 +113,20 @@ export const syncExchangeFeedback = createServerFn({ method: "POST" })
     return { seen, processed, failed, skipped };
   });
 
+
+export const updateHandoffLocale = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { handoffId: string; countryCode: string; languageCode: string }) => {
+    if (typeof input?.handoffId !== "string" || !input.handoffId) {
+      throw new Error("A handoff id is required.");
+    }
+    const country = (input.countryCode ?? "").trim().toUpperCase();
+    const language = (input.languageCode ?? "").trim().toLowerCase();
+    if (!/^[A-Z]{2}$/.test(country)) throw new Error("Confirm a 2-letter country code.");
+    if (!/^[a-z]{2}$/.test(language)) throw new Error("Confirm a 2-letter language code.");
+    return { handoffId: input.handoffId, countryCode: country, languageCode: language };
+  })
+  .handler(async ({ data, context }) => {
+    const exchange = await import("./exchange.server");
+    return exchange.updateHandoffLocale(context.supabase, context.userId, data);
+  });
