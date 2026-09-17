@@ -28,6 +28,14 @@ export type PdfTarget = {
   url: string;
   /** Free-text label used only for traceability (e.g. the ordinance number). */
   document_label?: string;
+  /**
+   * Taxonomy concept that surfaced this document. Structured, never encoded
+   * inside `document_label`: normalization copies these fields verbatim onto
+   * the normalized payload, the same way the France collector does.
+   */
+  concept_code?: string;
+  concept_label?: string;
+  concept_query?: string;
 };
 
 async function extractPdfText(bytes: Uint8Array): Promise<string> {
@@ -97,6 +105,13 @@ export async function runPdfCollection(input: {
             plain_text: content,
             document_label: label,
             byte_length: bytes.byteLength,
+            ...(target.concept_label
+              ? {
+                  concept_label: target.concept_label,
+                  concept_code: target.concept_code ?? null,
+                  concept_query: target.concept_query ?? null,
+                }
+              : {}),
           } as unknown as never,
           content_hash: await sha256Hex(content),
           collected_at: new Date().toISOString(),

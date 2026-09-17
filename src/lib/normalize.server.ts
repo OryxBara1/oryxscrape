@@ -51,8 +51,9 @@ export async function runNormalizeJob(input: {
       text?: string | unknown;
       html?: string;
       plain_text?: string;
+      concept_code?: string | null;
       concept_label?: string;
-      concept_query?: string;
+      concept_query?: string | null;
       document_label?: string;
     };
     const content =
