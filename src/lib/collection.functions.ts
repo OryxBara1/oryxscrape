@@ -40,9 +40,20 @@ export const startCollectionJob = createServerFn({ method: "POST" })
       profileId?: string | null;
       maxPages?: number;
       query?: string;
-      concepts?: { concept_label: string; query: string }[];
+      concepts?: { concept_code?: string; concept_label: string; query: string }[];
       /** Direct document URLs, used by `http` sources (e.g. PDF-only portals). */
-      documents?: { url: string; document_label?: string }[];
+      documents?: {
+        url: string;
+        document_label?: string;
+        concept_code?: string;
+        concept_label?: string;
+        concept_query?: string;
+      }[];
+      /**
+       * Concept behind a crawl/API run, tagged onto every row it ingests.
+       * Falls back to the first entry of `concepts` when only that is given.
+       */
+      concept?: { concept_code?: string; concept_label: string; concept_query?: string };
       language?: string | null;
     }) => input,
   )
