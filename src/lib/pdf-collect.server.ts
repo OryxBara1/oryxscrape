@@ -115,7 +115,10 @@ export async function runPdfCollection(input: {
       const label = target.document_label ?? null;
       try {
         const response = await fetch(target.url, {
-          headers: { Accept: "application/pdf,*/*" },
+          headers: {
+            Accept: "application/pdf,text/html;q=0.9,*/*;q=0.8",
+            "User-Agent": "OryxScrape/1.0 (+official document collection)",
+          },
           redirect: "follow",
         });
         const contentType = response.headers.get("content-type");
@@ -123,8 +126,16 @@ export async function runPdfCollection(input: {
           throw new Error(`HTTP ${response.status}`);
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const content = await extractPdfText(bytes);
-        if (!content) throw new Error("PDF has no extractable text layer.");
+        const isPdf = looksLikePdf(bytes, contentType);
+        const content = isPdf
+          ? await extractPdfText(bytes)
+          : extractHtmlText(new TextDecoder("utf-8").decode(bytes));
+        if (!content) {
+          throw new Error(
+            isPdf ? "PDF has no extractable text layer." : "Document has no extractable text.",
+          );
+        }
+
 
         const { error } = await supabase.from("raw_items").insert({
           job_id: job.id,
