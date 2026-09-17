@@ -80,6 +80,24 @@ export async function uploadTextFile(params: {
 }
 
 
+/** Overwrites the content of an existing Drive file (new revision, same file id). */
+export async function updateTextFileContent(params: {
+  fileId: string;
+  mimeType: string;
+  content: string;
+}): Promise<DriveFile> {
+  const res = await fetch(
+    `${UPLOAD}/${params.fileId}?uploadType=media&${SHARED_DRIVE_PARAMS}&fields=id,name,mimeType`,
+    {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": params.mimeType },
+      body: params.content,
+    },
+  );
+  if (!res.ok) await readError(res, "file content update");
+  return (await res.json()) as DriveFile;
+}
+
 export async function listFolderInDrive(folderId: string, driveId: string): Promise<DriveFile[]> {
   const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
   const res = await fetch(

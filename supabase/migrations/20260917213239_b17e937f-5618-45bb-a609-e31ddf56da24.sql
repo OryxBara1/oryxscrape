@@ -1,0 +1,1 @@
+ALTER TYPE public.audit_check_type ADD VALUE IF NOT EXISTS 'exchange_metadata_correction';

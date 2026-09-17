@@ -19,6 +19,7 @@ import {
   listSuppressions,
   packageAndSendHandoff,
   syncExchangeFeedback,
+  updateHandoffLocale,
 } from "@/lib/exchange.functions";
 
 const STATE_TONE: Record<string, string> = {
@@ -58,10 +59,14 @@ function ExchangeScreen() {
   const fetchSuppressions = useServerFn(listSuppressions);
   const sendHandoff = useServerFn(packageAndSendHandoff);
   const syncFeedback = useServerFn(syncExchangeFeedback);
+  const correctLocale = useServerFn(updateHandoffLocale);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [country, setCountry] = useState("");
   const [language, setLanguage] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCountry, setEditCountry] = useState("");
+  const [editLanguage, setEditLanguage] = useState("");
 
   const candidates = useQuery({
     queryKey: ["handoff-candidates"],
@@ -96,8 +101,32 @@ function ExchangeScreen() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const correct = useMutation({
+    mutationFn: (vars: { handoffId: string; countryCode: string; languageCode: string }) =>
+      correctLocale({ data: vars }),
+    onSuccess: (res) => {
+      toast.success(
+        `Corrected ${res.previous.country_code ?? "—"}/${res.previous.language_code ?? "—"} → ${res.next.country_code}/${res.next.language_code} and rewrote metadata.json.`,
+      );
+      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ["handoffs"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const canSend =
     !!selectedId && /^[A-Za-z]{2}$/.test(country) && /^[A-Za-z]{2}$/.test(language);
+  const canCorrect =
+    /^[A-Za-z]{2}$/.test(editCountry) && /^[A-Za-z]{2}$/.test(editLanguage);
+
+  // Each source publishes for one jurisdiction, so selecting an item pre-fills
+  // the codes; staff still confirms or overrides before sending.
+  function selectCandidate(id: string | null) {
+    setSelectedId(id);
+    const candidate = (candidates.data ?? []).find((c) => c.id === id);
+    setCountry(candidate?.suggestedCountryCode ?? "");
+    setLanguage(candidate?.suggestedLanguageCode ?? "");
+  }
 
   return (
     <section className="space-y-6">
@@ -119,7 +148,7 @@ function ExchangeScreen() {
             <select
               className={inputClass}
               value={selectedId ?? ""}
-              onChange={(e) => setSelectedId(e.target.value || null)}
+              onChange={(e) => selectCandidate(e.target.value || null)}
             >
               <option value="">Select a reviewed + eligible item…</option>
               {(candidates.data ?? [])
@@ -192,7 +221,57 @@ function ExchangeScreen() {
               <p className="max-w-60 truncate font-mono">{row.artifact_sha256}</p>
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">
-              {row.country_code ?? "—"} / {row.language_code ?? "—"}
+              {editingId === row.id ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className={`${inputClass} w-16 py-1 text-xs`}
+                    value={editCountry}
+                    maxLength={2}
+                    onChange={(e) => setEditCountry(e.target.value)}
+                  />
+                  <input
+                    className={`${inputClass} w-16 py-1 text-xs`}
+                    value={editLanguage}
+                    maxLength={2}
+                    onChange={(e) => setEditLanguage(e.target.value)}
+                  />
+                  <GlowButton
+                    type="submit"
+                    disabled={!canCorrect || correct.isPending}
+                    onClick={() =>
+                      correct.mutate({
+                        handoffId: row.id,
+                        countryCode: editCountry,
+                        languageCode: editLanguage,
+                      })
+                    }
+                  >
+                    {correct.isPending ? "Saving…" : "Save"}
+                  </GlowButton>
+                  <GlowButton variant="ghost" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </GlowButton>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {row.country_code ?? "—"} / {row.language_code ?? "—"}
+                  </span>
+                  {row.state === "pending" ? (
+                    <button
+                      type="button"
+                      className="text-[11px] underline underline-offset-2 hover:text-foreground"
+                      onClick={() => {
+                        setEditingId(row.id);
+                        setEditCountry(row.country_code ?? "");
+                        setEditLanguage(row.language_code ?? "");
+                      }}
+                    >
+                      Edit country/language
+                    </button>
+                  ) : null}
+                </div>
+              )}
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(row.sent_at)}</td>
             <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">

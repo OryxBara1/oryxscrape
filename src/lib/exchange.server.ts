@@ -3,6 +3,7 @@ import {
   ARTIFACT_KIND,
   CONTENT_INTEGRITY_SCOPE,
   MANIFEST_VERSION,
+  suggestLocale,
 } from "./exchange-config";
 
 export type NormalizedPayload = Record<string, unknown>;
@@ -396,13 +397,126 @@ export async function packageAndSend(
 export function deriveLocaleFromSourceName(
   name: string,
 ): { countryCode: string; languageCode: string } | null {
-  const n = name.toLowerCase();
-  if (n.includes("boe")) return { countryCode: "ES", languageCode: "es" };
-  if (n.includes("légifrance") || n.includes("legifrance"))
-    return { countryCode: "FR", languageCode: "fr" };
-  if (n.includes("narodne novine")) return { countryCode: "HR", languageCode: "hr" };
-  if (n.includes("gesetze im internet")) return { countryCode: "DE", languageCode: "de" };
-  return null;
+  return suggestLocale({ sourceName: name });
+}
+
+/**
+ * Corrects country/language on a handoff that AuraMaris has not acted on yet.
+ * Only `pending` rows may be edited: once a decision exists the record is theirs.
+ * Rewrites metadata.json in place (same folder, same file id); the artifact is
+ * never touched, so the checksum and suppression identity stay stable.
+ */
+export async function updateHandoffLocale(
+  supabase: ExchangeDb,
+  userId: string | null,
+  input: { handoffId: string; countryCode: string; languageCode: string },
+) {
+  const drive = await import("./drive.server");
+
+  const { data: row, error } = await supabase
+    .from("exchange_handoffs")
+    .select(
+      "id, exchange_item_id, normalized_item_id, state, country_code, language_code, drive_folder_id, drive_metadata_file_id, artifact_filename, artifact_mime_type, artifact_sha256, artifact_size_bytes",
+    )
+    .eq("id", input.handoffId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new Error("Handoff not found.");
+  if (row.state !== "pending") {
+    throw new Error(
+      `This handoff is ${row.state} — AuraMaris has already acted on it, so country/language can no longer be corrected.`,
+    );
+  }
+  if (!row.drive_metadata_file_id) {
+    throw new Error("This handoff has no metadata file in Drive yet.");
+  }
+
+  const previous = { country_code: row.country_code, language_code: row.language_code };
+  if (
+    previous.country_code === input.countryCode &&
+    previous.language_code === input.languageCode
+  ) {
+    throw new Error("Country and language are already set to these values.");
+  }
+
+  const { data: item, error: itemError } = await supabase
+    .from("normalized_items")
+    .select("id, source_url, jurisdiction_hint, category, payload, collected_at, raw_item_id")
+    .eq("id", row.normalized_item_id)
+    .maybeSingle();
+  if (itemError) throw new Error(itemError.message);
+  if (!item) throw new Error("Item not found.");
+
+  const { data: raw } = await supabase
+    .from("raw_items")
+    .select("canonical_url")
+    .eq("id", item.raw_item_id)
+    .maybeSingle();
+
+  const payload = (item.payload ?? {}) as Record<string, unknown>;
+  const concept = extractConcept(payload);
+  const manifest = buildManifest({
+    exchangeItemId: row.exchange_item_id,
+    sourceUrl: item.source_url,
+    canonicalUrl: raw?.canonical_url ?? null,
+    countryCode: input.countryCode,
+    languageCode: input.languageCode,
+    title: extractTitle(payload),
+    reference: extractReference(payload),
+    publicationDate: extractPublicationDate(payload),
+    category: item.category,
+    jurisdictionHint: item.jurisdiction_hint,
+    conceptCode: concept.code,
+    conceptLabel: concept.label,
+    collectedAt: item.collected_at,
+    artifactFilename: row.artifact_filename,
+    artifactSha256: row.artifact_sha256,
+    artifactSizeBytes: Number(row.artifact_size_bytes),
+    artifactMimeType: row.artifact_mime_type,
+  });
+
+  await drive.updateTextFileContent({
+    fileId: row.drive_metadata_file_id,
+    mimeType: "application/json",
+    content: JSON.stringify(manifest, null, 2),
+  });
+
+  const correctedAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("exchange_handoffs")
+    .update({
+      country_code: input.countryCode,
+      language_code: input.languageCode,
+      last_synced_at: correctedAt,
+    })
+    .eq("id", row.id)
+    .eq("state", "pending");
+  if (updateError) throw new Error(updateError.message);
+
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    check_type: "exchange_metadata_correction",
+    target_table: "exchange_handoffs",
+    target_id: row.id,
+    result: "ok",
+    findings: {
+      exchange_item_id: row.exchange_item_id,
+      normalized_item_id: row.normalized_item_id,
+      drive_metadata_file_id: row.drive_metadata_file_id,
+      previous,
+      new: { country_code: input.countryCode, language_code: input.languageCode },
+      corrected_at: correctedAt,
+      corrected_by: userId,
+      note: "metadata.json rewritten in place while still pending; artifact untouched.",
+    },
+  });
+  if (auditError) throw new Error(`Correction applied but audit logging failed: ${auditError.message}`);
+
+  return {
+    exchangeItemId: row.exchange_item_id,
+    previous,
+    next: { country_code: input.countryCode, language_code: input.languageCode },
+    correctedAt,
+  };
 }
 
 export type BatchRow = {
@@ -567,7 +681,8 @@ export async function runFeedbackSync(supabase: ExchangeDb) {
           check_type: "exchange_feedback",
           target_table: "normalized_items",
           target_id: handoff.normalized_item_id,
-          result: feedback.decision,
+          // audit_events.result is constrained to ok/warning/failed; the decision lives in findings.
+          result: "ok",
           findings: {
             exchange_item_id: feedback.exchange_item_id,
             decision: feedback.decision,
