@@ -101,8 +101,32 @@ function ExchangeScreen() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const correct = useMutation({
+    mutationFn: (vars: { handoffId: string; countryCode: string; languageCode: string }) =>
+      correctLocale({ data: vars }),
+    onSuccess: (res) => {
+      toast.success(
+        `Corrected ${res.previous.country_code ?? "—"}/${res.previous.language_code ?? "—"} → ${res.next.country_code}/${res.next.language_code} and rewrote metadata.json.`,
+      );
+      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ["handoffs"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const canSend =
     !!selectedId && /^[A-Za-z]{2}$/.test(country) && /^[A-Za-z]{2}$/.test(language);
+  const canCorrect =
+    /^[A-Za-z]{2}$/.test(editCountry) && /^[A-Za-z]{2}$/.test(editLanguage);
+
+  // Each source publishes for one jurisdiction, so selecting an item pre-fills
+  // the codes; staff still confirms or overrides before sending.
+  function selectCandidate(id: string | null) {
+    setSelectedId(id);
+    const candidate = (candidates.data ?? []).find((c) => c.id === id);
+    setCountry(candidate?.suggestedCountryCode ?? "");
+    setLanguage(candidate?.suggestedLanguageCode ?? "");
+  }
 
   return (
     <section className="space-y-6">
