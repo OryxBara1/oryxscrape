@@ -849,6 +849,7 @@ export type Database = {
         | "robots_recheck"
         | "review_status_change"
         | "exchange_feedback"
+        | "exchange_metadata_correction"
       collection_method: "apify" | "http" | "api" | "manual"
       exchange_handoff_state:
         | "pending"
@@ -1026,6 +1027,7 @@ export const Constants = {
         "robots_recheck",
         "review_status_change",
         "exchange_feedback",
+        "exchange_metadata_correction",
       ],
       collection_method: ["apify", "http", "api", "manual"],
       exchange_handoff_state: [
