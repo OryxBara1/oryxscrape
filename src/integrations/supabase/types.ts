@@ -689,6 +689,7 @@ export type Database = {
       }
       sources: {
         Row: {
+          apify_actor_id: string | null
           collection_method: Database["public"]["Enums"]["collection_method"]
           crawler_type: string
           created_at: string
@@ -714,6 +715,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          apify_actor_id?: string | null
           collection_method?: Database["public"]["Enums"]["collection_method"]
           crawler_type?: string
           created_at?: string
@@ -739,6 +741,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          apify_actor_id?: string | null
           collection_method?: Database["public"]["Enums"]["collection_method"]
           crawler_type?: string
           created_at?: string

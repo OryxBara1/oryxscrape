@@ -53,7 +53,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     const { data: source, error: sourceError } = await supabase
       .from("sources")
       .select(
-        "id, domain, start_url, collection_method, is_active, crawler_type, include_url_globs, is_official_domain, is_primary_document, traceability_level, institution_class",
+        "id, domain, start_url, collection_method, is_active, crawler_type, apify_actor_id, include_url_globs, is_official_domain, is_primary_document, traceability_level, institution_class",
       )
       .eq("id", data.sourceId)
       .single();
@@ -111,6 +111,8 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     const crawlerType =
       source.crawler_type === "playwright:firefox" ? "playwright:firefox" : "cheerio";
     const includeUrlGlobs = source.include_url_globs ?? undefined;
+    /** Per-source named Apify actor; NULL keeps the generic content crawler. */
+    const actorId = source.apify_actor_id ?? "apify~website-content-crawler";
 
 
     const { data: job, error: jobError } = await supabase
@@ -121,7 +123,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         status: "running",
         started_at: new Date().toISOString(),
         run_params: {
-          actor: "apify~website-content-crawler",
+          actor: actorId,
           maxCrawlPages,
           crawlerType,
           ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
@@ -137,6 +139,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         startUrl: source.start_url,
         maxCrawlPages,
         crawlerType,
+        actorId,
         ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
       });
 

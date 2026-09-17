@@ -1,0 +1,2 @@
+ALTER TABLE public.sources ADD COLUMN IF NOT EXISTS apify_actor_id text;
+COMMENT ON COLUMN public.sources.apify_actor_id IS 'Optional named Apify actor (username~actor-name). NULL uses the generic website-content-crawler.';
