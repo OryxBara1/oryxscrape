@@ -230,8 +230,12 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
     const pages = await getDatasetItems(run.defaultDatasetId, MAX_PAGES);
     const { sha256Hex } = await import("./consumer-keys.server");
     const facts = job.sources!;
-    const runParams = (job.run_params ?? {}) as { actor?: string };
+    const runParams = (job.run_params ?? {}) as {
+      actor?: string;
+      concept?: { concept_code?: string; concept_label: string; concept_query?: string };
+    };
     const actorId = runParams.actor ?? null;
+    const concept = runParams.concept;
 
 
     let ingested = 0;
