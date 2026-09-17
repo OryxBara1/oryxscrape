@@ -48,6 +48,32 @@ async function extractPdfText(bytes: Uint8Array): Promise<string> {
   return (Array.isArray(text) ? text.join("\n") : text).replace(/\u0000/g, "").trim();
 }
 
+/** Minimal HTML-to-text reduction; no DOM parser exists in the Worker runtime. */
+function extractHtmlText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|li|tr|h[1-6]|section|article)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t\u00a0]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\u0000/g, "")
+    .trim();
+}
+
+function looksLikePdf(bytes: Uint8Array, contentType: string | null): boolean {
+  if (contentType?.toLowerCase().includes("pdf")) return true;
+  return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+}
+
+
 export async function runPdfCollection(input: {
   supabase: SupabaseClient<Database>;
   source: SourceFacts;
