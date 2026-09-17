@@ -66,9 +66,20 @@ export function suggestLocale(input: {
   sourceDomain?: string | null;
   sourceUrl?: string | null;
 }): Locale | null {
-  const haystack = `${input.sourceDomain ?? ""} ${input.sourceUrl ?? ""}`.toLowerCase();
-  for (const [domain, locale] of DOMAIN_LOCALES) {
-    if (haystack.includes(domain)) return locale;
+  // Match on host suffix, never on a raw substring: a path or query containing
+  // "et.gr" or "europa.eu" must not decide the jurisdiction of another country.
+  const hosts: string[] = [];
+  const domain = (input.sourceDomain ?? "").trim().toLowerCase();
+  if (domain) hosts.push(domain.replace(/^https?:\/\//, "").split("/")[0] ?? domain);
+  if (input.sourceUrl) {
+    try {
+      hosts.push(new URL(input.sourceUrl).hostname.toLowerCase());
+    } catch {
+      /* not a parseable URL — the domain column is enough */
+    }
+  }
+  for (const [candidate, locale] of DOMAIN_LOCALES) {
+    if (hosts.some((host) => host === candidate || host.endsWith(`.${candidate}`))) return locale;
   }
   const name = (input.sourceName ?? "").toLowerCase();
   for (const [key, locale] of NAME_LOCALES) {
