@@ -255,7 +255,16 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
         job_id: job.id,
         source_id: job.source_id,
         source_url: url,
-        raw_payload: page as unknown as never,
+        raw_payload: {
+          ...page,
+          ...(concept
+            ? {
+                concept_label: concept.concept_label,
+                concept_code: concept.concept_code ?? null,
+                concept_query: concept.concept_query ?? null,
+              }
+            : {}),
+        } as unknown as never,
         content_hash: contentHash,
         collected_at: new Date().toISOString(),
         collection_method: "apify",
