@@ -59,10 +59,14 @@ function ExchangeScreen() {
   const fetchSuppressions = useServerFn(listSuppressions);
   const sendHandoff = useServerFn(packageAndSendHandoff);
   const syncFeedback = useServerFn(syncExchangeFeedback);
+  const correctLocale = useServerFn(updateHandoffLocale);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [country, setCountry] = useState("");
   const [language, setLanguage] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCountry, setEditCountry] = useState("");
+  const [editLanguage, setEditLanguage] = useState("");
 
   const candidates = useQuery({
     queryKey: ["handoff-candidates"],
