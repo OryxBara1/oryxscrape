@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -260,14 +261,15 @@ function ExchangeScreen() {
                   {row.state === "pending" ? (
                     <button
                       type="button"
-                      className="text-[11px] underline underline-offset-2 hover:text-foreground"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-black/20 px-2 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground outline-none transition hover:border-primary/50 hover:text-foreground focus-visible:border-primary/50 focus-visible:shadow-glow"
                       onClick={() => {
                         setEditingId(row.id);
                         setEditCountry(row.country_code ?? "");
                         setEditLanguage(row.language_code ?? "");
                       }}
                     >
-                      Edit country/language
+                      <Pencil size={11} strokeWidth={2} />
+                      Edit locale
                     </button>
                   ) : null}
                 </div>
