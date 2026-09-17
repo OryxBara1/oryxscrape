@@ -51,8 +51,9 @@ export async function runNormalizeJob(input: {
       text?: string | unknown;
       html?: string;
       plain_text?: string;
+      concept_code?: string | null;
       concept_label?: string;
-      concept_query?: string;
+      concept_query?: string | null;
       document_label?: string;
     };
     const content =
@@ -72,7 +73,11 @@ export async function runNormalizeJob(input: {
         payload: {
           ...doc,
           ...(payload.concept_label
-            ? { concept_label: payload.concept_label, concept_query: payload.concept_query }
+            ? {
+                concept_label: payload.concept_label,
+                concept_code: payload.concept_code ?? null,
+                concept_query: payload.concept_query ?? null,
+              }
             : {}),
           ...(payload.document_label ? { document_label: payload.document_label } : {}),
         } as unknown as never,

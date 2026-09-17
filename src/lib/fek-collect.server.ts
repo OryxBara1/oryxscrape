@@ -42,6 +42,8 @@ export async function runFekCollection(input: {
   issue?: string;
   /** Explicit targets, used by manual hunts for a known ΦΕΚ. */
   targets?: FekEntry[];
+  /** Taxonomy concept that drove this run, tagged onto every ingested row. */
+  concept?: { concept_code?: string; concept_label: string; concept_query?: string };
 }) {
   const { supabase, source } = input;
   const issue = input.issue ?? FEK_ISSUE_B;
@@ -104,6 +106,13 @@ export async function runFekCollection(input: {
           raw_payload: {
             plain_text: content,
             document_label: entry.label,
+            ...(input.concept
+              ? {
+                  concept_label: input.concept.concept_label,
+                  concept_code: input.concept.concept_code ?? null,
+                  concept_query: input.concept.concept_query ?? null,
+                }
+              : {}),
             fek_issue: entry.issue,
             fek_year: entry.year,
             fek_document_number: entry.documentNumber,

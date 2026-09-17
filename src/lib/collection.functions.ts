@@ -40,15 +40,42 @@ export const startCollectionJob = createServerFn({ method: "POST" })
       profileId?: string | null;
       maxPages?: number;
       query?: string;
-      concepts?: { concept_label: string; query: string }[];
+      concepts?: { concept_code?: string; concept_label: string; query: string }[];
       /** Direct document URLs, used by `http` sources (e.g. PDF-only portals). */
-      documents?: { url: string; document_label?: string }[];
+      documents?: {
+        url: string;
+        document_label?: string;
+        concept_code?: string;
+        concept_label?: string;
+        concept_query?: string;
+      }[];
+      /**
+       * Concept behind a crawl/API run, tagged onto every row it ingests.
+       * Falls back to the first entry of `concepts` when only that is given.
+       */
+      concept?: { concept_code?: string; concept_label: string; concept_query?: string };
       language?: string | null;
     }) => input,
   )
 
   .handler(async ({ data, context }) => {
     const { supabase } = context;
+
+    /**
+     * One concept tag for the whole run. Every collection path stamps it onto
+     * the rows it ingests so concept traceability no longer depends on which
+     * collector happened to run.
+     */
+    const runConcept =
+      data.concept ??
+      (data.concepts?.length && data.concepts[0]
+        ? {
+            ...(data.concepts[0].concept_code ? { concept_code: data.concepts[0].concept_code } : {}),
+            concept_label: data.concepts[0].concept_label,
+            concept_query: data.concepts[0].query,
+          }
+        : undefined);
+
 
     const { data: source, error: sourceError } = await supabase
       .from("sources")
@@ -68,6 +95,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         source,
         profileId: data.profileId ?? null,
         limit: data.maxPages ?? 4,
+        ...(runConcept ? { concept: runConcept } : {}),
       });
     }
 
@@ -92,9 +120,10 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     // extracted server-side, because no crawler can parse application/pdf.
     if (source.collection_method === "http") {
       const { runPdfCollection } = await import("./pdf-collect.server");
-      const targets = data.documents?.length
-        ? data.documents
-        : [{ url: source.start_url }];
+      // Per-document concept wins; otherwise the run-level concept applies.
+      const targets = (data.documents?.length ? data.documents : [{ url: source.start_url }]).map(
+        (target) => ({ ...runConcept, ...target }),
+      );
       return runPdfCollection({
         supabase,
         source,
@@ -127,6 +156,8 @@ export const startCollectionJob = createServerFn({ method: "POST" })
           maxCrawlPages,
           crawlerType,
           ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
+          // Read back at sync time and stamped onto every crawled row.
+          ...(runConcept ? { concept: runConcept } : {}),
         },
       })
       .select("id")
@@ -199,8 +230,12 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
     const pages = await getDatasetItems(run.defaultDatasetId, MAX_PAGES);
     const { sha256Hex } = await import("./consumer-keys.server");
     const facts = job.sources!;
-    const runParams = (job.run_params ?? {}) as { actor?: string };
+    const runParams = (job.run_params ?? {}) as {
+      actor?: string;
+      concept?: { concept_code?: string; concept_label: string; concept_query?: string };
+    };
     const actorId = runParams.actor ?? null;
+    const concept = runParams.concept;
 
 
     let ingested = 0;
@@ -220,7 +255,16 @@ export const syncCollectionJob = createServerFn({ method: "POST" })
         job_id: job.id,
         source_id: job.source_id,
         source_url: url,
-        raw_payload: page as unknown as never,
+        raw_payload: {
+          ...page,
+          ...(concept
+            ? {
+                concept_label: concept.concept_label,
+                concept_code: concept.concept_code ?? null,
+                concept_query: concept.concept_query ?? null,
+              }
+            : {}),
+        } as unknown as never,
         content_hash: contentHash,
         collected_at: new Date().toISOString(),
         collection_method: "apify",
