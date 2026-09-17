@@ -61,6 +61,22 @@ export const startCollectionJob = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
+    /**
+     * One concept tag for the whole run. Every collection path stamps it onto
+     * the rows it ingests so concept traceability no longer depends on which
+     * collector happened to run.
+     */
+    const runConcept =
+      data.concept ??
+      (data.concepts?.length && data.concepts[0]
+        ? {
+            ...(data.concepts[0].concept_code ? { concept_code: data.concepts[0].concept_code } : {}),
+            concept_label: data.concepts[0].concept_label,
+            concept_query: data.concepts[0].query,
+          }
+        : undefined);
+
+
     const { data: source, error: sourceError } = await supabase
       .from("sources")
       .select(
