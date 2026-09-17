@@ -5,10 +5,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const listHandoffCandidates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { suggestLocale } = await import("./exchange-config");
     const { data: items, error } = await context.supabase
       .from("normalized_items")
       .select(
-        "id, source_url, jurisdiction_hint, category, payload, collected_at, updated_at",
+        "id, source_url, jurisdiction_hint, category, payload, collected_at, updated_at, sources(name, domain)",
       )
       .eq("verification_status", "reviewed")
       .eq("publication_status", "eligible")
