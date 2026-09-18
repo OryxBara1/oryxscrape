@@ -780,6 +780,39 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_members: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          is_active: boolean
+          note: string | null
+          role: Database["public"]["Enums"]["staff_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          role?: Database["public"]["Enums"]["staff_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          note?: string | null
+          role?: Database["public"]["Enums"]["staff_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -845,6 +878,8 @@ export type Database = {
           verification_status: Database["public"]["Enums"]["verification_status"]
         }[]
       }
+      is_staff: { Args: { _user_id: string }; Returns: boolean }
+      is_staff_owner: { Args: { _user_id: string }; Returns: boolean }
       is_valid_exposure_policy: { Args: { exposure: Json }; Returns: boolean }
       is_valid_policy_node: {
         Args: { depth?: number; node: Json }
@@ -899,6 +934,7 @@ export type Database = {
         | "disabled_auto"
         | "manual_only"
         | "deprecated"
+      staff_role: "owner" | "staff"
       tier_label: "T1" | "T2" | "T3" | "T4" | "T5"
       traceability_level:
         | "direct_url"
@@ -1084,6 +1120,7 @@ export const Constants = {
         "manual_only",
         "deprecated",
       ],
+      staff_role: ["owner", "staff"],
       tier_label: ["T1", "T2", "T3", "T4", "T5"],
       traceability_level: [
         "direct_url",
