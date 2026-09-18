@@ -343,9 +343,34 @@ function ExchangeScreen() {
               )}
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(row.sent_at)}</td>
-            <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-              {row.drive_folder_id ?? "—"}
+            <td className="px-4 py-3 text-xs text-muted-foreground">
+              {row.processed_at ? (
+                <div>
+                  <p>{formatDate(row.processed_at)}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em]">in _processed</p>
+                  {row.processed_note ? (
+                    <p className="max-w-52 text-[11px]">{row.processed_note}</p>
+                  ) : null}
+                </div>
+              ) : row.state === "pending" ? (
+                <button
+                  type="button"
+                  title="Confirm this item was seen in AuraMaris and move its folder to _processed"
+                  disabled={archive.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-black/20 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground outline-none transition hover:border-primary/50 hover:text-foreground focus-visible:border-primary/50 focus-visible:shadow-glow disabled:opacity-50"
+                  onClick={() => archive.mutate({ handoffId: row.id })}
+                >
+                  <Archive size={11} strokeWidth={2} />
+                  Mark processed
+                </button>
+              ) : (
+                "—"
+              )}
             </td>
+            <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
+              {row.drive_processed_folder_id ?? row.drive_folder_id ?? "—"}
+            </td>
+
           </tr>
         ))}
       </DataTable>
