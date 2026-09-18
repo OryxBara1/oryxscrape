@@ -56,7 +56,7 @@ export const listHandoffs = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("exchange_handoffs")
       .select(
-        "id, exchange_item_id, normalized_item_id, artifact_filename, artifact_sha256, artifact_size_bytes, country_code, language_code, state, sent_at, reason_code, reason_detail, drive_folder_id, drive_artifact_file_id, drive_metadata_file_id, last_synced_at, error_reason, created_at",
+        "id, exchange_item_id, normalized_item_id, artifact_filename, artifact_sha256, artifact_size_bytes, country_code, language_code, state, sent_at, reason_code, reason_detail, drive_folder_id, drive_artifact_file_id, drive_metadata_file_id, drive_processed_folder_id, processed_at, processed_note, last_synced_at, error_reason, created_at",
       )
       .order("created_at", { ascending: false })
       .limit(200);
