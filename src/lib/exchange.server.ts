@@ -525,8 +525,11 @@ export async function updateHandoffLocale(
  * folder untouched, so folder presence is not a usable "already ingested"
  * signal — this is therefore an explicit human confirmation, not a detection.
  *
- * The item folder is moved, with our own Drive identity, into the
- * `_processed` subfolder of 01_Pending_Review. State becomes `archived`,
+ * Our Drive identity is a Contributor on the shared drive: it may create files
+ * but not move or delete anything (canMoveChildrenWithinDrive = false), so the
+ * item folder cannot be relocated. Instead we drop a `processed.json` marker
+ * inside the item folder with our own credentials, and the authoritative
+ * bookkeeping lives in exchange_handoffs. State becomes `archived`,
  * deliberately distinct from accepted/rejected: we do not know AuraMaris's
  * decision. Nothing on normalized_items is touched.
  */
@@ -536,9 +539,6 @@ export async function markHandoffProcessed(
   input: { handoffId: string; note?: string | null },
 ) {
   const drive = await import("./drive.server");
-  const { EXCHANGE_FOLDERS, EXCHANGE_SHARED_DRIVE_ID, PROCESSED_FOLDER_NAME } = await import(
-    "./exchange-config"
-  );
 
   const { data: row, error } = await supabase
     .from("exchange_handoffs")
@@ -552,20 +552,26 @@ export async function markHandoffProcessed(
   }
   if (!row.drive_folder_id) throw new Error("This handoff has no Drive folder to archive.");
 
-  const processedFolder = await drive.findOrCreateFolder(
-    PROCESSED_FOLDER_NAME,
-    EXCHANGE_FOLDERS.pendingReview,
-    EXCHANGE_SHARED_DRIVE_ID,
-  );
-
-  await drive.moveFile({
-    fileId: row.drive_folder_id,
-    addParentId: processedFolder.id,
-    removeParentId: EXCHANGE_FOLDERS.pendingReview,
-  });
-
   const processedAt = new Date().toISOString();
   const note = input.note?.trim() ? input.note.trim() : null;
+
+  const marker = await drive.uploadTextFile({
+    name: "processed.json",
+    parentId: row.drive_folder_id,
+    mimeType: "application/json; charset=utf-8",
+    content: JSON.stringify(
+      {
+        exchange_item_id: row.exchange_item_id,
+        processed_at: processedAt,
+        confirmed_by: "OryxScrape staff",
+        note,
+        meaning:
+          "OryxScrape bookkeeping only: staff confirmed this item was seen on the AuraMaris side. This is NOT an acceptance or rejection decision.",
+      },
+      null,
+      2,
+    ),
+  });
 
   const { error: updateError } = await supabase
     .from("exchange_handoffs")
@@ -574,13 +580,14 @@ export async function markHandoffProcessed(
       processed_at: processedAt,
       processed_by: userId,
       processed_note: note,
-      drive_processed_folder_id: processedFolder.id,
+      drive_processed_folder_id: marker.id,
       last_synced_at: processedAt,
       error_reason: null,
     })
     .eq("id", row.id)
     .eq("state", "pending");
   if (updateError) throw new Error(updateError.message);
+
 
   const { error: auditError } = await supabase.from("audit_events").insert({
     check_type: "exchange_archive",
