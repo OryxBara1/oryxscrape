@@ -73,6 +73,7 @@ function ExchangeScreen() {
   const sendHandoff = useServerFn(packageAndSendHandoff);
   const syncFeedback = useServerFn(syncExchangeFeedback);
   const correctLocale = useServerFn(updateHandoffLocale);
+  const archiveHandoff = useServerFn(markHandoffProcessed);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [country, setCountry] = useState("");
@@ -80,6 +81,8 @@ function ExchangeScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCountry, setEditCountry] = useState("");
   const [editLanguage, setEditLanguage] = useState("");
+  const [filter, setFilter] = useState<FilterKey>("all");
+
 
   const candidates = useQuery({
     queryKey: ["handoff-candidates"],
