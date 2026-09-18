@@ -600,12 +600,12 @@ export async function markHandoffProcessed(
       previous_state: "pending",
       new_state: "archived",
       drive_folder_id: row.drive_folder_id,
-      drive_processed_folder_id: processedFolder.id,
+      drive_processed_marker_file_id: marker.id,
       processed_at: processedAt,
       processed_by: userId,
       note,
       detail:
-        "Staff-confirmed bookkeeping only: item folder moved to 01_Pending_Review/_processed. No AuraMaris decision implied; review/publication state unchanged.",
+        "Staff-confirmed bookkeeping only: processed.json marker written inside the item folder in 01_Pending_Review. No AuraMaris decision implied; review/publication state unchanged.",
     },
   });
   if (auditError) throw new Error(`Archived but audit logging failed: ${auditError.message}`);
@@ -613,8 +613,9 @@ export async function markHandoffProcessed(
   return {
     exchangeItemId: row.exchange_item_id,
     processedAt,
-    driveProcessedFolderId: processedFolder.id,
+    driveMarkerFileId: marker.id,
   };
+
 }
 
 
