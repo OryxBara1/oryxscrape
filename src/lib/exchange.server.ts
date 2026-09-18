@@ -525,13 +525,13 @@ export async function updateHandoffLocale(
  * folder untouched, so folder presence is not a usable "already ingested"
  * signal — this is therefore an explicit human confirmation, not a detection.
  *
- * Our Drive identity is a Contributor on the shared drive: it may create files
- * but not move or delete anything (canMoveChildrenWithinDrive = false), so the
- * item folder cannot be relocated. Instead we drop a `processed.json` marker
- * inside the item folder with our own credentials, and the authoritative
- * bookkeeping lives in exchange_handoffs. State becomes `archived`,
- * deliberately distinct from accepted/rejected: we do not know AuraMaris's
- * decision. Nothing on normalized_items is touched.
+ * Our Drive identity is now a Content Manager on the shared drive
+ * (canMoveItemWithinDrive = true), so the item folder is really moved into
+ * 01_Pending_Review/_processed. If the move fails for any reason we fall back
+ * to writing a `processed.json` marker inside the item folder, so the
+ * confirmation is never lost. State becomes `archived`, deliberately distinct
+ * from accepted/rejected: we do not know AuraMaris's decision. Nothing on
+ * normalized_items is touched.
  */
 export async function markHandoffProcessed(
   supabase: ExchangeDb,
@@ -539,6 +539,9 @@ export async function markHandoffProcessed(
   input: { handoffId: string; note?: string | null },
 ) {
   const drive = await import("./drive.server");
+  const { EXCHANGE_FOLDERS, EXCHANGE_SHARED_DRIVE_ID, PROCESSED_FOLDER_NAME } = await import(
+    "./exchange-config"
+  );
 
   const { data: row, error } = await supabase
     .from("exchange_handoffs")
@@ -555,23 +558,48 @@ export async function markHandoffProcessed(
   const processedAt = new Date().toISOString();
   const note = input.note?.trim() ? input.note.trim() : null;
 
-  const marker = await drive.uploadTextFile({
-    name: "processed.json",
-    parentId: row.drive_folder_id,
-    mimeType: "application/json; charset=utf-8",
-    content: JSON.stringify(
-      {
-        exchange_item_id: row.exchange_item_id,
-        processed_at: processedAt,
-        confirmed_by: "OryxScrape staff",
-        note,
-        meaning:
-          "OryxScrape bookkeeping only: staff confirmed this item was seen on the AuraMaris side. This is NOT an acceptance or rejection decision.",
-      },
-      null,
-      2,
-    ),
-  });
+  let movedIntoFolderId: string | null = null;
+  let markerFileId: string | null = null;
+  let moveError: string | null = null;
+
+  try {
+    const processedFolder = await drive.findOrCreateFolder(
+      PROCESSED_FOLDER_NAME,
+      EXCHANGE_FOLDERS.pendingReview,
+      EXCHANGE_SHARED_DRIVE_ID,
+    );
+    await drive.moveFile({
+      fileId: row.drive_folder_id,
+      addParentId: processedFolder.id,
+      removeParentId: EXCHANGE_FOLDERS.pendingReview,
+    });
+    movedIntoFolderId = processedFolder.id;
+  } catch (err) {
+    moveError = err instanceof Error ? err.message : String(err);
+    console.error(`[exchange] archive move failed, falling back to marker: ${moveError}`);
+  }
+
+  if (!movedIntoFolderId) {
+    const marker = await drive.uploadTextFile({
+      name: "processed.json",
+      parentId: row.drive_folder_id,
+      mimeType: "application/json; charset=utf-8",
+      content: JSON.stringify(
+        {
+          exchange_item_id: row.exchange_item_id,
+          processed_at: processedAt,
+          confirmed_by: "OryxScrape staff",
+          note,
+          move_error: moveError,
+          meaning:
+            "OryxScrape bookkeeping only: staff confirmed this item was seen on the AuraMaris side. This is NOT an acceptance or rejection decision.",
+        },
+        null,
+        2,
+      ),
+    });
+    markerFileId = marker.id;
+  }
 
   const { error: updateError } = await supabase
     .from("exchange_handoffs")
@@ -580,7 +608,7 @@ export async function markHandoffProcessed(
       processed_at: processedAt,
       processed_by: userId,
       processed_note: note,
-      drive_processed_folder_id: marker.id,
+      drive_processed_folder_id: movedIntoFolderId ?? markerFileId,
       last_synced_at: processedAt,
       error_reason: null,
     })
@@ -600,12 +628,15 @@ export async function markHandoffProcessed(
       previous_state: "pending",
       new_state: "archived",
       drive_folder_id: row.drive_folder_id,
-      drive_processed_marker_file_id: marker.id,
+      drive_processed_folder_id: movedIntoFolderId,
+      drive_processed_marker_file_id: markerFileId,
+      move_error: moveError,
       processed_at: processedAt,
       processed_by: userId,
       note,
-      detail:
-        "Staff-confirmed bookkeeping only: processed.json marker written inside the item folder in 01_Pending_Review. No AuraMaris decision implied; review/publication state unchanged.",
+      detail: movedIntoFolderId
+        ? "Staff-confirmed bookkeeping only: item folder moved into 01_Pending_Review/_processed. No AuraMaris decision implied; review/publication state unchanged."
+        : "Staff-confirmed bookkeeping only: move failed, processed.json marker written inside the item folder in 01_Pending_Review. No AuraMaris decision implied; review/publication state unchanged.",
     },
   });
   if (auditError) throw new Error(`Archived but audit logging failed: ${auditError.message}`);
@@ -613,7 +644,8 @@ export async function markHandoffProcessed(
   return {
     exchangeItemId: row.exchange_item_id,
     processedAt,
-    driveMarkerFileId: marker.id,
+    driveProcessedFolderId: movedIntoFolderId,
+    driveMarkerFileId: markerFileId,
   };
 
 }
