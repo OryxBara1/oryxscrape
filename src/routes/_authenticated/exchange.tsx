@@ -132,7 +132,7 @@ function ExchangeScreen() {
   const archive = useMutation({
     mutationFn: (vars: { handoffId: string }) => archiveHandoff({ data: vars }),
     onSuccess: (res) => {
-      toast.success(`Marked as processed and moved to _processed (${res.exchangeItemId}).`);
+      toast.success(`Marked as processed (${res.exchangeItemId}).`);
       queryClient.invalidateQueries({ queryKey: ["handoffs"] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -347,7 +347,7 @@ function ExchangeScreen() {
               {row.processed_at ? (
                 <div>
                   <p>{formatDate(row.processed_at)}</p>
-                  <p className="text-[10px] uppercase tracking-[0.18em]">in _processed</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em]">marker written</p>
                   {row.processed_note ? (
                     <p className="max-w-52 text-[11px]">{row.processed_note}</p>
                   ) : null}
@@ -355,7 +355,7 @@ function ExchangeScreen() {
               ) : row.state === "pending" ? (
                 <button
                   type="button"
-                  title="Confirm this item was seen in AuraMaris and move its folder to _processed"
+                  title="Confirm this item was seen in AuraMaris; writes a processed marker in its Drive folder"
                   disabled={archive.isPending}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-black/20 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground outline-none transition hover:border-primary/50 hover:text-foreground focus-visible:border-primary/50 focus-visible:shadow-glow disabled:opacity-50"
                   onClick={() => archive.mutate({ handoffId: row.id })}
