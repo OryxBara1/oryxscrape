@@ -195,6 +195,7 @@ export type Database = {
           drive_feedback_file_id: string | null
           drive_folder_id: string | null
           drive_metadata_file_id: string | null
+          drive_processed_folder_id: string | null
           error_reason: string | null
           exchange_item_id: string
           id: string
@@ -202,6 +203,9 @@ export type Database = {
           last_synced_at: string | null
           normalized_item_id: string
           original_artifact_available: boolean
+          processed_at: string | null
+          processed_by: string | null
+          processed_note: string | null
           reason_code: string | null
           reason_detail: string | null
           sent_at: string | null
@@ -225,6 +229,7 @@ export type Database = {
           drive_feedback_file_id?: string | null
           drive_folder_id?: string | null
           drive_metadata_file_id?: string | null
+          drive_processed_folder_id?: string | null
           error_reason?: string | null
           exchange_item_id?: string
           id?: string
@@ -232,6 +237,9 @@ export type Database = {
           last_synced_at?: string | null
           normalized_item_id: string
           original_artifact_available?: boolean
+          processed_at?: string | null
+          processed_by?: string | null
+          processed_note?: string | null
           reason_code?: string | null
           reason_detail?: string | null
           sent_at?: string | null
@@ -255,6 +263,7 @@ export type Database = {
           drive_feedback_file_id?: string | null
           drive_folder_id?: string | null
           drive_metadata_file_id?: string | null
+          drive_processed_folder_id?: string | null
           error_reason?: string | null
           exchange_item_id?: string
           id?: string
@@ -262,6 +271,9 @@ export type Database = {
           last_synced_at?: string | null
           normalized_item_id?: string
           original_artifact_available?: boolean
+          processed_at?: string | null
+          processed_by?: string | null
+          processed_note?: string | null
           reason_code?: string | null
           reason_detail?: string | null
           sent_at?: string | null
@@ -850,6 +862,7 @@ export type Database = {
         | "review_status_change"
         | "exchange_feedback"
         | "exchange_metadata_correction"
+        | "exchange_archive"
       collection_method: "apify" | "http" | "api" | "manual"
       exchange_handoff_state:
         | "pending"
@@ -859,6 +872,7 @@ export type Database = {
         | "error"
         | "duplicate"
         | "superseded"
+        | "archived"
       exchange_suppression_kind:
         | "sha256"
         | "normalized_url"
@@ -1028,6 +1042,7 @@ export const Constants = {
         "review_status_change",
         "exchange_feedback",
         "exchange_metadata_correction",
+        "exchange_archive",
       ],
       collection_method: ["apify", "http", "api", "manual"],
       exchange_handoff_state: [
@@ -1038,6 +1053,7 @@ export const Constants = {
         "error",
         "duplicate",
         "superseded",
+        "archived",
       ],
       exchange_suppression_kind: [
         "sha256",

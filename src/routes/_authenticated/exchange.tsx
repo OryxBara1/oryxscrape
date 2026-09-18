@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Pencil } from "lucide-react";
+import { Archive, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import {
   listHandoffCandidates,
   listHandoffs,
   listSuppressions,
+  markHandoffProcessed,
   packageAndSendHandoff,
   syncExchangeFeedback,
   updateHandoffLocale,
@@ -25,11 +26,22 @@ import {
 
 const STATE_TONE: Record<string, string> = {
   pending: "neutral",
+  archived: "ok",
   feedback_received: "warn",
   accepted: "live",
   rejected: "bad",
   error: "bad",
 };
+
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "pending", label: "Awaiting" },
+  { key: "archived", label: "Processed" },
+  { key: "decided", label: "Decided" },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]["key"];
+
 
 export const Route = createFileRoute("/_authenticated/exchange")({
   head: () => ({
@@ -61,6 +73,7 @@ function ExchangeScreen() {
   const sendHandoff = useServerFn(packageAndSendHandoff);
   const syncFeedback = useServerFn(syncExchangeFeedback);
   const correctLocale = useServerFn(updateHandoffLocale);
+  const archiveHandoff = useServerFn(markHandoffProcessed);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [country, setCountry] = useState("");
@@ -68,6 +81,8 @@ function ExchangeScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCountry, setEditCountry] = useState("");
   const [editLanguage, setEditLanguage] = useState("");
+  const [filter, setFilter] = useState<FilterKey>("all");
+
 
   const candidates = useQuery({
     queryKey: ["handoff-candidates"],
@@ -114,11 +129,37 @@ function ExchangeScreen() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+  const archive = useMutation({
+    mutationFn: (vars: { handoffId: string }) => archiveHandoff({ data: vars }),
+    onSuccess: (res) => {
+      toast.success(`Marked as processed (${res.exchangeItemId}).`);
+      queryClient.invalidateQueries({ queryKey: ["handoffs"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
 
   const canSend =
     !!selectedId && /^[A-Za-z]{2}$/.test(country) && /^[A-Za-z]{2}$/.test(language);
   const canCorrect =
     /^[A-Za-z]{2}$/.test(editCountry) && /^[A-Za-z]{2}$/.test(editLanguage);
+
+  const allHandoffs = handoffs.data ?? [];
+  const counts = {
+    all: allHandoffs.length,
+    pending: allHandoffs.filter((r) => r.state === "pending").length,
+    archived: allHandoffs.filter((r) => r.state === "archived").length,
+    decided: allHandoffs.filter(
+      (r) => r.state !== "pending" && r.state !== "archived" && r.state !== "error",
+    ).length,
+  };
+  const visibleHandoffs = allHandoffs.filter((r) => {
+    if (filter === "all") return true;
+    if (filter === "pending") return r.state === "pending";
+    if (filter === "archived") return r.state === "archived";
+    return r.state !== "pending" && r.state !== "archived" && r.state !== "error";
+  });
+
 
   // Each source publishes for one jurisdiction, so selecting an item pre-fills
   // the codes; staff still confirms or overrides before sending.
@@ -201,11 +242,37 @@ function ExchangeScreen() {
         ) : null}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={`rounded-md border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] transition ${
+              filter === f.key
+                ? "border-primary/60 text-foreground shadow-glow"
+                : "border-border/60 bg-black/20 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            }`}
+          >
+            {f.label} ({counts[f.key]})
+          </button>
+        ))}
+      </div>
+
       <DataTable
-        headers={["Exchange item", "State", "Artifact", "Country / language", "Sent", "Drive"]}
-        empty={!handoffs.isLoading && (handoffs.data ?? []).length === 0}
+        headers={[
+          "Exchange item",
+          "State",
+          "Artifact",
+          "Country / language",
+          "Sent",
+          "Processed",
+          "Drive",
+        ]}
+        empty={!handoffs.isLoading && visibleHandoffs.length === 0}
       >
-        {(handoffs.data ?? []).map((row) => (
+        {visibleHandoffs.map((row) => (
+
           <tr key={row.id} className="border-b border-border/40 last:border-0">
             <td className="px-4 py-3 font-mono text-[11px]">{row.exchange_item_id}</td>
             <td className="px-4 py-3">
@@ -276,9 +343,34 @@ function ExchangeScreen() {
               )}
             </td>
             <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(row.sent_at)}</td>
-            <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-              {row.drive_folder_id ?? "—"}
+            <td className="px-4 py-3 text-xs text-muted-foreground">
+              {row.processed_at ? (
+                <div>
+                  <p>{formatDate(row.processed_at)}</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em]">marker written</p>
+                  {row.processed_note ? (
+                    <p className="max-w-52 text-[11px]">{row.processed_note}</p>
+                  ) : null}
+                </div>
+              ) : row.state === "pending" ? (
+                <button
+                  type="button"
+                  title="Confirm this item was seen in AuraMaris; writes a processed marker in its Drive folder"
+                  disabled={archive.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-black/20 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground outline-none transition hover:border-primary/50 hover:text-foreground focus-visible:border-primary/50 focus-visible:shadow-glow disabled:opacity-50"
+                  onClick={() => archive.mutate({ handoffId: row.id })}
+                >
+                  <Archive size={11} strokeWidth={2} />
+                  Mark processed
+                </button>
+              ) : (
+                "—"
+              )}
             </td>
+            <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">
+              {row.drive_processed_folder_id ?? row.drive_folder_id ?? "—"}
+            </td>
+
           </tr>
         ))}
       </DataTable>

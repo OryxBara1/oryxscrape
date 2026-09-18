@@ -11,6 +11,12 @@ export const EXCHANGE_FOLDERS = {
   searchTermsShared: "1vkY03W1TWkAsDYIvAYLte3BKz79Ft3Qk", // 05_Search_Terms_Shared (we write exports)
 } as const;
 
+// Archive for item folders staff has confirmed as seen in AuraMaris. It lives
+// inside 01_Pending_Review because that is the only intake folder we may write
+// to; "_processed" is our bookkeeping, never an AuraMaris decision.
+export const PROCESSED_FOLDER_NAME = "_processed";
+
+
 // Folders this identity is allowed to write to. 02/03 are deliberately excluded.
 export const WRITABLE_FOLDER_IDS: readonly string[] = [
   EXCHANGE_FOLDERS.pendingReview,

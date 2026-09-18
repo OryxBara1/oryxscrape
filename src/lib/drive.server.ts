@@ -109,6 +109,35 @@ export async function listFolderInDrive(folderId: string, driveId: string): Prom
   return json.files ?? [];
 }
 
+/** Returns the existing subfolder with this name, or creates it. */
+export async function findOrCreateFolder(
+  name: string,
+  parentId: string,
+  driveId: string,
+): Promise<DriveFile> {
+  const children = await listFolderInDrive(parentId, driveId);
+  const existing = children.find(
+    (f) => f.name === name && f.mimeType === "application/vnd.google-apps.folder",
+  );
+  if (existing) return existing;
+  return await createFolder(name, parentId);
+}
+
+/** Moves a file/folder between parents (same shared drive). */
+export async function moveFile(params: {
+  fileId: string;
+  addParentId: string;
+  removeParentId: string;
+}): Promise<DriveFile> {
+  const res = await fetch(
+    `${API}/files/${params.fileId}?addParents=${params.addParentId}&removeParents=${params.removeParentId}&${SHARED_DRIVE_PARAMS}&fields=id,name,mimeType,parents`,
+    { method: "PATCH", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: "{}" },
+  );
+  if (!res.ok) await readError(res, "folder move");
+  return (await res.json()) as DriveFile;
+}
+
+
 export async function getFileText(fileId: string): Promise<string> {
   const res = await fetch(`${API}/files/${fileId}?alt=media&${SHARED_DRIVE_PARAMS}`, {
     headers: authHeaders(),

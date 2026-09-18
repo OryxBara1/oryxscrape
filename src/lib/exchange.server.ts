@@ -519,6 +519,107 @@ export async function updateHandoffLocale(
   };
 }
 
+/**
+ * Staff-confirmed archiving ("processed") for a handoff still awaiting a
+ * decision. AuraMaris reads 01_Pending_Review on every scan but leaves the
+ * folder untouched, so folder presence is not a usable "already ingested"
+ * signal — this is therefore an explicit human confirmation, not a detection.
+ *
+ * Our Drive identity is a Contributor on the shared drive: it may create files
+ * but not move or delete anything (canMoveChildrenWithinDrive = false), so the
+ * item folder cannot be relocated. Instead we drop a `processed.json` marker
+ * inside the item folder with our own credentials, and the authoritative
+ * bookkeeping lives in exchange_handoffs. State becomes `archived`,
+ * deliberately distinct from accepted/rejected: we do not know AuraMaris's
+ * decision. Nothing on normalized_items is touched.
+ */
+export async function markHandoffProcessed(
+  supabase: ExchangeDb,
+  userId: string | null,
+  input: { handoffId: string; note?: string | null },
+) {
+  const drive = await import("./drive.server");
+
+  const { data: row, error } = await supabase
+    .from("exchange_handoffs")
+    .select("id, exchange_item_id, normalized_item_id, state, drive_folder_id")
+    .eq("id", input.handoffId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new Error("Handoff not found.");
+  if (row.state !== "pending") {
+    throw new Error(`Only handoffs still awaiting a decision can be archived (this one is ${row.state}).`);
+  }
+  if (!row.drive_folder_id) throw new Error("This handoff has no Drive folder to archive.");
+
+  const processedAt = new Date().toISOString();
+  const note = input.note?.trim() ? input.note.trim() : null;
+
+  const marker = await drive.uploadTextFile({
+    name: "processed.json",
+    parentId: row.drive_folder_id,
+    mimeType: "application/json; charset=utf-8",
+    content: JSON.stringify(
+      {
+        exchange_item_id: row.exchange_item_id,
+        processed_at: processedAt,
+        confirmed_by: "OryxScrape staff",
+        note,
+        meaning:
+          "OryxScrape bookkeeping only: staff confirmed this item was seen on the AuraMaris side. This is NOT an acceptance or rejection decision.",
+      },
+      null,
+      2,
+    ),
+  });
+
+  const { error: updateError } = await supabase
+    .from("exchange_handoffs")
+    .update({
+      state: "archived",
+      processed_at: processedAt,
+      processed_by: userId,
+      processed_note: note,
+      drive_processed_folder_id: marker.id,
+      last_synced_at: processedAt,
+      error_reason: null,
+    })
+    .eq("id", row.id)
+    .eq("state", "pending");
+  if (updateError) throw new Error(updateError.message);
+
+
+  const { error: auditError } = await supabase.from("audit_events").insert({
+    check_type: "exchange_archive",
+    target_table: "exchange_handoffs",
+    target_id: row.id,
+    result: "ok",
+    findings: {
+      exchange_item_id: row.exchange_item_id,
+      normalized_item_id: row.normalized_item_id,
+      previous_state: "pending",
+      new_state: "archived",
+      drive_folder_id: row.drive_folder_id,
+      drive_processed_marker_file_id: marker.id,
+      processed_at: processedAt,
+      processed_by: userId,
+      note,
+      detail:
+        "Staff-confirmed bookkeeping only: processed.json marker written inside the item folder in 01_Pending_Review. No AuraMaris decision implied; review/publication state unchanged.",
+    },
+  });
+  if (auditError) throw new Error(`Archived but audit logging failed: ${auditError.message}`);
+
+  return {
+    exchangeItemId: row.exchange_item_id,
+    processedAt,
+    driveMarkerFileId: marker.id,
+  };
+
+}
+
+
+
 export type BatchRow = {
   normalizedItemId: string;
   source: string;
