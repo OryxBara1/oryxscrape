@@ -130,3 +130,17 @@ export const updateHandoffLocale = createServerFn({ method: "POST" })
     const exchange = await import("./exchange.server");
     return exchange.updateHandoffLocale(context.supabase, context.userId, data);
   });
+
+export const markHandoffProcessed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { handoffId: string; note?: string | null }) => {
+    if (typeof input?.handoffId !== "string" || !input.handoffId) {
+      throw new Error("A handoff id is required.");
+    }
+    return { handoffId: input.handoffId, note: input.note ?? null };
+  })
+  .handler(async ({ data, context }) => {
+    const exchange = await import("./exchange.server");
+    return exchange.markHandoffProcessed(context.supabase, context.userId, data);
+  });
+
