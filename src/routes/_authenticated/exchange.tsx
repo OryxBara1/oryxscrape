@@ -242,11 +242,37 @@ function ExchangeScreen() {
         ) : null}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={`rounded-md border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] transition ${
+              filter === f.key
+                ? "border-primary/60 text-foreground shadow-glow"
+                : "border-border/60 bg-black/20 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            }`}
+          >
+            {f.label} ({counts[f.key]})
+          </button>
+        ))}
+      </div>
+
       <DataTable
-        headers={["Exchange item", "State", "Artifact", "Country / language", "Sent", "Drive"]}
-        empty={!handoffs.isLoading && (handoffs.data ?? []).length === 0}
+        headers={[
+          "Exchange item",
+          "State",
+          "Artifact",
+          "Country / language",
+          "Sent",
+          "Processed",
+          "Drive",
+        ]}
+        empty={!handoffs.isLoading && visibleHandoffs.length === 0}
       >
-        {(handoffs.data ?? []).map((row) => (
+        {visibleHandoffs.map((row) => (
+
           <tr key={row.id} className="border-b border-border/40 last:border-0">
             <td className="px-4 py-3 font-mono text-[11px]">{row.exchange_item_id}</td>
             <td className="px-4 py-3">
