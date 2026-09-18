@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Pencil } from "lucide-react";
+import { Archive, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import {
   listHandoffCandidates,
   listHandoffs,
   listSuppressions,
+  markHandoffProcessed,
   packageAndSendHandoff,
   syncExchangeFeedback,
   updateHandoffLocale,
@@ -25,11 +26,22 @@ import {
 
 const STATE_TONE: Record<string, string> = {
   pending: "neutral",
+  archived: "ok",
   feedback_received: "warn",
   accepted: "live",
   rejected: "bad",
   error: "bad",
 };
+
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "pending", label: "Awaiting" },
+  { key: "archived", label: "Processed" },
+  { key: "decided", label: "Decided" },
+] as const;
+
+type FilterKey = (typeof FILTERS)[number]["key"];
+
 
 export const Route = createFileRoute("/_authenticated/exchange")({
   head: () => ({
