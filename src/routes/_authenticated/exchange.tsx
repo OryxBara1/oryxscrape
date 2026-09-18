@@ -129,6 +129,15 @@ function ExchangeScreen() {
     },
     onError: (err: Error) => toast.error(err.message),
   });
+  const archive = useMutation({
+    mutationFn: (vars: { handoffId: string }) => archiveHandoff({ data: vars }),
+    onSuccess: (res) => {
+      toast.success(`Marked as processed and moved to _processed (${res.exchangeItemId}).`);
+      queryClient.invalidateQueries({ queryKey: ["handoffs"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
 
   const canSend =
     !!selectedId && /^[A-Za-z]{2}$/.test(country) && /^[A-Za-z]{2}$/.test(language);
