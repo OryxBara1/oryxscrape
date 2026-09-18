@@ -144,6 +144,23 @@ function ExchangeScreen() {
   const canCorrect =
     /^[A-Za-z]{2}$/.test(editCountry) && /^[A-Za-z]{2}$/.test(editLanguage);
 
+  const allHandoffs = handoffs.data ?? [];
+  const counts = {
+    all: allHandoffs.length,
+    pending: allHandoffs.filter((r) => r.state === "pending").length,
+    archived: allHandoffs.filter((r) => r.state === "archived").length,
+    decided: allHandoffs.filter(
+      (r) => r.state !== "pending" && r.state !== "archived" && r.state !== "error",
+    ).length,
+  };
+  const visibleHandoffs = allHandoffs.filter((r) => {
+    if (filter === "all") return true;
+    if (filter === "pending") return r.state === "pending";
+    if (filter === "archived") return r.state === "archived";
+    return r.state !== "pending" && r.state !== "archived" && r.state !== "error";
+  });
+
+
   // Each source publishes for one jurisdiction, so selecting an item pre-fills
   // the codes; staff still confirms or overrides before sending.
   function selectCandidate(id: string | null) {
