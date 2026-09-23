@@ -86,7 +86,47 @@ async function collectOne(
       };
     }
 
+    if (
+      source.collection_method === "api" &&
+      source.domain.includes("legislation.gov.uk")
+    ) {
+      const { runUkLegislationCollection } = await import("./uk-legislation.server");
+      const result = await runUkLegislationCollection(supabase);
+      return {
+        ...base,
+        jobId: result.jobId,
+        status: "collected",
+        ingested: result.new_items,
+        duplicates: result.duplicates,
+      };
+    }
+
+    if (source.collection_method === "api" && source.domain.includes("overheid.nl")) {
+      const { runNlOverheidCollection } = await import("./nl-overheid.server");
+      const result = await runNlOverheidCollection(supabase);
+      return {
+        ...base,
+        jobId: result.jobId,
+        status: "collected",
+        ingested: result.new_items,
+        duplicates: result.duplicates,
+      };
+    }
+
+    if (source.collection_method === "http" && source.domain.includes("in.gov.br")) {
+      const { runBrDouCollection } = await import("./br-dou.server");
+      const result = await runBrDouCollection(supabase);
+      return {
+        ...base,
+        jobId: result.jobId,
+        status: "collected",
+        ingested: result.new_items,
+        duplicates: result.duplicates,
+      };
+    }
+
     if (source.collection_method === "api") {
+
 
       const { runPisteCollection } = await import("./piste-collect.server");
       const { data: terms } = await supabase
