@@ -99,6 +99,21 @@ async function collectOne(
     }
 
     if (
+      source.collection_method === "http" &&
+      source.domain.includes("narodne-novine.nn.hr")
+    ) {
+      const { runNnCollection } = await import("./nn-collect.server");
+      const result = await runNnCollection(supabase);
+      return {
+        ...base,
+        jobId: result.jobId,
+        status: "collected",
+        ingested: result.new_items,
+        duplicates: result.duplicates,
+      };
+    }
+
+    if (
       source.collection_method === "api" &&
       source.domain.includes("legislation.gov.uk")
     ) {
