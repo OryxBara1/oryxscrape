@@ -63,14 +63,23 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 async function fetchHtml(url: string): Promise<string> {
-  const response = await fetch(url, {
-    headers: { "User-Agent": UA, Accept: "text/html", "Accept-Language": "hr" },
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`NN fetch failed [${response.status}] ${url}: ${text.slice(0, 200)}`);
+  let lastError = "";
+  // The gazette occasionally drops connections mid-handshake; one retry is enough.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { "User-Agent": UA, Accept: "text/html", "Accept-Language": "hr" },
+      });
+      const text = await response.text();
+      if (response.ok) return text;
+      lastError = `HTTP ${response.status}`;
+    } catch (error) {
+      const cause = (error as { cause?: { message?: string; code?: string } }).cause;
+      lastError = `${(error as Error).message} ${cause?.code ?? ""}`.trim();
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
   }
-  return text;
+  throw new Error(`NN fetch failed ${url}: ${lastError}`);
 }
 
 function decodeEntities(value: string): string {
@@ -127,6 +136,8 @@ export type NnArticle = {
   title: string;
   issueYear: number;
   issueNumber: number;
+  docType: string | null;
+  publishedAt: Date | null;
 };
 
 function issueUrl(year: number, issueNumber: number): string {
@@ -159,29 +170,38 @@ async function readIssue(
 
   const articles: NnArticle[] = [];
   const seen = new Set<string>();
+  // Each listing row is: the article link, then its own
+  // "NN 100/2026, (1203), pravilnik, 9.9.2026." metadata line.
   const re =
-    /href="(\/clanci\/sluzbeni\/(\d{4})_\d{2}_(\d+)_\d+\.html)"[^>]*>([\s\S]{0,600}?)<\/a>/g;
+    /href="(\/clanci\/sluzbeni\/(\d{4})_\d{2}_(\d+)_\d+\.html)"[^>]*>([\s\S]{0,600}?)<\/a>[\s\S]{0,2000}?official-number-and-date">([^<]*)<\/div>/g;
   for (const m of html.matchAll(re)) {
-    const path = m[1];
-    if (seen.has(path)) continue;
+    const path = m[1] ?? "";
+    if (!path || seen.has(path)) continue;
     seen.add(path);
-    const title = decodeEntities(m[4].replace(/<[^>]+>/g, " "))
+    const title = decodeEntities((m[4] ?? "").replace(/<[^>]+>/g, " "))
       .replace(/\s+/g, " ")
       .trim();
+    const meta = decodeEntities(m[5] ?? "").replace(/\s+/g, " ").trim();
+    const metaParts = meta.split(",").map((part) => part.trim());
+    const docType = metaParts.length >= 3 ? metaParts[metaParts.length - 2] ?? null : null;
     articles.push({
       path,
       url: `${BASE}${path}`,
       title,
       issueYear: Number(m[2]),
       issueNumber: Number(m[3]),
+      docType,
+      publishedAt: parseHrDate(meta),
     });
   }
 
-  // The issue listing prints the issue's publication date.
-  const dates = [...html.matchAll(/(\d{1,2}\.\s?\d{1,2}\.\s?\d{4})/g)]
-    .map((m) => parseHrDate(m[1]))
-    .filter((d): d is Date => d !== null);
-  const publishedAt = dates.length ? dates[0] : null;
+  // The issue's publication date is the date its articles carry. (The page's
+  // first date is a cache timestamp, not a publication date.)
+  const dates = articles
+    .map((a) => a.publishedAt)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => b.getTime() - a.getTime());
+  const publishedAt = dates[0] ?? null;
 
   return { publishedAt, articles };
 }
@@ -199,7 +219,12 @@ export type NnIssueStats = {
   failed: number;
 };
 
-export async function runNnCollection(supabase: SupabaseClient<Database>) {
+export async function runNnCollection(
+  supabase: SupabaseClient<Database>,
+  options?: { windowDays?: number; maxIssues?: number },
+) {
+  const windowDays = options?.windowDays ?? WINDOW_DAYS;
+  const maxIssues = options?.maxIssues ?? MAX_ISSUES;
   log("run started");
 
   const { data: source, error: sourceError } = await supabase
@@ -216,7 +241,7 @@ export async function runNnCollection(supabase: SupabaseClient<Database>) {
   log("source resolved", { id: source.id, name: source.name });
 
   const until = new Date();
-  const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000);
+  const since = new Date(Date.now() - windowDays * 86_400_000);
   log("date window", { since: since.toISOString(), until: until.toISOString() });
 
   const { data: job, error: jobError } = await supabase
@@ -233,8 +258,8 @@ export async function runNnCollection(supabase: SupabaseClient<Database>) {
         collector_version: NN_COLLECTOR_VERSION,
         window_start: since.toISOString(),
         window_end: until.toISOString(),
-        window_days: WINDOW_DAYS,
-        max_issues: MAX_ISSUES,
+        window_days: windowDays,
+        max_issues: maxIssues,
         max_docs_per_run: MAX_DOCS_PER_RUN,
         terms: NN_TERMS,
       } as unknown as never,
@@ -260,7 +285,7 @@ export async function runNnCollection(supabase: SupabaseClient<Database>) {
     let year = latest.year;
     let issueNumber = latest.issueNumber;
 
-    issueLoop: for (let step = 0; step < MAX_ISSUES; step += 1) {
+    issueLoop: for (let step = 0; step < maxIssues; step += 1) {
       if (issueNumber < 1) {
         // Year rollover: previous year's issue numbering is unknown from here.
         log("reached start of year — stopping", { year });
@@ -335,7 +360,8 @@ export async function runNnCollection(supabase: SupabaseClient<Database>) {
           }
 
           const collectedAt = new Date().toISOString();
-          const publishedAt = issueData.publishedAt ? issueData.publishedAt.toISOString() : null;
+          const articleDate = article.publishedAt ?? issueData.publishedAt;
+          const publishedAt = articleDate ? articleDate.toISOString() : null;
 
           const { data: rawItem, error: rawError } = await supabase
             .from("raw_items")
@@ -346,6 +372,7 @@ export async function runNnCollection(supabase: SupabaseClient<Database>) {
               raw_payload: {
                 title: article.title,
                 issue: { year: article.issueYear, number: article.issueNumber },
+                doc_type: article.docType,
                 published_at: publishedAt,
                 document_html: html,
                 plain_text: plain,
@@ -388,6 +415,7 @@ export async function runNnCollection(supabase: SupabaseClient<Database>) {
               text_content: plain,
               url: article.url,
               issue: `${article.issueNumber}/${article.issueYear}`,
+              doc_type: article.docType,
               published_at: publishedAt,
               language: "hr",
               tags: ["nautical_sweep"],
