@@ -113,9 +113,9 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api" && source.domain.includes("overheid.nl")) {
-      const { runNlOverheidCollection } = await import("./nl-overheid.server");
-      const result = await runNlOverheidCollection(supabase);
+    if (source.collection_method === "api" && source.domain.includes("officielebekendmakingen.nl")) {
+      const { runObkCollection } = await import("./obk-collect.server");
+      const result = await runObkCollection(supabase);
       return {
         ...base,
         jobId: result.jobId,
