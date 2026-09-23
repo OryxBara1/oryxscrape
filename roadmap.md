@@ -66,3 +66,8 @@ Phase 7 — Greece source + weekly scheduled collection (approved 2026-09-16)
 - [x] Weekly flag enabled: Spain, Croatia, Germany, France, Greece
 - [ ] BLOCKED: timer itself — pg_cron HTTP callbacks unsupported on user-managed Supabase; needs an external scheduler calling /api/public/cron/*
 - [ ] Italy: listing is JS-paginated, no automatic discovery of new ordinances yet
+
+Phase 8 — collect-fr-legifrance Supabase Edge Function
+- [ ] Edge Function `collect-fr-legifrance`: PISTE OAuth (_ORYXSCRAPE secrets), publication-date-bounded LODA search since last successful France job (fallback 90d), pagination ceiling 5 pages / 100 docs per concept, nautical sweep pass, raw_items dedup by content hash, normalized_items insert, job row succeeded/failed, HTTP 500 JSON on failure
+- [ ] Weekly Monday 03:00 UTC trigger wired externally (separate step)
+- [ ] Backfill run after 1–2 clean weekly runs (deferred, not this deploy)
