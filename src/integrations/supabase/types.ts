@@ -898,7 +898,12 @@ export type Database = {
         | "exchange_feedback"
         | "exchange_metadata_correction"
         | "exchange_archive"
-      collection_method: "apify" | "http" | "api" | "manual"
+      collection_method:
+        | "apify"
+        | "http"
+        | "api"
+        | "manual"
+        | "parallel_extract"
       exchange_handoff_state:
         | "pending"
         | "feedback_received"
@@ -1080,7 +1085,7 @@ export const Constants = {
         "exchange_metadata_correction",
         "exchange_archive",
       ],
-      collection_method: ["apify", "http", "api", "manual"],
+      collection_method: ["apify", "http", "api", "manual", "parallel_extract"],
       exchange_handoff_state: [
         "pending",
         "feedback_received",
