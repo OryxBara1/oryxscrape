@@ -24,6 +24,7 @@ import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cr
 import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/public/cron/collect-br-dou'
 import { Route as ApiPublicCronCollectEsBoeRouteImport } from './routes/api/public/cron/collect-es-boe'
 import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/api/public/cron/collect-fr-legifrance'
+import { Route as ApiPublicCronCollectHrNnRouteImport } from './routes/api/public/cron/collect-hr-nn'
 import { Route as ApiPublicCronCollectItNormattivaRouteImport } from './routes/api/public/cron/collect-it-normattiva'
 import { Route as ApiPublicCronCollectNlObkRouteImport } from './routes/api/public/cron/collect-nl-obk'
 import { Route as ApiPublicCronCollectUkLegislationRouteImport } from './routes/api/public/cron/collect-uk-legislation'
@@ -107,6 +108,12 @@ const ApiPublicCronCollectFrLegifranceRoute =
     path: '/api/public/cron/collect-fr-legifrance',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronCollectHrNnRoute =
+  ApiPublicCronCollectHrNnRouteImport.update({
+    id: '/api/public/cron/collect-hr-nn',
+    path: '/api/public/cron/collect-hr-nn',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronCollectItNormattivaRoute =
   ApiPublicCronCollectItNormattivaRouteImport.update({
     id: '/api/public/cron/collect-it-normattiva',
@@ -151,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
@@ -172,6 +180,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
@@ -195,6 +204,7 @@ export interface FileRoutesById {
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
     | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
     | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
@@ -261,6 +273,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
     | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
@@ -276,6 +289,7 @@ export interface RootRouteChildren {
   ApiPublicCronCollectBrDouRoute: typeof ApiPublicCronCollectBrDouRoute
   ApiPublicCronCollectEsBoeRoute: typeof ApiPublicCronCollectEsBoeRoute
   ApiPublicCronCollectFrLegifranceRoute: typeof ApiPublicCronCollectFrLegifranceRoute
+  ApiPublicCronCollectHrNnRoute: typeof ApiPublicCronCollectHrNnRoute
   ApiPublicCronCollectItNormattivaRoute: typeof ApiPublicCronCollectItNormattivaRoute
   ApiPublicCronCollectNlObkRoute: typeof ApiPublicCronCollectNlObkRoute
   ApiPublicCronCollectUkLegislationRoute: typeof ApiPublicCronCollectUkLegislationRoute
@@ -390,6 +404,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCollectFrLegifranceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/collect-hr-nn': {
+      id: '/api/public/cron/collect-hr-nn'
+      path: '/api/public/cron/collect-hr-nn'
+      fullPath: '/api/public/cron/collect-hr-nn'
+      preLoaderRoute: typeof ApiPublicCronCollectHrNnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/collect-it-normattiva': {
       id: '/api/public/cron/collect-it-normattiva'
       path: '/api/public/cron/collect-it-normattiva'
@@ -461,6 +482,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronCollectBrDouRoute: ApiPublicCronCollectBrDouRoute,
   ApiPublicCronCollectEsBoeRoute: ApiPublicCronCollectEsBoeRoute,
   ApiPublicCronCollectFrLegifranceRoute: ApiPublicCronCollectFrLegifranceRoute,
+  ApiPublicCronCollectHrNnRoute: ApiPublicCronCollectHrNnRoute,
   ApiPublicCronCollectItNormattivaRoute: ApiPublicCronCollectItNormattivaRoute,
   ApiPublicCronCollectNlObkRoute: ApiPublicCronCollectNlObkRoute,
   ApiPublicCronCollectUkLegislationRoute:
