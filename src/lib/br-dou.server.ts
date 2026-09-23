@@ -153,7 +153,9 @@ async function searchDouPage(input: {
   page: number;
 }): Promise<DouHit[]> {
   const url = new URL(SEARCH_BASE);
-  url.searchParams.set("q", input.term);
+  // Unquoted multi-word queries are matched word-by-word and flood the results
+  // with unrelated contract notices, so every term is searched as an exact phrase.
+  url.searchParams.set("q", `"${input.term}"`);
   url.searchParams.set("s", "todos");
   url.searchParams.set("exactDate", "personalizado");
   url.searchParams.set("publishFrom", brDate(input.since));
@@ -162,14 +164,19 @@ async function searchDouPage(input: {
   url.searchParams.set("delta", String(PAGE_SIZE));
   url.searchParams.set("currentPage", String(input.page));
 
-  const response = await fetch(url, {
-    headers: { Accept: "text/html", "User-Agent": BROWSER_UA },
-  });
-  const html = await response.text();
-  if (!response.ok) {
-    throw new Error(`DOU search failed [${response.status}]: ${html.slice(0, 300)}`);
+  // The CDN in front of the gazette occasionally answers 502; retry briefly.
+  let html = "";
+  let status = 0;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const response = await fetch(url, {
+      headers: { Accept: "text/html", "User-Agent": BROWSER_UA },
+    });
+    html = await response.text();
+    status = response.status;
+    if (response.ok) return extractHits(html);
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
   }
-  return extractHits(html);
+  throw new Error(`DOU search failed [${status}]: ${html.slice(0, 300)}`);
 }
 
 async function fetchDouItem(hit: DouHit): Promise<{ html: string; plain: string }> {
