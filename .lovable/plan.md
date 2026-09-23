@@ -1,99 +1,98 @@
-# Spain (BOE) collector — plan
+# Seven more countries — live research findings and build plan
 
-Same shape as the French collector: a protected scheduled endpoint inside the app
-(`POST /api/public/cron/collect-es-boe`), not a Supabase Edge Function — new Edge
-Functions are blocked on this stack, which is why France ended up this way too.
+Everything below comes from real requests made today, not from documentation.
 
-## Answers to your five questions (verified against the live BOE API today)
+## Verdict table
 
-**1. Endpoints.** Two, both useful and complementary:
+| Country | Source tested | Keyword search | Date window | Paging | Full text | Verdict |
+|---|---|---|---|---|---|---|
+| UK | legislation.gov.uk Atom | yes | by year (path) | yes | yes, XML | **Direct API — build** |
+| Netherlands | repository.overheid.nl SRU | yes | yes (exact) | yes | yes, XML | **Direct API — build** |
+| Brazil | in.gov.br DOU search | yes | yes (exact) | yes | yes, page per item | **Parse embedded data — build** |
+| Italy | normattiva / dati.normattiva | blocked | — | — | — | **Skip for now** |
+| Germany | openlegaldata / gesetze-im-internet | no real search | no | n/a | partly | **Skip the API; keep crawler** |
+| Croatia | narodne-novine.nn.hr | not over a plain link | no | — | yes, per issue | **Keep the existing crawler** |
+| Portugal | diariodarepublica.pt | not over a plain link | — | — | yes, PDF | **Browser-based collector** |
 
-- `GET /datosabiertos/api/legislacion-consolidada` — the search endpoint. It accepts a
-  JSON `query` parameter with `query_string` (fields `titulo`, `texto`, `materia@codigo`,
-  `rango@codigo`, `departamento@codigo`, joined with `and`/`or`/`not`), a `range` block
-  for real date filtering (`fecha_publicacion` with `gte`/`lte`), and `sort`
-  (`[{"fecha_publicacion":"desc"}]`). Confirmed working: a title search for
-  "embarcaciones de recreo" bounded to 2020-2026, newest first, returned the July 2025
-  Marina Mercante resolution on private-to-commercial change of use.
-- `GET /datosabiertos/api/legislacion-consolidada/id/{id}/texto` — the full consolidated
-  text of one norm, as XML blocks. Confirmed 200.
-- Optionally `GET /datosabiertos/api/boe/sumario/{AAAAMMDD}` — the daily gazette index,
-  covering everything published that day including items never consolidated. See question A.
+## What each test showed
 
-**2. No registration, no token.** Truly open — every call above succeeded anonymously.
-Plain GET over https; POST returns 403. Output format is chosen with the `Accept` header:
-search supports JSON, the `/texto` endpoint only answers XML (JSON gives a 400).
+**United Kingdom — usable, best of the seven.** No key, no account.
+`https://www.legislation.gov.uk/all/{year}/data.feed?text={term}&page={n}` answers an Atom
+feed; "vessel" for 2026 returned 50 items, each with title, publication date and a direct
+link to the full legal text as XML (verified on SI 2026/577). One caveat found by testing:
+`start-date`/`end-date` in the address are silently ignored — only the year in the path
+actually filters — so the 7-day window has to be applied by us after reading the dates in
+the feed, and around New Year we query both years.
 
-**3. Pagination.** Much simpler than Légifrance: `offset` + `limit` on the search
-endpoint (default 50). No opaque cursor, no page-token state. We keep your ceiling —
-5 pages of 20 per concept, 100 documents per concept per run.
+**Netherlands — usable.** No key. `https://repository.overheid.nl/sru` covers the
+Staatscourant, official announcements and parliamentary papers together. A search for
+"pleziervaart" limited to items available since 1 August 2026 returned 9 results with
+title, summary, language and publication date, and the full text of one of them
+(`wsb-2026-20581`) downloaded cleanly as XML. Real date filtering, real paging, real
+keyword search — the closest match to the Spain collector.
 
-**4. Structural differences that change the approach.**
+**Brazil — usable with one extra step.** The official gazette search at
+`in.gov.br/consulta/-/buscar/dou` accepts the search word and an exact from/to date pair
+and returns the result list as structured data embedded inside the page, including title,
+section, publication date, an excerpt and the address of each item. Verified with
+"embarcação" over 1–23 September 2026. It is not a documented API, so it is slightly more
+fragile than the UK/NL routes and we keep the full page we received as evidence. The
+alternative sources you named are not available: Querido Diário's service answered "no
+available server" on every attempt, and INLABS rejected the request outright (it needs a
+gov.br login anyway, and it carries municipal/federal gazettes rather than consolidated law).
 
-- *The `from`/`to` top-level parameters filter by last-update date, not publication date.*
-  Using them would re-collect every old law that was merely amended. So the date bound
-  goes in the `range` block on `fecha_publicacion` instead — same "publication date, not
-  version date" decision you made for France.
-- *Responses already carry rich metadata* (title, rank, ministry, official number,
-  publication date, entry into force, ELI permalink), so unlike Légifrance we don't need
-  a second call just to learn the date — one call per norm, only for the full text.
-- *The full text is XML, not JSON.* We strip tags per `<bloque>` the way the French
-  collector strips article HTML.
-- *There are no Spanish terms in the lexicon yet* (`search_terms` has zero `ES` rows),
-  whereas France had concept terms to draw on. See question B.
-- *BOE is already in the weekly Apify crawl* — it's an active, schedule-enabled source
-  with a crawler-based method. See question C.
+**Italy — blocked.** Every address under `dati.normattiva.it` and `normattiva.it/api`
+answered 409 "page blocked by the protection systems of the State Printing Office",
+including the service's own configuration file. Nothing is readable from our servers today,
+regardless of the February open-data launch. Italy stays as it is (manual, PDF-based) until
+either the block lifts or we route Italy through the Apify proxy like Croatia.
 
-**5. Canonical URL.** The ELI permalink returned as `url_eli`, e.g.
-`https://www.boe.es/eli/es/rd/2022/05/17/376`, with fallback to
-`https://www.boe.es/buscar/act.php?id={identificador}` when a norm has no ELI. That's
-`source_url` and `canonical_url` in `raw_items`.
+**Germany — no usable search.** `de.openlegaldata.io` answers and is open, but the search
+word is ignored: "Sportboot" and "Sportbootführerschein" both return the entire corpus of
+176,915 records in the same order, so it cannot find nautical law. It also has no publication
+date to filter on. `gesetze-im-internet.de` was unreachable from our servers entirely;
+`recht.bund.de` (the new Bundesgesetzblatt) does answer, but it is a browser application, not
+a data service. Germany keeps its current working crawler; no API collector is honest here.
 
-## What gets built
+**Croatia — same conclusion as before.** The ELI addresses work and the individual issue
+pages are readable, but the search page is a form that does not run a query from a plain
+link (the results only appear after a form submission). So there is no date+keyword search
+to call. Croatia's existing crawler stays; a Thursday slot would add nothing new.
 
-1. `src/lib/boe-collect.server.ts` — `runBoeCollection(supabase)`:
-   resolve the `boe.es` source; lower bound = `finished_at` of the last successful BOE job,
-   90-day fallback; one pass per concept term plus a nautical sweep; per pass, page through
-   `offset`/`limit` newest-first until the window is exhausted or the ceiling is hit; for each
-   hit fetch `/texto`, flatten to plain text, SHA-256, skip if that hash already exists for
-   this source, otherwise insert `raw_items` (immutable, `collection_method: "api"`,
-   `language: "es"`, collector version) then `normalized_items` with
-   `verification_status: "unreviewed"` and `publication_status: "internal_only"`.
-2. `src/routes/api/public/cron/collect-es-boe.ts` — shared-secret protected POST, JSON
-   counts back, HTTP 500 with a JSON error body on failure, never a silent empty success.
-3. Job bookkeeping identical to France: `running` at start; `succeeded` with
-   fetched/new/duplicate/failed counts, or `failed` with the error text; window, ceilings
-   and term list recorded in `run_params`.
-4. Console logging at each step, and the roadmap updated.
+**Portugal — browser only.** Both the current site and the old dre.pt address return the
+same empty application shell; the search runs entirely inside the browser. So Portugal needs
+either the Apify browser crawler on its search page, or the document-by-document PDF route
+already used for it in this project. No plain data service exists.
 
-Nothing downstream is touched: no promotion, no eligibility, no Drive handoff, and no
-write of any kind outside the OryxScrape schema.
+## Proposed build
 
-## Questions before building
+Three collectors now, in exactly the France/Spain pattern — a protected scheduled endpoint
+plus a server module, 7-day rolling publication window, per-term paging with the 5-page /
+100-document ceiling, SHA-256 dedup against `raw_items`, immutable `raw_items` then
+`normalized_items` at `unreviewed` / `internal_only`, job row `running` → `succeeded`/`failed`
+with counts, HTTP 500 with a JSON error body on failure, and step-by-step logging.
 
-**A. Daily sumario sweep, yes or no?** Consolidated legislation only covers norms the BOE
-documentation service has consolidated, and consolidation lags publication. A once-a-week
-walk of the daily sumario for the days in the window (section I, filtered by nautical
-keywords in the title) would catch new órdenes ministeriales the moment they appear, at
-about 6-7 extra calls per run. I'd include it. Your call.
+1. `src/lib/uk-legislation.server.ts` + `/api/public/cron/collect-uk-legislation`
+   — Sunday 03:00 UTC. `collection_method = 'api'`.
+2. `src/lib/nl-overheid.server.ts` + `/api/public/cron/collect-nl-overheid`
+   — Friday 03:00 UTC. `collection_method = 'api'`.
+3. `src/lib/br-dou.server.ts` + `/api/public/cron/collect-br-dou`
+   — Monday 09:00 UTC. `collection_method = 'scrape'`.
 
-**B. Where do the Spanish search terms come from?** There are no `ES` rows in the lexicon.
-I propose starting with a fixed sweep list in code — "embarcaciones de recreo", "navegación
-de recreo", "título náutico" / "licencia de navegación", "puertos deportivos" / "amarre",
-"despacho de embarcaciones", "motos náuticas", "seguro de embarcaciones" — and separately
-seeding those as `ES` lexicon rows so they show on the Lexicon screen and drive future runs,
-exactly like France. Confirm the list, or tell me to seed the lexicon first and read from it
-only.
+Each needs a row in `sources` (UK legislation.gov.uk, NL overheid.nl, BR in.gov.br) with the
+provenance facts set the same way as the existing official-gazette sources; Brazil and the UK
+have no row yet. The weekly scheduler gets one branch per new collector, as Spain did.
 
-**C. BOE is already collected weekly by the Apify crawler.** Two collectors on one source
-will produce overlapping evidence (different hashes, since the crawled HTML and the API text
-differ — so dedup won't merge them). Options: (i) switch the BOE source to the API collector
-and drop it from the crawler schedule, (ii) keep both, accepting some duplication, or
-(iii) register the API collector as a second source row (`boe.es API`). I'd go with (i).
+Not built: Italy, Germany, Croatia, Portugal — with the reasons above. Croatia and Germany
+already collect through the crawler, so nothing is lost; Italy and Portugal would need a
+browser-based run, which I can add as a separate step if you want their slots filled.
 
-**D. Scope of `rango`.** Restrict to leyes, reales decretos, órdenes and resoluciones, or
-accept anything the keyword search returns?
+## What I need from you
 
-**E. Schedule slot.** France is Monday 03:00 UTC. Same slot for Spain, or staggered?
-
-**F. Backfill** stays parked until 1-2 clean weekly runs, same rule as France — confirm.
+1. **Search terms per country** — you said you would provide them. I need English (UK),
+   Dutch (NL) and Brazilian Portuguese (BR) lists, the same shape as the nine Spanish terms.
+2. **Italy and Portugal** — leave the Wednesday and Tuesday-09:00 slots empty for now, or
+   should I plan browser-based collectors for them as a follow-up?
+3. **Croatia and Germany** — confirm they keep their current weekly crawler and we drop the
+   Thursday/Saturday API slots.
+4. Backfill stays parked until 1–2 clean runs, same rule as France and Spain — confirm.
