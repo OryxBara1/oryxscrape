@@ -21,8 +21,11 @@ import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/k
 import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
+import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/public/cron/collect-br-dou'
 import { Route as ApiPublicCronCollectEsBoeRouteImport } from './routes/api/public/cron/collect-es-boe'
 import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/api/public/cron/collect-fr-legifrance'
+import { Route as ApiPublicCronCollectNlOverheidRouteImport } from './routes/api/public/cron/collect-nl-overheid'
+import { Route as ApiPublicCronCollectUkLegislationRouteImport } from './routes/api/public/cron/collect-uk-legislation'
 import { Route as ApiPublicCronFinalizeRouteImport } from './routes/api/public/cron/finalize'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
@@ -85,6 +88,12 @@ const ApiPublicCronCollectRoute = ApiPublicCronCollectRouteImport.update({
   path: '/api/public/cron/collect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronCollectBrDouRoute =
+  ApiPublicCronCollectBrDouRouteImport.update({
+    id: '/api/public/cron/collect-br-dou',
+    path: '/api/public/cron/collect-br-dou',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronCollectEsBoeRoute =
   ApiPublicCronCollectEsBoeRouteImport.update({
     id: '/api/public/cron/collect-es-boe',
@@ -95,6 +104,18 @@ const ApiPublicCronCollectFrLegifranceRoute =
   ApiPublicCronCollectFrLegifranceRouteImport.update({
     id: '/api/public/cron/collect-fr-legifrance',
     path: '/api/public/cron/collect-fr-legifrance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronCollectNlOverheidRoute =
+  ApiPublicCronCollectNlOverheidRouteImport.update({
+    id: '/api/public/cron/collect-nl-overheid',
+    path: '/api/public/cron/collect-nl-overheid',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronCollectUkLegislationRoute =
+  ApiPublicCronCollectUkLegislationRouteImport.update({
+    id: '/api/public/cron/collect-uk-legislation',
+    path: '/api/public/cron/collect-uk-legislation',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicCronFinalizeRoute = ApiPublicCronFinalizeRouteImport.update({
@@ -120,8 +141,11 @@ export interface FileRoutesByFullPath {
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
+  '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-nl-overheid': typeof ApiPublicCronCollectNlOverheidRoute
+  '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -137,8 +161,11 @@ export interface FileRoutesByTo {
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
+  '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-nl-overheid': typeof ApiPublicCronCollectNlOverheidRoute
+  '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -156,8 +183,11 @@ export interface FileRoutesById {
   '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
+  '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-nl-overheid': typeof ApiPublicCronCollectNlOverheidRoute
+  '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -175,8 +205,11 @@ export interface FileRouteTypes {
     | '/lexicon'
     | '/sources'
     | '/api/public/cron/collect'
+    | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-nl-overheid'
+    | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
@@ -192,8 +225,11 @@ export interface FileRouteTypes {
     | '/lexicon'
     | '/sources'
     | '/api/public/cron/collect'
+    | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-nl-overheid'
+    | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
   id:
@@ -210,8 +246,11 @@ export interface FileRouteTypes {
     | '/_authenticated/lexicon'
     | '/_authenticated/sources'
     | '/api/public/cron/collect'
+    | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-nl-overheid'
+    | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
@@ -221,8 +260,11 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicCronCollectRoute: typeof ApiPublicCronCollectRoute
+  ApiPublicCronCollectBrDouRoute: typeof ApiPublicCronCollectBrDouRoute
   ApiPublicCronCollectEsBoeRoute: typeof ApiPublicCronCollectEsBoeRoute
   ApiPublicCronCollectFrLegifranceRoute: typeof ApiPublicCronCollectFrLegifranceRoute
+  ApiPublicCronCollectNlOverheidRoute: typeof ApiPublicCronCollectNlOverheidRoute
+  ApiPublicCronCollectUkLegislationRoute: typeof ApiPublicCronCollectUkLegislationRoute
   ApiPublicCronFinalizeRoute: typeof ApiPublicCronFinalizeRoute
   ApiPublicV1ItemsRoute: typeof ApiPublicV1ItemsRoute
 }
@@ -313,6 +355,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCollectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/collect-br-dou': {
+      id: '/api/public/cron/collect-br-dou'
+      path: '/api/public/cron/collect-br-dou'
+      fullPath: '/api/public/cron/collect-br-dou'
+      preLoaderRoute: typeof ApiPublicCronCollectBrDouRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/collect-es-boe': {
       id: '/api/public/cron/collect-es-boe'
       path: '/api/public/cron/collect-es-boe'
@@ -325,6 +374,20 @@ declare module '@tanstack/react-router' {
       path: '/api/public/cron/collect-fr-legifrance'
       fullPath: '/api/public/cron/collect-fr-legifrance'
       preLoaderRoute: typeof ApiPublicCronCollectFrLegifranceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/collect-nl-overheid': {
+      id: '/api/public/cron/collect-nl-overheid'
+      path: '/api/public/cron/collect-nl-overheid'
+      fullPath: '/api/public/cron/collect-nl-overheid'
+      preLoaderRoute: typeof ApiPublicCronCollectNlOverheidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/collect-uk-legislation': {
+      id: '/api/public/cron/collect-uk-legislation'
+      path: '/api/public/cron/collect-uk-legislation'
+      fullPath: '/api/public/cron/collect-uk-legislation'
+      preLoaderRoute: typeof ApiPublicCronCollectUkLegislationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/finalize': {
@@ -374,8 +437,12 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicCronCollectRoute: ApiPublicCronCollectRoute,
+  ApiPublicCronCollectBrDouRoute: ApiPublicCronCollectBrDouRoute,
   ApiPublicCronCollectEsBoeRoute: ApiPublicCronCollectEsBoeRoute,
   ApiPublicCronCollectFrLegifranceRoute: ApiPublicCronCollectFrLegifranceRoute,
+  ApiPublicCronCollectNlOverheidRoute: ApiPublicCronCollectNlOverheidRoute,
+  ApiPublicCronCollectUkLegislationRoute:
+    ApiPublicCronCollectUkLegislationRoute,
   ApiPublicCronFinalizeRoute: ApiPublicCronFinalizeRoute,
   ApiPublicV1ItemsRoute: ApiPublicV1ItemsRoute,
 }
