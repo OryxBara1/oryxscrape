@@ -25,7 +25,7 @@ import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/publ
 import { Route as ApiPublicCronCollectEsBoeRouteImport } from './routes/api/public/cron/collect-es-boe'
 import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/api/public/cron/collect-fr-legifrance'
 import { Route as ApiPublicCronCollectItNormattivaRouteImport } from './routes/api/public/cron/collect-it-normattiva'
-import { Route as ApiPublicCronCollectNlOverheidRouteImport } from './routes/api/public/cron/collect-nl-overheid'
+import { Route as ApiPublicCronCollectNlObkRouteImport } from './routes/api/public/cron/collect-nl-obk'
 import { Route as ApiPublicCronCollectUkLegislationRouteImport } from './routes/api/public/cron/collect-uk-legislation'
 import { Route as ApiPublicCronFinalizeRouteImport } from './routes/api/public/cron/finalize'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
@@ -113,10 +113,10 @@ const ApiPublicCronCollectItNormattivaRoute =
     path: '/api/public/cron/collect-it-normattiva',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicCronCollectNlOverheidRoute =
-  ApiPublicCronCollectNlOverheidRouteImport.update({
-    id: '/api/public/cron/collect-nl-overheid',
-    path: '/api/public/cron/collect-nl-overheid',
+const ApiPublicCronCollectNlObkRoute =
+  ApiPublicCronCollectNlObkRouteImport.update({
+    id: '/api/public/cron/collect-nl-obk',
+    path: '/api/public/cron/collect-nl-obk',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicCronCollectUkLegislationRoute =
@@ -152,7 +152,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
-  '/api/public/cron/collect-nl-overheid': typeof ApiPublicCronCollectNlOverheidRoute
+  '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
@@ -173,7 +173,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
-  '/api/public/cron/collect-nl-overheid': typeof ApiPublicCronCollectNlOverheidRoute
+  '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
@@ -196,7 +196,7 @@ export interface FileRoutesById {
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
-  '/api/public/cron/collect-nl-overheid': typeof ApiPublicCronCollectNlOverheidRoute
+  '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
@@ -219,7 +219,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/collect-it-normattiva'
-    | '/api/public/cron/collect-nl-overheid'
+    | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
@@ -240,7 +240,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/collect-it-normattiva'
-    | '/api/public/cron/collect-nl-overheid'
+    | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
@@ -262,7 +262,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/collect-it-normattiva'
-    | '/api/public/cron/collect-nl-overheid'
+    | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
@@ -277,7 +277,7 @@ export interface RootRouteChildren {
   ApiPublicCronCollectEsBoeRoute: typeof ApiPublicCronCollectEsBoeRoute
   ApiPublicCronCollectFrLegifranceRoute: typeof ApiPublicCronCollectFrLegifranceRoute
   ApiPublicCronCollectItNormattivaRoute: typeof ApiPublicCronCollectItNormattivaRoute
-  ApiPublicCronCollectNlOverheidRoute: typeof ApiPublicCronCollectNlOverheidRoute
+  ApiPublicCronCollectNlObkRoute: typeof ApiPublicCronCollectNlObkRoute
   ApiPublicCronCollectUkLegislationRoute: typeof ApiPublicCronCollectUkLegislationRoute
   ApiPublicCronFinalizeRoute: typeof ApiPublicCronFinalizeRoute
   ApiPublicV1ItemsRoute: typeof ApiPublicV1ItemsRoute
@@ -397,11 +397,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCollectItNormattivaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/cron/collect-nl-overheid': {
-      id: '/api/public/cron/collect-nl-overheid'
-      path: '/api/public/cron/collect-nl-overheid'
-      fullPath: '/api/public/cron/collect-nl-overheid'
-      preLoaderRoute: typeof ApiPublicCronCollectNlOverheidRouteImport
+    '/api/public/cron/collect-nl-obk': {
+      id: '/api/public/cron/collect-nl-obk'
+      path: '/api/public/cron/collect-nl-obk'
+      fullPath: '/api/public/cron/collect-nl-obk'
+      preLoaderRoute: typeof ApiPublicCronCollectNlObkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/collect-uk-legislation': {
@@ -462,7 +462,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronCollectEsBoeRoute: ApiPublicCronCollectEsBoeRoute,
   ApiPublicCronCollectFrLegifranceRoute: ApiPublicCronCollectFrLegifranceRoute,
   ApiPublicCronCollectItNormattivaRoute: ApiPublicCronCollectItNormattivaRoute,
-  ApiPublicCronCollectNlOverheidRoute: ApiPublicCronCollectNlOverheidRoute,
+  ApiPublicCronCollectNlObkRoute: ApiPublicCronCollectNlObkRoute,
   ApiPublicCronCollectUkLegislationRoute:
     ApiPublicCronCollectUkLegislationRoute,
   ApiPublicCronFinalizeRoute: ApiPublicCronFinalizeRoute,
