@@ -21,6 +21,7 @@ import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/k
 import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
+import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/api/public/cron/collect-fr-legifrance'
 import { Route as ApiPublicCronFinalizeRouteImport } from './routes/api/public/cron/finalize'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
@@ -83,6 +84,12 @@ const ApiPublicCronCollectRoute = ApiPublicCronCollectRouteImport.update({
   path: '/api/public/cron/collect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCronCollectFrLegifranceRoute =
+  ApiPublicCronCollectFrLegifranceRouteImport.update({
+    id: '/api/public/cron/collect-fr-legifrance',
+    path: '/api/public/cron/collect-fr-legifrance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronFinalizeRoute = ApiPublicCronFinalizeRouteImport.update({
   id: '/api/public/cron/finalize',
   path: '/api/public/cron/finalize',
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
+  '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -121,6 +129,7 @@ export interface FileRoutesByTo {
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
+  '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -138,6 +147,7 @@ export interface FileRoutesById {
   '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
+  '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/lexicon'
     | '/sources'
     | '/api/public/cron/collect'
+    | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/lexicon'
     | '/sources'
     | '/api/public/cron/collect'
+    | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
   id:
@@ -186,6 +198,7 @@ export interface FileRouteTypes {
     | '/_authenticated/lexicon'
     | '/_authenticated/sources'
     | '/api/public/cron/collect'
+    | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
@@ -195,6 +208,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicCronCollectRoute: typeof ApiPublicCronCollectRoute
+  ApiPublicCronCollectFrLegifranceRoute: typeof ApiPublicCronCollectFrLegifranceRoute
   ApiPublicCronFinalizeRoute: typeof ApiPublicCronFinalizeRoute
   ApiPublicV1ItemsRoute: typeof ApiPublicV1ItemsRoute
 }
@@ -285,6 +299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCollectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/collect-fr-legifrance': {
+      id: '/api/public/cron/collect-fr-legifrance'
+      path: '/api/public/cron/collect-fr-legifrance'
+      fullPath: '/api/public/cron/collect-fr-legifrance'
+      preLoaderRoute: typeof ApiPublicCronCollectFrLegifranceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/finalize': {
       id: '/api/public/cron/finalize'
       path: '/api/public/cron/finalize'
@@ -332,6 +353,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicCronCollectRoute: ApiPublicCronCollectRoute,
+  ApiPublicCronCollectFrLegifranceRoute: ApiPublicCronCollectFrLegifranceRoute,
   ApiPublicCronFinalizeRoute: ApiPublicCronFinalizeRoute,
   ApiPublicV1ItemsRoute: ApiPublicV1ItemsRoute,
 }
