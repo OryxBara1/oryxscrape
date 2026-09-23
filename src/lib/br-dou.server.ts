@@ -28,6 +28,13 @@ export const MAX_PAGES_PER_TERM = 5;
 export const MAX_DOCS_PER_TERM = 100;
 const PAGE_SIZE = 20;
 
+/**
+ * The gazette sits behind a CDN that answers 502 to non-browser user agents,
+ * so we identify as a normal browser. Nothing else about the request changes.
+ */
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
 /** Nautical / recreational navigation terms — deliberately scoped. */
 export const BR_TERMS = [
   "embarcação de esporte e recreio",
@@ -146,7 +153,9 @@ async function searchDouPage(input: {
   page: number;
 }): Promise<DouHit[]> {
   const url = new URL(SEARCH_BASE);
-  url.searchParams.set("q", input.term);
+  // Unquoted multi-word queries are matched word-by-word and flood the results
+  // with unrelated contract notices, so every term is searched as an exact phrase.
+  url.searchParams.set("q", `"${input.term}"`);
   url.searchParams.set("s", "todos");
   url.searchParams.set("exactDate", "personalizado");
   url.searchParams.set("publishFrom", brDate(input.since));
@@ -155,19 +164,24 @@ async function searchDouPage(input: {
   url.searchParams.set("delta", String(PAGE_SIZE));
   url.searchParams.set("currentPage", String(input.page));
 
-  const response = await fetch(url, {
-    headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; OryxScrape/1.0)" },
-  });
-  const html = await response.text();
-  if (!response.ok) {
-    throw new Error(`DOU search failed [${response.status}]: ${html.slice(0, 300)}`);
+  // The CDN in front of the gazette occasionally answers 502; retry briefly.
+  let html = "";
+  let status = 0;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const response = await fetch(url, {
+      headers: { Accept: "text/html", "User-Agent": BROWSER_UA },
+    });
+    html = await response.text();
+    status = response.status;
+    if (response.ok) return extractHits(html);
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
   }
-  return extractHits(html);
+  throw new Error(`DOU search failed [${status}]: ${html.slice(0, 300)}`);
 }
 
 async function fetchDouItem(hit: DouHit): Promise<{ html: string; plain: string }> {
   const response = await fetch(hit.url, {
-    headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; OryxScrape/1.0)" },
+    headers: { Accept: "text/html", "User-Agent": BROWSER_UA },
   });
   const html = await response.text();
   if (!response.ok) {

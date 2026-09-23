@@ -2,7 +2,7 @@
  * collect-uk-legislation — scheduled UK legislation collection (server-only).
  *
  * legislation.gov.uk exposes an open Atom search feed (no key, no account):
- *   https://www.legislation.gov.uk/all/{year}/data.feed?text={term}&page={n}
+ *   https://www.legislation.gov.uk/all/{year}/data.feed?sort=date&text={term}&page={n}
  * Each entry links to the full legal text as XML.
  *
  * Quirk verified live: `start-date` / `end-date` query parameters are silently
@@ -139,6 +139,7 @@ async function searchUkPage(input: {
 }): Promise<UkEntry[]> {
   const url = new URL(`${FEED_BASE}/all/${input.year}/data.feed`);
   url.searchParams.set("text", input.term);
+  url.searchParams.set("sort", "date");
   url.searchParams.set("page", String(input.page));
 
   const response = await fetch(url, {

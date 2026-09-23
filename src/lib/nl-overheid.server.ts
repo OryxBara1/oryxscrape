@@ -149,15 +149,35 @@ async function searchNlPage(input: {
   return parseRecords(xml);
 }
 
+/**
+ * Full text. Not every publication is served as XML (older or scanned items
+ * answer 404 there), so we fall back to the HTML rendition before giving up.
+ */
 async function fetchNlText(identifier: string): Promise<{ xml: string; plain: string }> {
-  const response = await fetch(`${TEXT_BASE}/${encodeURIComponent(identifier)}.xml`, {
-    headers: { Accept: "application/xml", "User-Agent": "OryxScrape/1.0" },
-  });
-  const xml = await response.text();
-  if (!response.ok) {
-    throw new Error(`overheid.nl text failed [${response.status}]: ${xml.slice(0, 300)}`);
+  const id = encodeURIComponent(identifier);
+  const attempts: { url: string; accept: string }[] = [
+    { url: `${TEXT_BASE}/${id}.xml`, accept: "application/xml" },
+    { url: `${TEXT_BASE}/${id}.html`, accept: "text/html" },
+  ];
+
+  let lastError = "";
+  for (const attempt of attempts) {
+    const response = await fetch(attempt.url, {
+      headers: { Accept: attempt.accept, "User-Agent": "OryxScrape/1.0" },
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      lastError = `[${response.status}] ${attempt.url}`;
+      continue;
+    }
+    const plain = stripTags(body);
+    if (!plain.trim()) {
+      lastError = `empty body at ${attempt.url}`;
+      continue;
+    }
+    return { xml: body, plain };
   }
-  return { xml, plain: stripTags(xml) };
+  throw new Error(`overheid.nl text failed: ${lastError}`);
 }
 
 // ------------------------------------------------------------------- runner
