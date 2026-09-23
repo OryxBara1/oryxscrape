@@ -90,7 +90,7 @@ async function collectOne(
       source.collection_method === "api" &&
       source.domain.includes("legislation.gov.uk")
     ) {
-      const { runUkLegislationCollection } = await import("./uk-legislation.server");
+      const { runUkLegislationCollection } = await import("./legislation-uk-collect.server");
       const result = await runUkLegislationCollection(supabase);
       return {
         ...base,
