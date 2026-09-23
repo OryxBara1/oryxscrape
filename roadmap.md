@@ -101,3 +101,4 @@ Phase 9 — Spain (BOE) API collector (approved 2026-09-23)
 - Not built: Italy (WAF blocks all API access), Germany and Croatia (keep existing crawlers),
   Portugal (SPA, no data service) — see `.lovable/plan.md`.
 - Backfill parked for all three until 1-2 clean weekly runs.
+- [x] Italy Normattiva API collector (Wed 03:00 UTC) — open items: full-act text (only preamble/first article captured), loose keyword matching

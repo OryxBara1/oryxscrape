@@ -74,6 +74,18 @@ async function collectOne(
       };
     }
 
+    if (source.collection_method === "api" && source.domain.includes("normattiva.it")) {
+      const { runNormattivaCollection } = await import("./normattiva-collect.server");
+      const result = await runNormattivaCollection(supabase);
+      return {
+        ...base,
+        jobId: result.jobId,
+        status: "collected",
+        ingested: result.new_items,
+        duplicates: result.duplicates,
+      };
+    }
+
     if (source.collection_method === "api" && source.domain.includes("boe.es")) {
       const { runBoeCollection } = await import("./boe-collect.server");
       const result = await runBoeCollection(supabase);
