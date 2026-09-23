@@ -81,3 +81,23 @@ Phase 9 — Spain (BOE) API collector (approved 2026-09-23)
 - [x] First run clean (0 found — no nautical BOE norms published in the window)
 - [ ] Backfill parked until 1-2 clean weekly runs
 - [ ] Seed ES search_terms in the lexicon (terms currently fixed in code)
+
+## Phase 10 — UK, Netherlands, Brazil collectors (23-09-2026)
+
+- [x] UK: `src/lib/uk-legislation.server.ts` + `POST /api/public/cron/collect-uk-legislation` (Sunday 03:00 UTC).
+      legislation.gov.uk Atom feed, no auth. Its start-date/end-date params are ignored, so the
+      7-day publication window is applied client-side; results requested newest-first.
+      First run: 0 in window (verified genuine — newest nautical match was 02-09-2026).
+- [x] NL: `src/lib/nl-overheid.server.ts` + `POST /api/public/cron/collect-nl-overheid` (Friday 03:00 UTC).
+      repository.overheid.nl SRU 2.0, keyword + exact publication-date search, XML full text with
+      HTML fallback. First run: 74 found, 41 new; second run 25 new / 49 duplicates, 0 failures.
+- [x] BR: `src/lib/br-dou.server.ts` + `POST /api/public/cron/collect-br-dou` (Monday 09:00 UTC).
+      in.gov.br DOU search, results parsed from the structured data embedded in the response.
+      Quirks: the CDN rejects non-browser user agents (502) and throttles bursts; terms must be
+      quoted or the search matches word-by-word and floods with unrelated notices.
+      First unquoted run discarded (131 irrelevant records deleted, job cancelled).
+      Re-run pending — in.gov.br temporarily blocked our address after that heavy run.
+- [x] sources rows added for legislation.gov.uk, overheid.nl, in.gov.br; scheduler branches wired.
+- Not built: Italy (WAF blocks all API access), Germany and Croatia (keep existing crawlers),
+  Portugal (SPA, no data service) — see `.lovable/plan.md`.
+- Backfill parked for all three until 1-2 clean weekly runs.
