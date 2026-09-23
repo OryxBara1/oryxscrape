@@ -1,0 +1,1 @@
+update public.sources set domain = 'dou.gov.br', collection_method = 'api', apify_actor_id = 'brasildados~monitor-diario-oficial-dou-api', schedule_enabled = true, schedule_notes = 'Weekly Monday 09:00 UTC via /api/public/cron/collect-br-dou' where id = '441d2ce0-a716-4a8c-965e-a09608cac2af';

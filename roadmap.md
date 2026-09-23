@@ -103,3 +103,4 @@ Phase 9 — Spain (BOE) API collector (approved 2026-09-23)
 - Backfill parked for all three until 1-2 clean weekly runs.
 - [x] Italy Normattiva API collector (Wed 03:00 UTC) — open items: full-act text (only preamble/first article captured), loose keyword matching
 - [x] NL collector renamed to collect-nl-obk (Fri 03:00 UTC), user terms; Germany openlegaldata rejected (filters ignored) — awaiting user choice
+- [x] Brazil DOU via Apify (brasildados actor, Mon 09:00 UTC) — open: current-edition only, noisy results, ~$1.20/run vs $5/month Apify limit

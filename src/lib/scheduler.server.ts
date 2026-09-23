@@ -125,9 +125,9 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "http" && source.domain.includes("in.gov.br")) {
-      const { runBrDouCollection } = await import("./br-dou.server");
-      const result = await runBrDouCollection(supabase);
+    if (source.collection_method === "api" && source.domain.includes("dou.gov.br")) {
+      const { runDouCollection } = await import("./dou-collect.server");
+      const result = await runDouCollection(supabase);
       return {
         ...base,
         jobId: result.jobId,

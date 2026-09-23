@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 
 /**
- * Scheduled Brazilian official gazette collection (Diário Oficial da União).
+ * Scheduled Brazilian official gazette collection (Diário Oficial da União, via Apify).
  * Shared-secret authenticated. Returns counts only — no document content,
  * no PII. Automates the collection step only; review stays human-driven.
  */
@@ -15,10 +15,10 @@ export const Route = createFileRoute("/api/public/cron/collect-br-dou")({
         if (denied) return denied;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { runBrDouCollection } = await import("@/lib/br-dou.server");
+        const { runDouCollection } = await import("@/lib/dou-collect.server");
 
         try {
-          const result = await runBrDouCollection(supabaseAdmin);
+          const result = await runDouCollection(supabaseAdmin);
           return Response.json(
             { ok: true, ...result },
             { headers: { "Cache-Control": "no-store" } },
