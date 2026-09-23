@@ -126,20 +126,30 @@ function extractHits(html: string): DouHit[] {
     );
   if (!match?.[1]) return [];
 
-  let parsed: { jsonArray?: Record<string, string>[] };
+  type DouRecord = {
+    urlTitle?: string;
+    title?: string;
+    pubDate?: string;
+    pubName?: string;
+    editionNumber?: string;
+    numberPage?: string;
+    content?: string;
+    artType?: string;
+    hierarchyStr?: string;
+  };
+
+  let parsed: { jsonArray?: DouRecord[] };
   try {
-    parsed = JSON.parse(decodeEntities(match[1].trim())) as {
-      jsonArray?: Record<string, string>[];
-    };
+    parsed = JSON.parse(decodeEntities(match[1].trim())) as { jsonArray?: DouRecord[] };
   } catch (error) {
     throw new Error(`DOU result parsing failed: ${(error as Error).message}`);
   }
 
   return (parsed.jsonArray ?? [])
-    .filter((item) => Boolean(item.urlTitle))
+    .filter((item): item is DouRecord & { urlTitle: string } => Boolean(item.urlTitle))
     .map((item) => ({
       title: item.title ? stripTags(item.title) : null,
-      urlTitle: item.urlTitle!,
+      urlTitle: item.urlTitle,
       pubDate: fromBrDate(item.pubDate),
       pubName: item.pubName ?? null,
       editionNumber: item.editionNumber ?? null,
