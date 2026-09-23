@@ -43,6 +43,8 @@ const DOMAIN_LOCALES: Array<[string, Locale]> = [
   ["wetten.overheid.nl", { countryCode: "NL", languageCode: "nl" }],
   ["overheid.nl", { countryCode: "NL", languageCode: "nl" }],
   ["officielebekendmakingen.nl", { countryCode: "NL", languageCode: "nl" }],
+  ["dou.gov.br", { countryCode: "BR", languageCode: "pt" }],
+  ["in.gov.br", { countryCode: "BR", languageCode: "pt" }],
   ["legislation.mt", { countryCode: "MT", languageCode: "en" }],
   ["cylaw.org", { countryCode: "CY", languageCode: "el" }],
   ["et.gr", { countryCode: "GR", languageCode: "el" }],
