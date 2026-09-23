@@ -1,60 +1,99 @@
-# French legislation: scheduled date-bounded collection
+# Spain (BOE) collector — plan
 
-## What already exists (verified, not assumed)
+Same shape as the French collector: a protected scheduled endpoint inside the app
+(`POST /api/public/cron/collect-es-boe`), not a Supabase Edge Function — new Edge
+Functions are blocked on this stack, which is why France ended up this way too.
 
-Most of what this request asks for is already built and running in OryxScrape:
+## Answers to your five questions (verified against the live BOE API today)
 
-- The source `Légifrance — France` (piste.gouv.fr) exists, is active, and is already marked for weekly collection.
-- A working Légifrance/PISTE client already lives in the project: OAuth2 client-credentials against `https://oauth.piste.gouv.fr/api/oauth/token`, with the token cached in memory and reused until just before expiry, and search + document retrieval against `https://api.piste.gouv.fr/dila/legifrance/lf-engine-app`.
-- Collection already writes a job record, immutable raw evidence with a SHA-256 content hash and duplicate skipping, and normalization through LogoriOn produces the reviewable items.
-- The weekly trigger already exists as a protected endpoint that an external scheduler calls; the French source is included in it.
-- The read API `/api/public/v1/items` already serves what has been reviewed and made eligible.
+**1. Endpoints.** Two, both useful and complementary:
 
-Two things in the request do not match this project and should not be built:
+- `GET /datosabiertos/api/legislacion-consolidada` — the search endpoint. It accepts a
+  JSON `query` parameter with `query_string` (fields `titulo`, `texto`, `materia@codigo`,
+  `rango@codigo`, `departamento@codigo`, joined with `and`/`or`/`not`), a `range` block
+  for real date filtering (`fecha_publicacion` with `gte`/`lte`), and `sort`
+  (`[{"fecha_publicacion":"desc"}]`). Confirmed working: a title search for
+  "embarcaciones de recreo" bounded to 2020-2026, newest first, returned the July 2025
+  Marina Mercante resolution on private-to-commercial change of use.
+- `GET /datosabiertos/api/legislacion-consolidada/id/{id}/texto` — the full consolidated
+  text of one norm, as XML blocks. Confirmed 200.
+- Optionally `GET /datosabiertos/api/boe/sumario/{AAAAMMDD}` — the daily gazette index,
+  covering everything published that day including items never consolidated. See question A.
 
-1. **No Supabase Edge Function.** This project's server code runs inside the app itself, not as Supabase Edge Functions. Adding one would mean a second, separately deployed copy of the Légifrance logic, its own copy of the credentials, and its own drift risk. The same schedule and the same behaviour are already available in the existing setup.
-2. **The credentials are already stored** as `PISTE_CLIENT_ID` / `PISTE_CLIENT_SECRET` and are in use. No `_ORYXSCRAPE`-suffixed copies are needed.
+**2. No registration, no token.** Truly open — every call above succeeded anonymously.
+Plain GET over https; POST returns 403. Output format is chosen with the `Accept` header:
+search supports JSON, the `/texto` endpoint only answers XML (JSON gives a 400).
 
-Several field names in the request also don't exist in our database (`job_type`, `collection_method = 'api_direct'`, `items_found`, `error_message`, `title`, `tier`, `publication_status = 'candidate'`). Our equivalents are already in place and will be used as-is; nothing about the storage shape needs to change.
+**3. Pagination.** Much simpler than Légifrance: `offset` + `limit` on the search
+endpoint (default 50). No opaque cursor, no page-token state. We keep your ceiling —
+5 pages of 20 per concept, 100 documents per concept per run.
 
-## What is actually missing
+**4. Structural differences that change the approach.**
 
-Today the weekly French run searches by concept terms only, capped at 2 results per concept, with no date boundary. So it re-finds the same well-known texts instead of picking up what is newly published. That is the real gap, and it is what this plan fixes.
+- *The `from`/`to` top-level parameters filter by last-update date, not publication date.*
+  Using them would re-collect every old law that was merely amended. So the date bound
+  goes in the `range` block on `fecha_publicacion` instead — same "publication date, not
+  version date" decision you made for France.
+- *Responses already carry rich metadata* (title, rank, ministry, official number,
+  publication date, entry into force, ELI permalink), so unlike Légifrance we don't need
+  a second call just to learn the date — one call per norm, only for the full text.
+- *The full text is XML, not JSON.* We strip tags per `<bloque>` the way the French
+  collector strips article HTML.
+- *There are no Spanish terms in the lexicon yet* (`search_terms` has zero `ES` rows),
+  whereas France had concept terms to draw on. See question B.
+- *BOE is already in the weekly Apify crawl* — it's an active, schedule-enabled source
+  with a crawler-based method. See question C.
 
-## Proposed work
+**5. Canonical URL.** The ELI permalink returned as `url_eli`, e.g.
+`https://www.boe.es/eli/es/rd/2022/05/17/376`, with fallback to
+`https://www.boe.es/buscar/act.php?id={identificador}` when a norm has no ELI. That's
+`source_url` and `canonical_url` in `raw_items`.
 
-1. **Remember the last successful French run.** Take the finish time of the most recent successful French collection job as the lower bound for the next run. First run with no history falls back to a configurable window (default: last 90 days).
+## What gets built
 
-2. **Add a date filter to the French search.** Each concept search gains a "published/modified since" bound so only texts newer than the last successful run come back. Sorting switches from relevance to most-recent-first for the scheduled path.
+1. `src/lib/boe-collect.server.ts` — `runBoeCollection(supabase)`:
+   resolve the `boe.es` source; lower bound = `finished_at` of the last successful BOE job,
+   90-day fallback; one pass per concept term plus a nautical sweep; per pass, page through
+   `offset`/`limit` newest-first until the window is exhausted or the ceiling is hit; for each
+   hit fetch `/texto`, flatten to plain text, SHA-256, skip if that hash already exists for
+   this source, otherwise insert `raw_items` (immutable, `collection_method: "api"`,
+   `language: "es"`, collector version) then `normalized_items` with
+   `verification_status: "unreviewed"` and `publication_status: "internal_only"`.
+2. `src/routes/api/public/cron/collect-es-boe.ts` — shared-secret protected POST, JSON
+   counts back, HTTP 500 with a JSON error body on failure, never a silent empty success.
+3. Job bookkeeping identical to France: `running` at start; `succeeded` with
+   fetched/new/duplicate/failed counts, or `failed` with the error text; window, ceilings
+   and term list recorded in `run_params`.
+4. Console logging at each step, and the roadmap updated.
 
-3. **Page through the results properly.** Instead of a hard cap of 2 items per concept, walk the result pages until either the results fall outside the date window, or a safety ceiling is reached (default: 5 pages / 100 documents per concept per run). This protects both the credit budget and the run time.
+Nothing downstream is touched: no promotion, no eligibility, no Drive handoff, and no
+write of any kind outside the OryxScrape schema.
 
-4. **Also add a plain "recent texts" sweep**, independent of concept terms, so genuinely new French legislation is not missed just because no search term matches it yet. Flagged in the stored evidence as a sweep rather than a concept hit, so provenance stays clear.
+## Questions before building
 
-5. **Report per run** how many were found, how many were new, how many were duplicates, and how many failed — already recorded on the job, plus the existing Slack alert on failure.
+**A. Daily sumario sweep, yes or no?** Consolidated legislation only covers norms the BOE
+documentation service has consolidated, and consolidation lags publication. A once-a-week
+walk of the daily sumario for the days in the window (section I, filtered by nautical
+keywords in the title) would catch new órdenes ministeriales the moment they appear, at
+about 6-7 extra calls per run. I'd include it. Your call.
 
-6. **Nothing downstream changes.** Everything collected stays unreviewed and internal-only, exactly as now. Normalization, review, eligibility and the Drive handoff remain human-driven.
+**B. Where do the Spanish search terms come from?** There are no `ES` rows in the lexicon.
+I propose starting with a fixed sweep list in code — "embarcaciones de recreo", "navegación
+de recreo", "título náutico" / "licencia de navegación", "puertos deportivos" / "amarre",
+"despacho de embarcaciones", "motos náuticas", "seguro de embarcaciones" — and separately
+seeding those as `ES` lexicon rows so they show on the Lexicon screen and drive future runs,
+exactly like France. Confirm the list, or tell me to seed the lexicon first and read from it
+only.
 
-## Endpoints used
+**C. BOE is already collected weekly by the Apify crawler.** Two collectors on one source
+will produce overlapping evidence (different hashes, since the crawled HTML and the API text
+differ — so dedup won't merge them). Options: (i) switch the BOE source to the API collector
+and drop it from the crawler schedule, (ii) keep both, accepting some duplication, or
+(iii) register the API collector as a second source row (`boe.es API`). I'd go with (i).
 
-- Token: `POST https://oauth.piste.gouv.fr/api/oauth/token` (client credentials, scope `openid`) — already implemented.
-- Search: `POST /search` on the LODA collection (lois, ordonnances, décrets, arrêtés) — already implemented; gains a date-range filter and date sorting.
-- Document retrieval: `POST /consult/lawDecree` per hit — already implemented.
+**D. Scope of `rango`.** Restrict to leyes, reales decretos, órdenes and resoluciones, or
+accept anything the keyword search returns?
 
-## Pagination
+**E. Schedule slot.** France is Monday 03:00 UTC. Same slot for Spain, or staggered?
 
-Légifrance returns a page number plus page size and a total count. The scheduled run will request page 1, then continue while: results remain, the page ceiling isn't reached, and the newest-first results are still inside the date window. Every retrieved document is deduplicated by content hash before insert, so overlapping pages are harmless.
-
-## Risks and open questions
-
-- **Date semantics.** Légifrance distinguishes publication date from version date. I'd use publication date as the bound, so an old law that was merely amended doesn't come back every week. Confirm that's what you want, or say if amended texts should also be re-collected.
-- **Volume and credits.** An unbounded "recent texts" sweep for France can be large. I propose the 5-page / 100-document per-concept ceiling above and a separate ceiling for the sweep. Tell me if you want different numbers.
-- **Scope.** Should the sweep cover all LODA texts, or stay filtered to the maritime/recreational-navigation domain the rest of the project targets?
-- **Backfill.** Do you want a one-off catch-up run over a longer window (e.g. the last 12 months) after this ships, or only forward-looking weekly runs?
-- **The Auramaris functions being replaced.** You mention 3 manual functions on the consumer side. If they do anything beyond collect/normalize (e.g. their own filtering or classification), tell me what, so nothing is silently dropped.
-
-## Technical notes
-
-- Changes are confined to `src/lib/piste.server.ts` (date filter, sort, pagination) and `src/lib/piste-collect.server.ts` (last-run lookup, paging loop, sweep pass, per-concept stats), plus the French branch of `src/lib/scheduler.server.ts`.
-- No database migration is required; the existing `collection_jobs`, `raw_items` and `normalized_items` shapes already cover this, and the run parameters (window start, ceilings, sweep vs concept) are stored on the job's run parameters field.
-- On failure the job is marked failed with the error text and the cron endpoint returns HTTP 500 with a JSON body, as it does today.
+**F. Backfill** stays parked until 1-2 clean weekly runs, same rule as France — confirm.
