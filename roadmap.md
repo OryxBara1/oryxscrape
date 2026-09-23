@@ -68,6 +68,8 @@ Phase 7 — Greece source + weekly scheduled collection (approved 2026-09-16)
 - [ ] Italy: listing is JS-paginated, no automatic discovery of new ordinances yet
 
 Phase 8 — collect-fr-legifrance Supabase Edge Function
-- [ ] Edge Function `collect-fr-legifrance`: PISTE OAuth (_ORYXSCRAPE secrets), publication-date-bounded LODA search since last successful France job (fallback 90d), pagination ceiling 5 pages / 100 docs per concept, nautical sweep pass, raw_items dedup by content hash, normalized_items insert, job row succeeded/failed, HTTP 500 JSON on failure
+- [x] Built as protected endpoint `/api/public/cron/collect-fr-legifrance` (Supabase Edge Functions are blocked on this stack)
+- [ ] Live first run — blocked: PISTE_CLIENT_ID_ORYXSCRAPE / PISTE_CLIENT_SECRET_ORYXSCRAPE must be added in Project Settings → Secrets
+- [x] Collector logic: PISTE OAuth (_ORYXSCRAPE secrets), publication-date-bounded LODA search since last successful France job (fallback 90d), pagination ceiling 5 pages / 100 docs per concept, nautical sweep pass, raw_items dedup by content hash, normalized_items insert, job row succeeded/failed, HTTP 500 JSON on failure
 - [ ] Weekly Monday 03:00 UTC trigger wired externally (separate step)
 - [ ] Backfill run after 1–2 clean weekly runs (deferred, not this deploy)
