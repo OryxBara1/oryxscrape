@@ -73,3 +73,11 @@ Phase 8 — collect-fr-legifrance Supabase Edge Function
 - [x] Collector logic: PISTE OAuth (_ORYXSCRAPE secrets), publication-date-bounded LODA search since last successful France job (fallback 90d), pagination ceiling 5 pages / 100 docs per concept, nautical sweep pass, raw_items dedup by content hash, normalized_items insert, job row succeeded/failed, HTTP 500 JSON on failure
 - [ ] Weekly Monday 03:00 UTC trigger wired externally (separate step)
 - [ ] Backfill run after 1–2 clean weekly runs (deferred, not this deploy)
+
+Phase 9 — Spain (BOE) API collector (approved 2026-09-23)
+- [x] boe-collect.server.ts (legislación consolidada API, 7-day publication window, 5 pages/100 docs per term)
+- [x] /api/public/cron/collect-es-boe protected endpoint (Tuesday 03:00 UTC, external scheduler)
+- [x] sources.boe.es switched to collection_method=api; Apify crawl retired for BOE
+- [x] First run clean (0 found — no nautical BOE norms published in the window)
+- [ ] Backfill parked until 1-2 clean weekly runs
+- [ ] Seed ES search_terms in the lexicon (terms currently fixed in code)
