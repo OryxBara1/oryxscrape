@@ -32,6 +32,11 @@ const PAGE_SIZE = 20;
  * The gazette sits behind a CDN that answers 502 to non-browser user agents,
  * so we identify as a normal browser. Nothing else about the request changes.
  */
+/** Politeness delay between gazette requests — the site throttles bursts. */
+const REQUEST_DELAY_MS = 1200;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
@@ -168,6 +173,7 @@ async function searchDouPage(input: {
   let html = "";
   let status = 0;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await sleep(REQUEST_DELAY_MS);
     const response = await fetch(url, {
       headers: { Accept: "text/html", "User-Agent": BROWSER_UA },
     });
@@ -180,6 +186,7 @@ async function searchDouPage(input: {
 }
 
 async function fetchDouItem(hit: DouHit): Promise<{ html: string; plain: string }> {
+  await sleep(REQUEST_DELAY_MS);
   const response = await fetch(hit.url, {
     headers: { Accept: "text/html", "User-Agent": BROWSER_UA },
   });
