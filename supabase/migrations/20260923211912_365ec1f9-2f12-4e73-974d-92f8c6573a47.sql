@@ -1,0 +1,1 @@
+update public.sources set domain = 'officielebekendmakingen.nl', name = 'Officiële bekendmakingen — Netherlands', start_url = 'https://zoek.officielebekendmakingen.nl/', collection_method = 'api', schedule_notes = 'Weekly Friday 03:00 UTC via /api/public/cron/collect-nl-obk' where id = 'a0a7e482-beb1-4879-b78d-f0d083370004';

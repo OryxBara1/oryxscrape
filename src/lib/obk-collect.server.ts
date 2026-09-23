@@ -1,5 +1,5 @@
 /**
- * collect-nl-overheid — scheduled Dutch official-publication collection.
+ * collect-nl-obk — scheduled Dutch official-publication collection.
  *
  * repository.overheid.nl exposes an open SRU 2.0 search service (no key):
  *   https://repository.overheid.nl/sru?operation=searchRetrieve&version=2.0&query=<cql>
@@ -20,7 +20,7 @@ const SRU_BASE = "https://repository.overheid.nl/sru";
 const TEXT_BASE = "https://zoek.officielebekendmakingen.nl";
 
 export const NL_COLLECTOR_VERSION = "nl-overheid-scheduled@1.0.0";
-export const SOURCE_DOMAIN = "overheid.nl";
+export const SOURCE_DOMAIN = "officielebekendmakingen.nl";
 export const WINDOW_DAYS = 7;
 export const MAX_PAGES_PER_TERM = 5;
 export const MAX_DOCS_PER_TERM = 100;
@@ -28,20 +28,20 @@ const PAGE_SIZE = 20;
 
 /** Nautical / recreational navigation terms — deliberately scoped. */
 export const NL_TERMS = [
-  "pleziervaart",
-  "pleziervaartuig",
+  "pleziervaartuigen",
   "recreatievaart",
   "vaarbewijs",
   "jachthaven",
-  "ligplaats",
+  "watersport",
   "waterscooter",
-  "snelle motorboot",
-  "binnenvaartpolitiereglement",
+  "zeiljacht",
+  "sloep",
+  "recreatieboot",
 ];
 
 function log(step: string, detail?: unknown) {
-  if (detail === undefined) console.log(`[collect-nl-overheid] ${step}`);
-  else console.log(`[collect-nl-overheid] ${step}`, JSON.stringify(detail));
+  if (detail === undefined) console.log(`[collect-nl-obk] ${step}`);
+  else console.log(`[collect-nl-obk] ${step}`, JSON.stringify(detail));
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -192,7 +192,7 @@ export type NlPassStats = {
   stopped_by: "exhausted" | "ceiling";
 };
 
-export async function runNlOverheidCollection(supabase: SupabaseClient<Database>) {
+export async function runObkCollection(supabase: SupabaseClient<Database>) {
   log("run started");
 
   const { data: source, error: sourceError } = await supabase
@@ -219,7 +219,7 @@ export async function runNlOverheidCollection(supabase: SupabaseClient<Database>
       status: "running",
       started_at: new Date().toISOString(),
       run_params: {
-        function: "collect-nl-overheid",
+        function: "collect-nl-obk",
         job_type: "scheduled",
         api: "repository.overheid.nl-sru",
         collector_version: NL_COLLECTOR_VERSION,
@@ -387,7 +387,7 @@ export async function runNlOverheidCollection(supabase: SupabaseClient<Database>
             ingested += 1;
           } catch (error) {
             console.error(
-              `[collect-nl-overheid] document failed ${record.identifier}: ${(error as Error).message}`,
+              `[collect-nl-obk] document failed ${record.identifier}: ${(error as Error).message}`,
             );
             stats.failed += 1;
             failed += 1;
@@ -427,7 +427,7 @@ export async function runNlOverheidCollection(supabase: SupabaseClient<Database>
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown failure";
-    console.error(`[collect-nl-overheid] run failed: ${message}`);
+    console.error(`[collect-nl-obk] run failed: ${message}`);
     await supabase
       .from("collection_jobs")
       .update({

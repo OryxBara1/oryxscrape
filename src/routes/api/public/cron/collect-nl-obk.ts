@@ -7,7 +7,7 @@ import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
  * Shared-secret authenticated. Returns counts only — no document content,
  * no PII. Automates the collection step only; review stays human-driven.
  */
-export const Route = createFileRoute("/api/public/cron/collect-nl-overheid")({
+export const Route = createFileRoute("/api/public/cron/collect-nl-obk")({
   server: {
     handlers: {
       POST: async ({ request }) => {
@@ -15,17 +15,17 @@ export const Route = createFileRoute("/api/public/cron/collect-nl-overheid")({
         if (denied) return denied;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { runNlOverheidCollection } = await import("@/lib/nl-overheid.server");
+        const { runObkCollection } = await import("@/lib/obk-collect.server");
 
         try {
-          const result = await runNlOverheidCollection(supabaseAdmin);
+          const result = await runObkCollection(supabaseAdmin);
           return Response.json(
             { ok: true, ...result },
             { headers: { "Cache-Control": "no-store" } },
           );
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown failure";
-          console.error("[cron/collect-nl-overheid] failed", message);
+          console.error("[cron/collect-nl-obk] failed", message);
           return Response.json(
             { ok: false, error: message },
             { status: 500, headers: { "Cache-Control": "no-store" } },
