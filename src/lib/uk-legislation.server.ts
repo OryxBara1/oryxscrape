@@ -139,6 +139,7 @@ async function searchUkPage(input: {
 }): Promise<UkEntry[]> {
   const url = new URL(`${FEED_BASE}/all/${input.year}/data.feed`);
   url.searchParams.set("text", input.term);
+  url.searchParams.set("sort", "date");
   url.searchParams.set("page", String(input.page));
 
   const response = await fetch(url, {
