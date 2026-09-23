@@ -15,7 +15,7 @@ export const Route = createFileRoute("/api/public/cron/collect-uk-legislation")(
         if (denied) return denied;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { runUkLegislationCollection } = await import("@/lib/uk-legislation.server");
+        const { runUkLegislationCollection } = await import("@/lib/legislation-uk-collect.server");
 
         try {
           const result = await runUkLegislationCollection(supabaseAdmin);

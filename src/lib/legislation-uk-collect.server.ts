@@ -30,14 +30,14 @@ export const MAX_DOCS_PER_TERM = 100;
 /** Nautical / recreational navigation terms — deliberately scoped. */
 export const UK_TERMS = [
   "recreational craft",
-  "pleasure vessel",
   "pleasure craft",
-  "small craft",
+  "nautical licence",
+  "sport boating",
+  "marina mooring",
   "personal watercraft",
-  "marina",
-  "mooring",
+  "vessel registration",
+  "recreational boating",
   "boat safety",
-  "yacht",
 ];
 
 function log(step: string, detail?: unknown) {
