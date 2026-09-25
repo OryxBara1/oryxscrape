@@ -129,6 +129,7 @@ export type Database = {
       }
       consumer_keys: {
         Row: {
+          allowed_tags: string[] | null
           consumer_app: string
           created_at: string
           id: string
@@ -142,6 +143,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allowed_tags?: string[] | null
           consumer_app: string
           created_at?: string
           id?: string
@@ -155,6 +157,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allowed_tags?: string[] | null
           consumer_app?: string
           created_at?: string
           id?: string
@@ -414,6 +417,7 @@ export type Database = {
           reviewed_by: string | null
           source_id: string
           source_url: string
+          tags: string[] | null
           traceability_level: Database["public"]["Enums"]["traceability_level"]
           updated_at: string
           verification_status: Database["public"]["Enums"]["verification_status"]
@@ -434,6 +438,7 @@ export type Database = {
           reviewed_by?: string | null
           source_id: string
           source_url: string
+          tags?: string[] | null
           traceability_level: Database["public"]["Enums"]["traceability_level"]
           updated_at?: string
           verification_status?: Database["public"]["Enums"]["verification_status"]
@@ -454,6 +459,7 @@ export type Database = {
           reviewed_by?: string | null
           source_id?: string
           source_url?: string
+          tags?: string[] | null
           traceability_level?: Database["public"]["Enums"]["traceability_level"]
           updated_at?: string
           verification_status?: Database["public"]["Enums"]["verification_status"]
@@ -479,6 +485,7 @@ export type Database = {
         Row: {
           apify_actor_id: string | null
           apify_run_id: string | null
+          canonical: boolean
           canonical_url: string | null
           collected_at: string
           collection_method: Database["public"]["Enums"]["collection_method"]
@@ -491,16 +498,22 @@ export type Database = {
           institution_class: Database["public"]["Enums"]["institution_class"]
           is_official_domain: boolean
           is_primary_document: boolean
+          item_status: Database["public"]["Enums"]["item_status_type"] | null
           job_id: string | null
           language: string | null
+          payload_integrity:
+            | Database["public"]["Enums"]["payload_integrity_type"]
+            | null
           raw_payload: Json
           source_id: string
           source_url: string
+          supersedes_raw_item_id: string | null
           traceability_level: Database["public"]["Enums"]["traceability_level"]
         }
         Insert: {
           apify_actor_id?: string | null
           apify_run_id?: string | null
+          canonical?: boolean
           canonical_url?: string | null
           collected_at?: string
           collection_method?: Database["public"]["Enums"]["collection_method"]
@@ -513,16 +526,22 @@ export type Database = {
           institution_class: Database["public"]["Enums"]["institution_class"]
           is_official_domain: boolean
           is_primary_document: boolean
+          item_status?: Database["public"]["Enums"]["item_status_type"] | null
           job_id?: string | null
           language?: string | null
+          payload_integrity?:
+            | Database["public"]["Enums"]["payload_integrity_type"]
+            | null
           raw_payload?: Json
           source_id: string
           source_url: string
+          supersedes_raw_item_id?: string | null
           traceability_level: Database["public"]["Enums"]["traceability_level"]
         }
         Update: {
           apify_actor_id?: string | null
           apify_run_id?: string | null
+          canonical?: boolean
           canonical_url?: string | null
           collected_at?: string
           collection_method?: Database["public"]["Enums"]["collection_method"]
@@ -535,11 +554,16 @@ export type Database = {
           institution_class?: Database["public"]["Enums"]["institution_class"]
           is_official_domain?: boolean
           is_primary_document?: boolean
+          item_status?: Database["public"]["Enums"]["item_status_type"] | null
           job_id?: string | null
           language?: string | null
+          payload_integrity?:
+            | Database["public"]["Enums"]["payload_integrity_type"]
+            | null
           raw_payload?: Json
           source_id?: string
           source_url?: string
+          supersedes_raw_item_id?: string | null
           traceability_level?: Database["public"]["Enums"]["traceability_level"]
         }
         Relationships: [
@@ -555,6 +579,13 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "raw_items_supersedes_raw_item_id_fkey"
+            columns: ["supersedes_raw_item_id"]
+            isOneToOne: false
+            referencedRelation: "raw_items"
             referencedColumns: ["id"]
           },
         ]
@@ -878,8 +909,8 @@ export type Database = {
           verification_status: Database["public"]["Enums"]["verification_status"]
         }[]
       }
-      is_staff: { Args: { _user_id: string }; Returns: boolean }
-      is_staff_owner: { Args: { _user_id: string }; Returns: boolean }
+      is_staff: { Args: never; Returns: boolean }
+      is_staff_owner: { Args: never; Returns: boolean }
       is_valid_exposure_policy: { Args: { exposure: Json }; Returns: boolean }
       is_valid_policy_node: {
         Args: { depth?: number; node: Json }
@@ -928,7 +959,15 @@ export type Database = {
         | "registered_media"
         | "commercial"
         | "unknown"
-      job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
+      item_status_type: "collected" | "failed" | "pending" | "superseded"
+      job_status:
+        | "queued"
+        | "running"
+        | "succeeded"
+        | "failed"
+        | "cancelled"
+        | "diagnostic"
+      payload_integrity_type: "verbatim" | "partial" | "synthesized"
       publication_status: "internal_only" | "eligible"
       search_term_lifecycle:
         | "candidate"
@@ -1113,7 +1152,16 @@ export const Constants = {
         "commercial",
         "unknown",
       ],
-      job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
+      item_status_type: ["collected", "failed", "pending", "superseded"],
+      job_status: [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "diagnostic",
+      ],
+      payload_integrity_type: ["verbatim", "partial", "synthesized"],
       publication_status: ["internal_only", "eligible"],
       search_term_lifecycle: [
         "candidate",
