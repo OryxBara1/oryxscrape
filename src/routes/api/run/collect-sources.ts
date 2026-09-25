@@ -119,7 +119,7 @@ async function runWithConcurrency<T, R>(
   return results;
 }
 
-export const Route = createFileRoute("/api/public/cron/collect-sources")({
+export const Route = createFileRoute("/api/run/collect-sources")({
   server: {
     handlers: {
       POST: async ({ request }) => {
