@@ -20,6 +20,7 @@ import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/j
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
 import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
+import { Route as ApiRunCollectSourcesRouteImport } from './routes/api/run/collect-sources'
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
 import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/public/cron/collect-br-dou'
 import { Route as ApiPublicCronCollectEsBoeRouteImport } from './routes/api/public/cron/collect-es-boe'
@@ -27,7 +28,6 @@ import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/a
 import { Route as ApiPublicCronCollectHrNnRouteImport } from './routes/api/public/cron/collect-hr-nn'
 import { Route as ApiPublicCronCollectItNormattivaRouteImport } from './routes/api/public/cron/collect-it-normattiva'
 import { Route as ApiPublicCronCollectNlObkRouteImport } from './routes/api/public/cron/collect-nl-obk'
-import { Route as ApiPublicCronCollectSourcesRouteImport } from './routes/api/public/cron/collect-sources'
 import { Route as ApiPublicCronCollectUkLegislationRouteImport } from './routes/api/public/cron/collect-uk-legislation'
 import { Route as ApiPublicCronFinalizeRouteImport } from './routes/api/public/cron/finalize'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
@@ -86,6 +86,11 @@ const AuthenticatedSourcesRoute = AuthenticatedSourcesRouteImport.update({
   path: '/sources',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiRunCollectSourcesRoute = ApiRunCollectSourcesRouteImport.update({
+  id: '/api/run/collect-sources',
+  path: '/api/run/collect-sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCronCollectRoute = ApiPublicCronCollectRouteImport.update({
   id: '/api/public/cron/collect',
   path: '/api/public/cron/collect',
@@ -127,12 +132,6 @@ const ApiPublicCronCollectNlObkRoute =
     path: '/api/public/cron/collect-nl-obk',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicCronCollectSourcesRoute =
-  ApiPublicCronCollectSourcesRouteImport.update({
-    id: '/api/public/cron/collect-sources',
-    path: '/api/public/cron/collect-sources',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicCronCollectUkLegislationRoute =
   ApiPublicCronCollectUkLegislationRouteImport.update({
     id: '/api/public/cron/collect-uk-legislation',
@@ -161,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
+  '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
@@ -168,7 +168,6 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
-  '/api/public/cron/collect-sources': typeof ApiPublicCronCollectSourcesRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
@@ -184,6 +183,7 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
   '/sources': typeof AuthenticatedSourcesRoute
+  '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
@@ -191,7 +191,6 @@ export interface FileRoutesByTo {
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
-  '/api/public/cron/collect-sources': typeof ApiPublicCronCollectSourcesRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
@@ -209,6 +208,7 @@ export interface FileRoutesById {
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
   '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
+  '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
@@ -216,7 +216,6 @@ export interface FileRoutesById {
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
-  '/api/public/cron/collect-sources': typeof ApiPublicCronCollectSourcesRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
@@ -234,6 +233,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/lexicon'
     | '/sources'
+    | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
@@ -241,7 +241,6 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
     | '/api/public/cron/collect-nl-obk'
-    | '/api/public/cron/collect-sources'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
@@ -257,6 +256,7 @@ export interface FileRouteTypes {
     | '/keys'
     | '/lexicon'
     | '/sources'
+    | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
@@ -264,7 +264,6 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
     | '/api/public/cron/collect-nl-obk'
-    | '/api/public/cron/collect-sources'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
@@ -281,6 +280,7 @@ export interface FileRouteTypes {
     | '/_authenticated/keys'
     | '/_authenticated/lexicon'
     | '/_authenticated/sources'
+    | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
@@ -288,7 +288,6 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
     | '/api/public/cron/collect-nl-obk'
-    | '/api/public/cron/collect-sources'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
     | '/api/public/v1/items'
@@ -298,6 +297,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiRunCollectSourcesRoute: typeof ApiRunCollectSourcesRoute
   ApiPublicCronCollectRoute: typeof ApiPublicCronCollectRoute
   ApiPublicCronCollectBrDouRoute: typeof ApiPublicCronCollectBrDouRoute
   ApiPublicCronCollectEsBoeRoute: typeof ApiPublicCronCollectEsBoeRoute
@@ -305,7 +305,6 @@ export interface RootRouteChildren {
   ApiPublicCronCollectHrNnRoute: typeof ApiPublicCronCollectHrNnRoute
   ApiPublicCronCollectItNormattivaRoute: typeof ApiPublicCronCollectItNormattivaRoute
   ApiPublicCronCollectNlObkRoute: typeof ApiPublicCronCollectNlObkRoute
-  ApiPublicCronCollectSourcesRoute: typeof ApiPublicCronCollectSourcesRoute
   ApiPublicCronCollectUkLegislationRoute: typeof ApiPublicCronCollectUkLegislationRoute
   ApiPublicCronFinalizeRoute: typeof ApiPublicCronFinalizeRoute
   ApiPublicV1ItemsRoute: typeof ApiPublicV1ItemsRoute
@@ -390,6 +389,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSourcesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/run/collect-sources': {
+      id: '/api/run/collect-sources'
+      path: '/api/run/collect-sources'
+      fullPath: '/api/run/collect-sources'
+      preLoaderRoute: typeof ApiRunCollectSourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/collect': {
       id: '/api/public/cron/collect'
       path: '/api/public/cron/collect'
@@ -437,13 +443,6 @@ declare module '@tanstack/react-router' {
       path: '/api/public/cron/collect-nl-obk'
       fullPath: '/api/public/cron/collect-nl-obk'
       preLoaderRoute: typeof ApiPublicCronCollectNlObkRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/cron/collect-sources': {
-      id: '/api/public/cron/collect-sources'
-      path: '/api/public/cron/collect-sources'
-      fullPath: '/api/public/cron/collect-sources'
-      preLoaderRoute: typeof ApiPublicCronCollectSourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/collect-uk-legislation': {
@@ -499,6 +498,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiRunCollectSourcesRoute: ApiRunCollectSourcesRoute,
   ApiPublicCronCollectRoute: ApiPublicCronCollectRoute,
   ApiPublicCronCollectBrDouRoute: ApiPublicCronCollectBrDouRoute,
   ApiPublicCronCollectEsBoeRoute: ApiPublicCronCollectEsBoeRoute,
@@ -506,7 +506,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronCollectHrNnRoute: ApiPublicCronCollectHrNnRoute,
   ApiPublicCronCollectItNormattivaRoute: ApiPublicCronCollectItNormattivaRoute,
   ApiPublicCronCollectNlObkRoute: ApiPublicCronCollectNlObkRoute,
-  ApiPublicCronCollectSourcesRoute: ApiPublicCronCollectSourcesRoute,
   ApiPublicCronCollectUkLegislationRoute:
     ApiPublicCronCollectUkLegislationRoute,
   ApiPublicCronFinalizeRoute: ApiPublicCronFinalizeRoute,
