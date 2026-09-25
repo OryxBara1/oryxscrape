@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { authenticateCronRequest } from "@/integrations/supabase/cron-auth";
 
 /**
  * Generic scheduled collection dispatcher.
@@ -123,8 +122,25 @@ export const Route = createFileRoute("/api/public/cron/collect-sources")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
+        const cronSecret = process.env['LOVABLE_CRON_SECRET'];
+        const collectSecret = process.env['COLLECT_SOURCES_SECRET'];
+
+        const match = /^Bearer ([^\s,]+)$/.exec(request.headers.get('authorization') ?? '');
+        const token = match?.[1];
+        if (!token || (!cronSecret && !collectSecret)) {
+          return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { createHash, timingSafeEqual } = await import('node:crypto');
+        const digest = (v: string) => createHash('sha256').update(v, 'utf8').digest();
+        const provided = digest(token);
+        const ok =
+          (cronSecret && timingSafeEqual(provided, digest(cronSecret))) ||
+          (collectSecret && timingSafeEqual(provided, digest(collectSecret)));
+        if (!ok) {
+          return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
