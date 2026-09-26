@@ -15,3 +15,11 @@
 - Brasil (DOU): ator ruidoso/caro.
 - 1 collection_job "running" travado.
 - `collect-documents` (Edge Function externa) sem gatilho/schedule neste projeto.
+
+## Triagem EUR-Lex (/items)
+- [x] Curadoria em payload.curation (jurisdições, estado de aplicação, nota), auditada por mudança.
+- [x] Filtros na URL (EU, estado, fonte, tipo CELEX, aplicação, datas, busca com CELEX exato primeiro).
+- [x] Rejeição em lote com motivo; aprovação exige escopo completo (EU).
+- [x] metadata.json inclui bloco curation.
+- [ ] Teste logado ponta a ponta — o navegador de teste não consegue entrar (Supabase externo); validar manualmente.
+- [ ] Itens EUR-Lex não têm texto extraído: o envio ao Exchange pode precisar do texto CELLAR antes.
