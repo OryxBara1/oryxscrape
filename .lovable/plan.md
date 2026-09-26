@@ -1,37 +1,30 @@
-# `collect-sources` dispatcher
+# Coletor EUR-Lex (`collect-eu-eurlex`)
 
-You asked for a Supabase Edge Function. This project cannot deploy new Edge Functions — the platform blocks creating them here (confirmed again earlier when I tried), and there is no `supabase/functions/` folder: all scheduled collection already runs as protected endpoints inside the app itself. So the plan is to build the exact same dispatcher, with the same request body and the same JSON response, as an in-app endpoint.
+Coletor de legislação marítima da União Europeia via CELLAR SPARQL (endpoint público, sem chave, sem custo), seguindo o mesmo padrão dos coletores por país (França, Espanha, UK, etc.).
 
-## What gets built
+## Arquivos novos
 
-One new file: `src/routes/api/public/cron/collect-sources.ts`
+1. `src/lib/eurlex-collect.server.ts` — lógica do coletor (`runEurlexCollection`)
+2. `src/routes/api/public/cron/collect-eu-eurlex.ts` — rota cron protegida por `authenticateCronRequest`
 
-- Address: `POST https://oryxscrape.lovable.app/api/public/cron/collect-sources`
-- Body: `{"scope":"single","source_domain":"officielebekendmakingen.nl"}` or `{"scope":"all"}` (empty body = all)
-- Returns the same `{ summary, results }` shape as your code, including per-source timing, usage, character count and insert status.
+## Comportamento
 
-Behaviour, matching your source line for line:
-- Reads active sources (optionally one domain), fetches each start page through Parallel Extract, stores a job row, then an immutable raw item with its SHA-256 hash and `parallel_extract` method.
-- Six sources at a time, failures reported per source instead of stopping the batch.
-- Nothing is reviewed, published or promoted; every item stays unreviewed and internal-only.
+- **Fonte:** CELLAR SPARQL endpoint (`https://publications.europa.eu/webapi/rdf/sparql`), aberto, sem autenticação.
+- **Filtro EuroVoc no SPARQL (ajuste 3):** a query filtra documentos tagueados com os descritores EuroVoc náuticos — `waterway transport` (eurovoc/3193), `pleasure craft` (eurovoc/4790), `maritime safety` (eurovoc/5551), `sea transport` (eurovoc/1499) — e/ou CELEX prefix `L` (legislação). Isso evita puxar aviação/transporte terrestre que mencionam "navigation".
+- **Janela de datas (ajuste 2):** primeiro run (fonte sem itens anteriores) usa lookback de **365 dias** para capturar diretivas em vigor; runs seguintes usam a janela padrão de 7 dias.
+- **Teto de segurança:** 5 páginas / 100 documentos por run.
+- **`jurisdiction_hint = "EU"` (ajuste 1):** todos os itens EUR-Lex gravam `EU`, não um ISO2 de país. Comentário no código explica que apps consumidores (ex: Auramaris) são responsáveis por mapear diretivas UE para os países cobertos.
+- **Gravação:** `collection_jobs` (running → succeeded/failed), `raw_items` imutável com SHA-256 `content_hash` (dedup), depois `normalized_items` com `publication_status='internal_only'`, `verification_status='unreviewed'`, `collection_method='api'`.
+- **Proveniência:** `institution_class='intergovernmental'`, `is_official_domain=true`, `trust_tier='official'`.
+- **Fonte:** insere linha em `sources` (domain `eur-lex.europa.eu`, country `EU`, collection_method `api`, schedule_notes apontando a rota cron) se não existir.
+- **Scheduler:** `src/lib/scheduler.server.ts` roteia domain `eur-lex.europa.eu` → `runEurlexCollection`.
+- **Resposta do endpoint:** `{ jobId, found, new_items, duplicates, failures }`.
 
-## Three differences from the pasted code, and why
+## Verificação
 
-1. **Authentication.** The other scheduled endpoints all use the shared cron secret (`Authorization: Bearer <LOVABLE_CRON_SECRET>`), not a Supabase key. This one will use the same, so your scheduler keeps one credential for every job. Anonymous callers get 401.
-2. **Database access.** Instead of hand-written REST calls with the service key, it uses the app's existing admin client — same privileges, same tables, already wired and tested.
-3. **Parallel calls go through the Lovable connector gateway**, which is how this project is allowed to reach Parallel. Same endpoint and same request body.
+- Teste ao vivo do SPARQL antes de gravar qualquer linha no banco.
+- Um run real do endpoint; confirmar que itens ficam `unreviewed`/`internal_only`.
 
-## One thing to decide
+## Fora de escopo
 
-Your code skips any source that already has a single raw item ever collected. Sixteen of the eighteen active sources already have items, so `{"scope":"all"}` would process only the two that never collected anything, and after one run it would do nothing at all forever.
-
-Options:
-- **A — keep as written.** A first-collection backfill tool: useful once, then idle.
-- **B — no skip.** Every run re-extracts every active source; the hash check still prevents duplicate storage.
-- **C — skip only recent.** Skip a source that already collected within the last 7 days; everything else runs.
-
-I'll implement A exactly as your code says unless you pick another.
-
-## Not touched
-
-No schema changes, no other files, no existing endpoints or collectors altered, no review state modified.
+Sem mudanças de schema, sem Edge Functions, sem alterar coletores existentes, sem automação além da coleta.
