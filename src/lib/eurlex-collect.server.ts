@@ -88,6 +88,8 @@ export type EuRecord = {
   celex: string;
   title: string | null;
   date: Date | null;
+  /** CELLAR XHTML manifestation — full text without the eur-lex WAF. */
+  manif: string | null;
   url: string;
 };
 
@@ -96,18 +98,26 @@ type SparqlBinding = {
   celexNumber?: { value: string };
   title?: { value: string };
   date?: { value: string };
+  manif?: { value: string };
 };
 
 function buildQuery(since: Date, until: Date, offset: number): string {
   const values = EUROVOC_CONCEPTS.map((uri) => `<${uri}>`).join(" ");
   return `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-SELECT DISTINCT ?work ?celexNumber ?title ?date WHERE {
+SELECT DISTINCT ?work ?celexNumber ?title ?date ?manif WHERE {
   ?work cdm:work_date_document ?date .
   ?work cdm:resource_legal_id_celex ?celexNumber .
   FILTER(STRSTARTS(STR(?celexNumber), "3") || REGEX(?celexNumber, "^[LR]"))
   ?work cdm:work_is_about_concept_eurovoc ?concept .
   VALUES ?concept { ${values} }
   OPTIONAL { ?work cdm:work_title ?title . FILTER(LANG(?title) = "en") }
+  OPTIONAL {
+    ?expr cdm:expression_belongs_to_work ?work .
+    ?expr cdm:expression_uses_language <http://publications.europa.eu/resource/authority/language/ENG> .
+    ?manif cdm:manifestation_manifests_expression ?expr .
+    ?manif cdm:manifestation_type ?mtype .
+    FILTER(STRENDS(STR(?mtype), "xhtml"))
+  }
   FILTER(?date >= "${isoDay(since)}"^^<http://www.w3.org/2001/XMLSchema#date>)
   FILTER(?date <= "${isoDay(until)}"^^<http://www.w3.org/2001/XMLSchema#date>)
 }
@@ -146,27 +156,47 @@ async function searchEuPage(input: {
       celex,
       title: binding.title?.value ?? null,
       date: date && !Number.isNaN(date.getTime()) ? date : null,
+      manif: binding.manif?.value ?? null,
       url: `${EULEX_TEXT_BASE}${encodeURIComponent(celex)}`,
     });
   }
   return records;
 }
 
-/** Full text via the EUR-Lex HTML rendition of the CELEX number. */
-async function fetchEuText(celex: string): Promise<{ html: string; plain: string }> {
-  const url = `${EULEX_TEXT_BASE}${encodeURIComponent(celex)}`;
-  const response = await fetch(url, {
-    headers: { Accept: "text/html", "User-Agent": "OryxScrape/1.0" },
-  });
-  const body = await response.text();
-  if (!response.ok) {
-    throw new Error(`eur-lex text failed [${response.status}]: ${url}`);
+/**
+ * Full text. The eur-lex.europa.eu rendition sits behind an AWS WAF JS
+ * challenge (HTTP 202) for server-side clients, so we fetch the CELLAR XHTML
+ * manifestation instead — same document, no bot wall. The EUR-Lex URL stays
+ * as the human-readable source_url. Suspiciously small bodies (WAF challenge
+ * pages, error shells) are treated as failures, never stored.
+ */
+const MIN_TEXT_CHARS = 500;
+
+async function fetchEuText(record: EuRecord): Promise<{ html: string; plain: string }> {
+  const attempts: { url: string; accept: string }[] = [];
+  if (record.manif) {
+    attempts.push({ url: record.manif, accept: "application/xhtml+xml" });
   }
-  const plain = stripTags(body);
-  if (!plain.trim()) {
-    throw new Error(`eur-lex empty body: ${url}`);
+  attempts.push({ url: record.url, accept: "text/html" });
+
+  let lastError = "";
+  for (const attempt of attempts) {
+    const response = await fetch(attempt.url, {
+      headers: { Accept: attempt.accept, "User-Agent": "OryxScrape/1.0" },
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      lastError = `[${response.status}] ${attempt.url}`;
+      continue;
+    }
+    const plain = stripTags(body);
+    if (plain.length < MIN_TEXT_CHARS) {
+      lastError = `body too small (${plain.length} chars) at ${attempt.url}`;
+      continue;
+    }
+    return { html: body, plain };
   }
-  return { html: body, plain };
+  throw new Error(`eur-lex text failed: ${lastError}`);
 }
 
 // ------------------------------------------------------------------- runner
