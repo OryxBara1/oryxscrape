@@ -103,9 +103,21 @@ export const getItemDetail = createServerFn({ method: "GET" })
             ? normalizedPayload["text"]
             : null;
 
+    const celex = typeof normalizedPayload["celexNumber"] === "string" ? normalizedPayload["celexNumber"] : null;
     return {
       id: row.id,
       title,
+      celex,
+      docType: celex ? docTypeFromCelex(celex) : null,
+      documentDate:
+        typeof normalizedPayload["published_at"] === "string" ? normalizedPayload["published_at"] : null,
+      eurovoc: Array.isArray(rawPayload["eurovoc_concepts"])
+        ? (rawPayload["eurovoc_concepts"] as string[])
+        : Array.isArray(normalizedPayload["eurovoc_concepts"])
+          ? (normalizedPayload["eurovoc_concepts"] as string[])
+          : [],
+      curation: readCuration(normalizedPayload),
+      payloadJson: JSON.stringify(normalizedPayload, null, 2).slice(0, 8000),
       sourceUrl: row.source_url,
       canonicalUrl: raw?.canonical_url ?? null,
       jurisdictionHint: row.jurisdiction_hint,
@@ -235,7 +247,7 @@ export const setItemReviewState = createServerFn({ method: "POST" })
 
     const { data: current, error: readError } = await supabase
       .from("normalized_items")
-      .select("id, verification_status, publication_status")
+      .select("id, verification_status, publication_status, jurisdiction_hint, payload")
       .eq("id", data.normalizedItemId)
       .maybeSingle();
     if (readError) throw new Error(readError.message);
@@ -251,6 +263,14 @@ export const setItemReviewState = createServerFn({ method: "POST" })
       throw new Error(
         `This action is not allowed from ${current.verification_status}/${current.publication_status}.`,
       );
+    }
+    // EU acts need explicit reviewer scope before they can reach the Exchange.
+    if (
+      data.action === "mark_eligible" &&
+      current.jurisdiction_hint === "EU" &&
+      !isCurationComplete(readCuration(current.payload))
+    ) {
+      throw new Error("EU items need affected jurisdictions and an application status before approval.");
     }
 
     const patch: {
@@ -281,5 +301,309 @@ export const setItemReviewState = createServerFn({ method: "POST" })
       verificationStatus: updated.verification_status,
       publicationStatus: updated.publication_status,
       updatedAt: updated.updated_at,
+    };
+  });
+
+// ---------------------------------------------------------------------------
+// Triage (curation) — payload.curation, audited per change.
+// ---------------------------------------------------------------------------
+
+import {
+  APPLICATION_STATUSES,
+  COVERED_JURISDICTIONS,
+  docTypeFromCelex,
+  isCurationComplete,
+  readCuration,
+  triageStateOf,
+  type ApplicationStatus,
+  type Curation,
+} from "@/lib/curation";
+
+export type TriageFilters = {
+  jurisdiction?: string | null;
+  state?: string | null;
+  domain?: string | null;
+  docType?: string | null;
+  application?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  q?: string | null;
+};
+
+type TriageRowDb = {
+  id: string;
+  source_url: string;
+  jurisdiction_hint: string | null;
+  category: string | null;
+  payload: Record<string, unknown> | null;
+  tags: string[] | null;
+  verification_status: VerificationStatus;
+  publication_status: PublicationStatus;
+  collected_at: string;
+  updated_at: string;
+  sources: { domain: string } | null;
+};
+
+const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+
+export const listTriageItems = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: TriageFilters) => input ?? {})
+  .handler(async ({ data, context }) => {
+    const sel = (s: string): string => s;
+    let query = context.supabase
+      .from("normalized_items")
+      .select(
+        sel(
+          "id, source_url, jurisdiction_hint, category, payload, tags, verification_status, publication_status, collected_at, updated_at, sources(domain)",
+        ),
+      )
+      .order("collected_at", { ascending: false })
+      .limit(1000);
+    if (data.jurisdiction) query = query.eq("jurisdiction_hint", data.jurisdiction);
+    const { data: rows, error } = await query.returns<TriageRowDb[]>();
+    if (error) throw new Error(error.message);
+
+    const ids = rows.map((r) => r.id);
+    const handoffs = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: hs, error: hErr } = await context.supabase
+        .from("exchange_handoffs")
+        .select("normalized_item_id, state, created_at")
+        .in("normalized_item_id", ids.slice(i, i + 200))
+        .order("created_at", { ascending: true });
+      if (hErr) throw new Error(hErr.message);
+      for (const h of hs ?? []) handoffs.set(h.normalized_item_id, h.state);
+    }
+
+    const q = (data.q ?? "").trim().toLowerCase();
+    const mapped = rows.map((r) => {
+      const p = r.payload ?? {};
+      const celex = str(p["celexNumber"]);
+      const curation = readCuration(p);
+      return {
+        id: r.id,
+        title: str(p["title"]),
+        celex,
+        docType: celex ? docTypeFromCelex(celex) : null,
+        date: str(p["published_at"]) ?? str(p["publication_date"]),
+        sourceUrl: r.source_url,
+        domain: r.sources?.domain ?? null,
+        jurisdictionHint: r.jurisdiction_hint,
+        tags: r.tags ?? [],
+        verificationStatus: r.verification_status,
+        publicationStatus: r.publication_status,
+        curation,
+        state: triageStateOf({
+          verification: r.verification_status,
+          publication: r.publication_status,
+          handoffState: handoffs.get(r.id) ?? null,
+          curation,
+        }),
+        collectedAt: r.collected_at,
+      };
+    });
+
+    const filtered = mapped.filter((m) => {
+      if (data.state && m.state !== data.state) return false;
+      if (data.domain && m.domain !== data.domain) return false;
+      if (data.docType && m.docType !== data.docType) return false;
+      if (data.application && m.curation?.application_status !== data.application) return false;
+      const d = m.date ?? m.collectedAt.slice(0, 10);
+      if (data.dateFrom && d < data.dateFrom) return false;
+      if (data.dateTo && d > data.dateTo) return false;
+      return true;
+    });
+
+    if (!q) return filtered.slice(0, 300);
+    // CELEX exact match wins over any title/tag match.
+    const exact = filtered.filter((m) => m.celex?.toLowerCase() === q);
+    if (exact.length) return exact;
+    return filtered
+      .filter(
+        (m) =>
+          m.celex?.toLowerCase().includes(q) ||
+          m.title?.toLowerCase().includes(q) ||
+          m.tags.some((t) => t.toLowerCase().includes(q)),
+      )
+      .slice(0, 300);
+  });
+
+async function writeCurationAudit(
+  supabase: import("@supabase/supabase-js").SupabaseClient<Database>,
+  itemId: string,
+  userId: string,
+  action: string,
+  previous: Curation | null,
+  next: Curation | null,
+) {
+  const { error } = await supabase.from("audit_events").insert({
+    check_type: "review_status_change",
+    target_table: "normalized_items",
+    target_id: itemId,
+    result: "ok",
+    findings: {
+      kind: "curation",
+      action,
+      normalized_item_id: itemId,
+      actor_user_id: userId,
+      previous,
+      next,
+      changed_at: new Date().toISOString(),
+    } as never,
+  });
+  if (error) throw new Error(`Audit write failed: ${error.message}`);
+}
+
+export const saveItemCuration = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      normalizedItemId: string;
+      appliesTo: string[];
+      applicationStatus: ApplicationStatus | null;
+      reviewerNote: string | null;
+      approve?: boolean;
+    }) => {
+      if (!input?.normalizedItemId) throw new Error("A normalized item id is required.");
+      const appliesTo = Array.from(new Set(input.appliesTo ?? [])).filter((j) =>
+        (COVERED_JURISDICTIONS as readonly string[]).includes(j),
+      );
+      if (input.applicationStatus && !APPLICATION_STATUSES.includes(input.applicationStatus)) {
+        throw new Error("Invalid application status.");
+      }
+      return {
+        normalizedItemId: input.normalizedItemId,
+        appliesTo,
+        applicationStatus: input.applicationStatus ?? null,
+        reviewerNote: (input.reviewerNote ?? "").trim().slice(0, 2000) || null,
+        approve: !!input.approve,
+      };
+    },
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: current, error } = await supabase
+      .from("normalized_items")
+      .select("id, payload, verification_status, publication_status, updated_at")
+      .eq("id", data.normalizedItemId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!current) throw new Error("Item not found.");
+    if (current.verification_status === "rejected") {
+      throw new Error("Rejected items must be reopened before curation.");
+    }
+    if (current.publication_status === "eligible" && !data.approve) {
+      throw new Error("Item already approved; set it back to internal only to change scope.");
+    }
+
+    const previous = readCuration(current.payload);
+    const next: Curation = {
+      schema_version: 1,
+      applies_to_jurisdictions: data.appliesTo,
+      application_status: data.applicationStatus,
+      reviewer_note: data.reviewerNote,
+      reject_reason: null,
+      curated_by: userId,
+      curated_at: new Date().toISOString(),
+    };
+    if (data.approve && !isCurationComplete(next)) {
+      throw new Error("Approval requires at least one jurisdiction and an application status.");
+    }
+
+    const payload = { ...((current.payload as Record<string, unknown>) ?? {}), curation: next };
+    const patch: Database["public"]["Tables"]["normalized_items"]["Update"] = {
+      payload: payload as never,
+      verification_status: "reviewed",
+      publication_status: data.approve ? "eligible" : current.publication_status,
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+    };
+    const { data: updated, error: upErr } = await supabase
+      .from("normalized_items")
+      .update(patch)
+      .eq("id", data.normalizedItemId)
+      .eq("updated_at", current.updated_at)
+      .select("id")
+      .maybeSingle();
+    if (upErr) throw new Error(upErr.message);
+    if (!updated) throw new Error("The item changed before this action could be applied.");
+
+    await writeCurationAudit(
+      supabase,
+      data.normalizedItemId,
+      userId,
+      data.approve ? "approve_for_exchange" : "save_scope",
+      previous,
+      next,
+    );
+    return { ok: true, approved: data.approve };
+  });
+
+export const rejectItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { normalizedItemIds: string[]; reason: string }) => {
+    const ids = Array.from(new Set(input?.normalizedItemIds ?? [])).filter(
+      (id) => typeof id === "string" && id,
+    );
+    if (!ids.length) throw new Error("Select at least one item.");
+    if (ids.length > 200) throw new Error("At most 200 items per batch.");
+    const reason = (input.reason ?? "").trim().slice(0, 500);
+    if (!reason) throw new Error("A rejection reason is required.");
+    return { ids, reason };
+  })
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const id of data.ids) {
+      try {
+        const { data: current, error } = await supabase
+          .from("normalized_items")
+          .select("id, payload, verification_status, publication_status")
+          .eq("id", id)
+          .maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!current) throw new Error("Item not found.");
+        if (current.publication_status !== "internal_only" || current.verification_status === "rejected") {
+          throw new Error(`Not rejectable from ${current.verification_status}/${current.publication_status}.`);
+        }
+        const previous = readCuration(current.payload);
+        const next: Curation = {
+          ...(previous ?? {
+            schema_version: 1,
+            applies_to_jurisdictions: [],
+            application_status: null,
+            reviewer_note: null,
+          }),
+          schema_version: 1,
+          reject_reason: data.reason,
+          curated_by: userId,
+          curated_at: new Date().toISOString(),
+        } as Curation;
+        const payload = { ...((current.payload as Record<string, unknown>) ?? {}), curation: next };
+        const { data: updated, error: upErr } = await supabase
+          .from("normalized_items")
+          .update({
+            payload: payload as never,
+            verification_status: "rejected",
+            publication_status: "internal_only",
+            reviewed_by: userId,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", id)
+          .eq("verification_status", current.verification_status)
+          .select("id")
+          .maybeSingle();
+        if (upErr) throw new Error(upErr.message);
+        if (!updated) throw new Error("Item changed concurrently.");
+        await writeCurationAudit(supabase, id, userId, "reject", previous, next);
+        results.push({ id, ok: true });
+      } catch (e) {
+        results.push({ id, ok: false, error: e instanceof Error ? e.message : "Unknown error" });
+      }
+    }
+    return {
+      rejected: results.filter((r) => r.ok).length,
+      failed: results.filter((r) => !r.ok),
     };
   });
