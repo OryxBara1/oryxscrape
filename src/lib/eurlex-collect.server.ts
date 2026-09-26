@@ -83,11 +83,11 @@ SELECT DISTINCT ?work ?celexNumber ?title ?date WHERE {
   ?work cdm:work_is_about_concept_eurovoc ?concept .
   VALUES ?concept { ${values} }
 
-  # Title in English (canonical language) — lives on the EN expression, not the work
+  # Title in English (canonical language). Work-level titles carry no
+  # language tag (LANG = ""), so accept both "en" and untagged.
   OPTIONAL {
-    ?work cdm:work_has_expression ?expr .
-    ?expr cdm:expression_uses_language <http://publications.europa.eu/resource/authority/language/ENG> .
-    ?expr cdm:expression_title ?title .
+    ?work cdm:work_title ?title .
+    FILTER(LANG(?title) IN ("en", ""))
   }
 
   FILTER(?date >= "${isoDay(since)}"^^<http://www.w3.org/2001/XMLSchema#date>)
