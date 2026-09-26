@@ -32,14 +32,14 @@ import {
 } from "@/lib/items.functions";
 
 export type TriageSearch = {
-  jur?: string;
-  state?: string;
-  domain?: string;
-  type?: string;
-  app?: string;
-  from?: string;
-  to?: string;
-  q?: string;
+  jur?: string | undefined;
+  state?: string | undefined;
+  domain?: string | undefined;
+  type?: string | undefined;
+  app?: string | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  q?: string | undefined;
 };
 
 const STATE_TONE: Record<TriageState, string> = {
