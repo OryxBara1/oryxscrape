@@ -1,7 +1,8 @@
 # Roadmap
 
-## Em andamento
-- Coletor EUR-Lex (`collect-eu-eurlex`): reescrever conforme spec exata do usuário (hash SHA-256 do CELEX, raw_payload só metadados, sem fetch de texto, rota no scheduler.server.ts, upsert de sources). Limpar o raw_item ruim do primeiro teste e rodar de verdade.
+## Concluído
+- Coletor EUR-Lex (`collect-eu-eurlex`): spec exata do usuário implementada (hash SHA-256 do CELEX, raw_payload com metadados, sem fetch de texto por causa do WAF, rota no scheduler.server.ts, fonte eur-lex.europa.eu criada). Run real: 77 itens novos, 4 duplicados, 0 falhas, títulos em inglês corretos.
+
 
 ## Desvios da spec (restrições do banco)
 - `collection_method='sparql'` não existe no enum (apify, http, api, manual, parallel_extract) → usar 'api'.
