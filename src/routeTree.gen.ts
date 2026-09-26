@@ -24,6 +24,7 @@ import { Route as ApiRunCollectSourcesRouteImport } from './routes/api/run/colle
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
 import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/public/cron/collect-br-dou'
 import { Route as ApiPublicCronCollectEsBoeRouteImport } from './routes/api/public/cron/collect-es-boe'
+import { Route as ApiPublicCronCollectEuEurlexRouteImport } from './routes/api/public/cron/collect-eu-eurlex'
 import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/api/public/cron/collect-fr-legifrance'
 import { Route as ApiPublicCronCollectHrNnRouteImport } from './routes/api/public/cron/collect-hr-nn'
 import { Route as ApiPublicCronCollectItNormattivaRouteImport } from './routes/api/public/cron/collect-it-normattiva'
@@ -108,6 +109,12 @@ const ApiPublicCronCollectEsBoeRoute =
     path: '/api/public/cron/collect-es-boe',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronCollectEuEurlexRoute =
+  ApiPublicCronCollectEuEurlexRouteImport.update({
+    id: '/api/public/cron/collect-eu-eurlex',
+    path: '/api/public/cron/collect-eu-eurlex',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronCollectFrLegifranceRoute =
   ApiPublicCronCollectFrLegifranceRouteImport.update({
     id: '/api/public/cron/collect-fr-legifrance',
@@ -164,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
+  '/api/public/cron/collect-eu-eurlex': typeof ApiPublicCronCollectEuEurlexRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
@@ -187,6 +195,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
+  '/api/public/cron/collect-eu-eurlex': typeof ApiPublicCronCollectEuEurlexRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
@@ -212,6 +221,7 @@ export interface FileRoutesById {
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
+  '/api/public/cron/collect-eu-eurlex': typeof ApiPublicCronCollectEuEurlexRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
+    | '/api/public/cron/collect-eu-eurlex'
     | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
+    | '/api/public/cron/collect-eu-eurlex'
     | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
@@ -284,6 +296,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
     | '/api/public/cron/collect-es-boe'
+    | '/api/public/cron/collect-eu-eurlex'
     | '/api/public/cron/collect-fr-legifrance'
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
@@ -301,6 +314,7 @@ export interface RootRouteChildren {
   ApiPublicCronCollectRoute: typeof ApiPublicCronCollectRoute
   ApiPublicCronCollectBrDouRoute: typeof ApiPublicCronCollectBrDouRoute
   ApiPublicCronCollectEsBoeRoute: typeof ApiPublicCronCollectEsBoeRoute
+  ApiPublicCronCollectEuEurlexRoute: typeof ApiPublicCronCollectEuEurlexRoute
   ApiPublicCronCollectFrLegifranceRoute: typeof ApiPublicCronCollectFrLegifranceRoute
   ApiPublicCronCollectHrNnRoute: typeof ApiPublicCronCollectHrNnRoute
   ApiPublicCronCollectItNormattivaRoute: typeof ApiPublicCronCollectItNormattivaRoute
@@ -417,6 +431,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCollectEsBoeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/collect-eu-eurlex': {
+      id: '/api/public/cron/collect-eu-eurlex'
+      path: '/api/public/cron/collect-eu-eurlex'
+      fullPath: '/api/public/cron/collect-eu-eurlex'
+      preLoaderRoute: typeof ApiPublicCronCollectEuEurlexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/collect-fr-legifrance': {
       id: '/api/public/cron/collect-fr-legifrance'
       path: '/api/public/cron/collect-fr-legifrance'
@@ -502,6 +523,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronCollectRoute: ApiPublicCronCollectRoute,
   ApiPublicCronCollectBrDouRoute: ApiPublicCronCollectBrDouRoute,
   ApiPublicCronCollectEsBoeRoute: ApiPublicCronCollectEsBoeRoute,
+  ApiPublicCronCollectEuEurlexRoute: ApiPublicCronCollectEuEurlexRoute,
   ApiPublicCronCollectFrLegifranceRoute: ApiPublicCronCollectFrLegifranceRoute,
   ApiPublicCronCollectHrNnRoute: ApiPublicCronCollectHrNnRoute,
   ApiPublicCronCollectItNormattivaRoute: ApiPublicCronCollectItNormattivaRoute,
