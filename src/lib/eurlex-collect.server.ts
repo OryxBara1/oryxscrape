@@ -310,7 +310,7 @@ export async function runEurlexCollection(supabase: SupabaseClient<Database>) {
         seenThisRun.add(record.celex);
 
         try {
-          const { html, plain } = await fetchEuText(record.celex);
+          const { html, plain } = await fetchEuText(record);
           const contentHash = await sha256Hex(plain);
 
           const { data: existing, error: existingError } = await supabase
