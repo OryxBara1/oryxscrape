@@ -103,9 +103,21 @@ export const getItemDetail = createServerFn({ method: "GET" })
             ? normalizedPayload["text"]
             : null;
 
+    const celex = typeof normalizedPayload["celexNumber"] === "string" ? normalizedPayload["celexNumber"] : null;
     return {
       id: row.id,
       title,
+      celex,
+      docType: celex ? docTypeFromCelex(celex) : null,
+      documentDate:
+        typeof normalizedPayload["published_at"] === "string" ? normalizedPayload["published_at"] : null,
+      eurovoc: Array.isArray(rawPayload["eurovoc_concepts"])
+        ? (rawPayload["eurovoc_concepts"] as string[])
+        : Array.isArray(normalizedPayload["eurovoc_concepts"])
+          ? (normalizedPayload["eurovoc_concepts"] as string[])
+          : [],
+      curation: readCuration(normalizedPayload),
+      payloadJson: JSON.stringify(normalizedPayload, null, 2).slice(0, 8000),
       sourceUrl: row.source_url,
       canonicalUrl: raw?.canonical_url ?? null,
       jurisdictionHint: row.jurisdiction_hint,
@@ -235,7 +247,7 @@ export const setItemReviewState = createServerFn({ method: "POST" })
 
     const { data: current, error: readError } = await supabase
       .from("normalized_items")
-      .select("id, verification_status, publication_status")
+      .select("id, verification_status, publication_status, jurisdiction_hint, payload")
       .eq("id", data.normalizedItemId)
       .maybeSingle();
     if (readError) throw new Error(readError.message);
@@ -251,6 +263,14 @@ export const setItemReviewState = createServerFn({ method: "POST" })
       throw new Error(
         `This action is not allowed from ${current.verification_status}/${current.publication_status}.`,
       );
+    }
+    // EU acts need explicit reviewer scope before they can reach the Exchange.
+    if (
+      data.action === "mark_eligible" &&
+      current.jurisdiction_hint === "EU" &&
+      !isCurationComplete(readCuration(current.payload))
+    ) {
+      throw new Error("EU items need affected jurisdictions and an application status before approval.");
     }
 
     const patch: {

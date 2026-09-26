@@ -97,8 +97,26 @@ export type ManifestInput = {
 
 // Deliberately excludes tiers, policies, profiles, reviewers, prompts,
 // credentials, provider metadata and raw payloads.
-export function buildManifest(input: ManifestInput) {
+export function buildManifest(input: ManifestInput & { payload?: Record<string, unknown> }) {
+  const p = input.payload ?? {};
+  const c = (p["curation"] ?? null) as Record<string, unknown> | null;
+  const celex = typeof p["celexNumber"] === "string" ? p["celexNumber"] : null;
   return {
+    // Editorial scope set by the OryxScrape reviewer (EU acts stay one package).
+    ...(c || celex
+      ? {
+          curation: {
+            celex,
+            doc_type: typeof p["doc_type"] === "string" ? p["doc_type"] : null,
+            date_document: typeof p["published_at"] === "string" ? p["published_at"] : null,
+            applies_to_jurisdictions: Array.isArray(c?.["applies_to_jurisdictions"])
+              ? c["applies_to_jurisdictions"]
+              : [],
+            application_status: c?.["application_status"] ?? null,
+            reviewer_note: c?.["reviewer_note"] ?? null,
+          },
+        }
+      : {}),
     manifest_version: MANIFEST_VERSION,
     exchange_item_id: input.exchangeItemId,
     document: {
