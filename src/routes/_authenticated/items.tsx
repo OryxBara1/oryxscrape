@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { TriagePanel, type TriageSearch } from "@/components/triage-panel";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Eye, ExternalLink } from "lucide-react";
@@ -75,10 +76,19 @@ export const Route = createFileRoute("/_authenticated/items")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>): TriageSearch => {
+    const pick = (k: string) => (typeof s[k] === "string" && s[k] ? (s[k] as string) : undefined);
+    return {
+      jur: pick("jur"), state: pick("state"), domain: pick("domain"), type: pick("type"),
+      app: pick("app"), from: pick("from"), to: pick("to"), q: pick("q"),
+    };
+  },
   component: ItemsScreen,
 });
 
 function ItemsScreen() {
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: "/items" });
   const queryClient = useQueryClient();
   const fetchProfiles = useServerFn(listResearchProfiles);
   const fetchMatrix = useServerFn(listTierMatrix);
@@ -157,8 +167,15 @@ function ItemsScreen() {
     <section className="space-y-6">
       <ScreenHeader
         title="Collected items"
-        description="Normalized items with the objective facts and how each active profile's policy classifies them."
+        description="Triagem: decida relevância, escopo e destino de cada item antes do Exchange."
       />
+
+      <TriagePanel
+        search={search}
+        onSearch={(patch) => navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true })}
+      />
+
+      <h2 className="pt-6 text-lg font-semibold">Tier matrix por perfil</h2>
 
       <div className="glass-panel grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Profile">
