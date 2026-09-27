@@ -231,6 +231,18 @@ export async function runEurlexCollection(
   const until = new Date();
   const since = new Date(until.getTime() - windowDays * 24 * 60 * 60 * 1000);
 
+  let resolution: Awaited<ReturnType<typeof resolveEurovocConcepts>> = {
+    resolved: [],
+    unresolved: [...EUROVOC_LABELS],
+  };
+  let resolveError: string | null = null;
+  try {
+    resolution = await resolveEurovocConcepts();
+  } catch (error) {
+    resolveError = (error as Error).message;
+  }
+  const conceptUris = resolution.resolved.map((r) => r.uri);
+
   const { data: job, error: jobError } = await supabase
     .from("collection_jobs")
     .insert({
@@ -248,13 +260,27 @@ export async function runEurlexCollection(
         window_days: windowDays,
         first_run: firstRun,
         max_pages: MAX_PAGES,
-        eurovoc_concepts: EUROVOC_CONCEPTS,
+        eurovoc_labels: EUROVOC_LABELS,
+        eurovoc_resolved: resolution.resolved,
+        eurovoc_unresolved: resolution.unresolved,
+        resource_types: ALLOWED_RESOURCE_TYPES,
       },
     })
     .select("id")
     .single();
   if (jobError) throw new Error(`collection_jobs insert failed: ${jobError.message}`);
   const jobId = job.id;
+
+  if (conceptUris.length === 0) {
+    const message = `EuroVoc resolution returned no concepts — refusing to run unfiltered${
+      resolveError ? ` (${resolveError})` : ""
+    }`;
+    await supabase
+      .from("collection_jobs")
+      .update({ status: "failed", finished_at: new Date().toISOString(), error_text: message })
+      .eq("id", jobId);
+    throw new Error(message);
+  }
 
   let found = 0;
   let newItems = 0;
@@ -263,7 +289,7 @@ export async function runEurlexCollection(
 
   try {
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const records = await searchEuPage(since, until, page * PAGE_SIZE);
+      const records = await searchEuPage(conceptUris, since, until, page * PAGE_SIZE);
       if (records.length === 0) break;
       found += records.length;
 
@@ -283,6 +309,7 @@ export async function runEurlexCollection(
           }
 
           const title = record.title?.trim() || record.celex;
+          const titleMatch = record.title ? TITLE_KEYWORDS.test(record.title) : false;
 
           const { data: raw, error: rawError } = await supabase
             .from("raw_items")
@@ -293,6 +320,7 @@ export async function runEurlexCollection(
               raw_payload: {
                 celexNumber: record.celex,
                 title: record.title,
+                title_source: record.titleSource,
                 date: record.date,
                 cellar_work: record.work,
               },
@@ -332,6 +360,8 @@ export async function runEurlexCollection(
             category: "nautical_sweep",
             payload: {
               title,
+              title_source: record.titleSource,
+              title_match: titleMatch,
               url: record.url,
               doc_type: "regulation",
               tier: "official",
@@ -349,7 +379,9 @@ export async function runEurlexCollection(
             collected_at: new Date().toISOString(),
             verification_status: "unreviewed",
             publication_status: "internal_only",
-            tags: ["maritime", "eu-legislation", "eurlex"],
+            tags: titleMatch
+              ? ["maritime", "eu-legislation", "eurlex"]
+              : ["maritime", "eu-legislation", "eurlex", "title-unmatched"],
           });
           if (normError) {
             failures += 1;
