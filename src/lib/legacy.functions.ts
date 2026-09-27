@@ -24,9 +24,7 @@ type LegacyRawRow = {
   sources: { domain: string } | null;
 };
 
-async function requireStaff(supabase: {
-  rpc: (fn: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
-}) {
+async function requireStaff(supabase: import("@supabase/supabase-js").SupabaseClient<Database>) {
   const { data, error } = await supabase.rpc("is_staff");
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Staff access required.");
