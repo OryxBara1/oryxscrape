@@ -1,55 +1,71 @@
-# Fix EUR-Lex collector filters (analysis + plan)
+# Corrigir o agendamento diário do coletor EUR-Lex
 
-Live read-only queries against the CELLAR SPARQL endpoint were run today to answer the five questions.
+## Contexto
 
-## What the live data shows
+O job `collect-eu-eurlex` (jobid 13) no pg_cron aponta para uma URL de Edge Function do Supabase que não existe. O coletor real vive no app Lovable em `POST /api/public/cron/collect-eu-eurlex`, protegido por `Authorization: Bearer <LOVABLE_CRON_SECRET>`.
 
-Current hardcoded IDs (all four are wrong):
+## Sobre o segredo (ponto importante)
 
-| ID | Real EuroVoc label |
-|---|---|
-| 3193 | goods and services |
-| 4790 | fishing area |
-| 5551 | police cooperation |
-| 1499 | iodine |
+O valor de `LOVABLE_CRON_SECRET` **não pode ser lido pelo sandbox sem expô-lo** — qualquer `echo $LOVABLE_CRON_SECRET` ou `printenv` apareceria nos logs da sessão. O caminho seguro:
 
-Label lookup for the proposed list returns 5 of 7 labels:
+1. Você abre **Project Settings → Secrets** no Lovable e copia o valor de `LOVABLE_CRON_SECRET`.
+2. Você mesmo cola o valor no comando SQL (no Supabase SQL Editor) ou na configuração do agendador externo.
 
-| Label | Real ID |
-|---|---|
-| maritime safety | 5889 |
-| maritime transport | 4522 |
-| inland waterway transport | 4515 |
-| pleasure craft | 4832 |
-| waterway transport | 5210 |
-| sea transport | not found |
-| recreational craft | not found |
+Eu nunca vejo nem manipulo o valor.
 
-Resource types on 2024 CELEX L/R works include DIR, REG_IMPL, DIR_IMPL, REG_DEL, DIR_DEL and a large number of CORRIGENDUM (560).
+## URLs do app
 
-## Answers
+- Publicado (produção): `https://oryxscrape.lovable.app`
+- Estável (imutável, serve a versão publicada): `https://project--df887a9c-40f0-4e83-a2cb-f9d4da5e1efb.lovable.app`
+- Preview: `https://id-preview--df887a9c-40f0-4e83-a2cb-f9d4da5e1efb.lovable.app` (não usar para cron — muda a cada build)
 
-**1. Is label lookup feasible?** Yes. EuroVoc `skos:prefLabel` sits in the same store and resolves without SERVICE or GRAPH. Two proposed labels do not exist, so they would silently match nothing. Recommendation: keep the label list in TypeScript, but resolve labels to URIs in a small first query at the start of each run. Then run the main query with a `VALUES` list of those URIs. Log any label that resolves to nothing into `run_params`, so a bad label shows up instead of failing silently. Fallback if the lookup fails: stop the job and mark it failed, rather than running without the concept filter.
+Endpoint completo: `https://oryxscrape.lovable.app/api/public/cron/collect-eu-eurlex`
 
-**2. AND vs OR.** EuroVoc and document type should both be required. The title keyword should NOT be a hard filter. Titles such as "Directive 2014/90/EU on marine equipment" or "Regulation on ... EMSA" or "port State control" are borderline. Many amending acts are titled only "amending Directive 2009/16/EC" and would be dropped, so the risk of missing valid acts is real. Recommendation: use the title match as a relevance flag on the item (for example `payload.title_match = true/false`, plus a `title-unmatched` tag). The review screen can then sort matched items first. If you still want it strict, add "marine|seafar|crew|cargo|harbour|EMSA|SOLAS|MARPOL" to the pattern and accept some loss.
+**Pré-requisito:** a rota cron precisa estar na versão publicada. Se o app foi publicado antes da criação da rota, é preciso clicar em Publish/Update antes de ativar o agendamento.
 
-**3. Performance.** Joining labels on every document is slower, because a string join runs across all concept links. Resolving to URIs once up front (see #1) removes that cost. The main query stays as fast as today's `VALUES` query.
+## Opção A (recomendada) — Agendador externo
 
-**4. Resource type coverage.** Resource type is populated on legislative works. A missing-type result did not appear in the sample, but the output was truncated, so this should be checked again during build. Do not use OPTIONAL: an act with no type should be excluded. Allowed set: DIR, REG, DIR_IMPL, REG_IMPL, DIR_DEL, REG_DEL. Delegated acts carry real maritime rules. CORRIGENDUM is excluded explicitly because it is the biggest source of noise.
+Usar um agendador externo (cron-job.org, EasyCron, GitHub Actions scheduled workflow etc.):
 
-**5. Title reliability.** `cdm:work_title` is inconsistent: some works have several untagged titles and some have none. Earlier runs also produced mostly blank titles. Recommendation: take the title from the English expression (`cdm:expression_belongs_to_work` + `cdm:expression_uses_language <.../language/ENG>` + `cdm:expression_title`). Fall back to `work_title` and then to CELEX. Apply the relevance flag from #2 to that title.
+- Método: `POST`
+- URL: `https://oryxscrape.lovable.app/api/public/cron/collect-eu-eurlex`
+- Header: `Authorization: Bearer <valor copiado de LOVABLE_CRON_SECRET>`
+- Frequência: diária (ex.: 06:00 UTC)
+- Depois: remover o job quebrado do pg_cron (você roda no SQL Editor: `SELECT cron.unschedule(13);`)
 
-## Build steps (after approval)
+Vantagem: nenhum SQL com segredo fica gravado no banco, e a rota já existe e foi testada.
 
-1. In `src/lib/eurlex-collect.server.ts`:
-   - Replace `EUROVOC_CONCEPTS` with `EUROVOC_LABELS`, using the 5 labels that exist. Optionally add verified extras such as "port", "ship", "maritime shipping" after a lookup.
-   - Add `resolveEurovocConcepts()`, which queries labels to URIs, fails the job if the list is empty, and records resolved and unresolved labels in `run_params`.
-   - Main query: resolved-URI `VALUES` + resource-type filter (6 types) + English expression title. Remove the broken STRSTARTS/REGEX filter.
-   - Title relevance: flag and tag only, never a hard filter.
-   - Bump `EU_COLLECTOR_VERSION` to `1.2.0`.
-2. Before any data is written, run a live dry query over a 365-day window and review the titles by hand.
-3. One real run through the cron route, then confirm the new items are `unreviewed` / `internal_only`.
+## Opção B — Corrigir o pg_cron (você executa o SQL)
 
-## Out of scope
+Se preferir manter o agendamento dentro do Supabase, você roda no SQL Editor (colando o segredo que copiou):
 
-No schema changes, no changes to other collectors, and no changes to the 75 already-rejected items.
+```sql
+SELECT cron.unschedule(13);
+
+SELECT cron.schedule(
+  'collect-eu-eurlex',
+  '0 6 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://oryxscrape.lovable.app/api/public/cron/collect-eu-eurlex',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer COLE_AQUI_O_LOVABLE_CRON_SECRET',
+      'Content-Type', 'application/json'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+Observação: o segredo ficará visível na definição do job no banco (qualquer admin do Supabase pode lê-lo). Por isso a Opção A é preferível.
+
+## Verificação (após você configurar)
+
+1. Eu chamo a rota publicada uma vez com `invoke-server-function` para confirmar que responde 200 em produção.
+2. No dia seguinte, confiro em `collection_jobs` se apareceu um job novo com `source` EUR-Lex criado pelo agendamento.
+
+## Fora de escopo
+
+- Nenhuma alteração de código, schema ou coletor.
+- Não leio nem exibo o valor de `LOVABLE_CRON_SECRET` em nenhum momento.
