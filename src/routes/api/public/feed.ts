@@ -1,0 +1,181 @@
+// OryxScrape public read API v1.0
+import { createFileRoute } from "@tanstack/react-router";
+
+/**
+ * GET /api/public/feed — read-only feed of approved regulatory documents
+ * for external consumer apps (e.g. AuraMaris).
+ *
+ * Auth: Authorization: Bearer <raw_key>
+ *   raw key = {8-char prefix}{secret}; consumer_keys stores key_prefix + sha256 hex hash.
+ *
+ * Query params (all optional):
+ *   since        ISO 8601 — items with updated_at > since (incremental pulls)
+ *   jurisdiction repeatable — jurisdiction_hint IN (...)
+ *   tags         repeatable — tags overlap; intersected with key's allowed_tags when set
+ *   limit        1..500, default 100
+ *   offset       >= 0, default 0
+ *
+ * Never exposes: raw_item_id, reviewed_by, payload, verification_status, publication_status.
+ * Raw keys are never logged. Self-contained — no shared auth middleware.
+ */
+
+const MAX_LIMIT = 500;
+const DEFAULT_LIMIT = 100;
+
+function jsonError(status: number, message: string) {
+  return Response.json({ error: message }, { status });
+}
+
+function unauthorized() {
+  return jsonError(401, "Unauthorized");
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export const Route = createFileRoute("/api/public/feed")({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        try {
+          const authHeader = request.headers.get("authorization") ?? "";
+          if (!authHeader.toLowerCase().startsWith("bearer ")) return unauthorized();
+          const rawKey = authHeader.slice(7).trim();
+          if (rawKey.length < 9) return unauthorized();
+
+          const prefix = rawKey.slice(0, 8);
+          const hash = await sha256Hex(rawKey);
+
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+          // Match the stored prefix exactly, or the namespaced oxs_<prefix> form.
+          const { data: keyRow, error: keyError } = await supabaseAdmin
+            .from("consumer_keys")
+            .select("id, allowed_tags")
+            .in("key_prefix", [prefix, `oxs_${prefix}`])
+            .eq("key_hash", hash)
+            .eq("is_active", true)
+            .is("revoked_at", null)
+            .maybeSingle();
+
+          if (keyError || !keyRow) return unauthorized();
+
+          const url = new URL(request.url);
+
+          // --- query params ---
+          const since = url.searchParams.get("since");
+          if (since && Number.isNaN(Date.parse(since))) {
+            return jsonError(400, "invalid since");
+          }
+
+          const jurisdictions = url.searchParams
+            .getAll("jurisdiction")
+            .map((v) => v.trim())
+            .filter(Boolean);
+
+          let tags = url.searchParams
+            .getAll("tags")
+            .map((v) => v.trim())
+            .filter(Boolean);
+          const allowedTags = keyRow.allowed_tags ?? [];
+          if (allowedTags.length > 0) {
+            // key's allowed_tags take priority: intersect (or restrict when no tags requested)
+            tags = tags.length > 0 ? tags.filter((t) => allowedTags.includes(t)) : allowedTags;
+            if (tags.length === 0) return jsonError(400, "no requested tags are allowed for this key");
+          }
+
+          const limitParam = url.searchParams.get("limit");
+          let limit = DEFAULT_LIMIT;
+          if (limitParam !== null) {
+            const parsed = Number.parseInt(limitParam, 10);
+            if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
+              return jsonError(400, "invalid limit");
+            }
+            limit = parsed;
+          }
+
+          const offsetParam = url.searchParams.get("offset");
+          let offset = 0;
+          if (offsetParam !== null) {
+            const parsed = Number.parseInt(offsetParam, 10);
+            if (!Number.isFinite(parsed) || parsed < 0) {
+              return jsonError(400, "invalid offset");
+            }
+            offset = parsed;
+          }
+
+          // --- data query ---
+          let query = supabaseAdmin
+            .from("normalized_items")
+            .select(
+              "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at",
+              { count: "exact" },
+            )
+            .eq("publication_status", "eligible")
+            .order("updated_at", { ascending: false })
+            .range(offset, offset + limit - 1);
+
+          if (since) query = query.gt("updated_at", since);
+          if (jurisdictions.length > 0) query = query.in("jurisdiction_hint", jurisdictions);
+          if (tags.length > 0) query = query.overlaps("tags", tags);
+
+          const { data, error, count } = await query;
+          if (error) {
+            console.error("[api/public/feed] query failed", error.message);
+            return jsonError(500, "Internal server error");
+          }
+
+          // fire-and-forget: never block the response on last_used_at bookkeeping
+          void supabaseAdmin
+            .from("consumer_keys")
+            .update({ last_used_at: new Date().toISOString() })
+            .eq("id", keyRow.id)
+            .then(undefined, () => undefined);
+
+          const items = (data ?? []).map((row) => {
+            const payload = (row.payload ?? {}) as Record<string, unknown>;
+            return {
+              id: row.id,
+              source_url: row.source_url,
+              jurisdiction: row.jurisdiction_hint,
+              category: row.category,
+              title: typeof payload.title === "string" ? payload.title : null,
+              doc_type: typeof payload.doc_type === "string" ? payload.doc_type : null,
+              tags: row.tags ?? [],
+              traceability_level: row.traceability_level,
+              institution_class: row.institution_class,
+              is_official_domain: row.is_official_domain,
+              is_primary_document: row.is_primary_document,
+              collected_at: row.collected_at,
+              reviewed_at: row.reviewed_at,
+            };
+          });
+
+          const total = count ?? items.length;
+          return Response.json(
+            {
+              items,
+              count: items.length,
+              total,
+              has_more: offset + items.length < total,
+              offset,
+              limit,
+            },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        } catch (err) {
+          console.error("[api/public/feed] unexpected error", err);
+          return jsonError(500, "Internal server error");
+        }
+      },
+      POST: async () => jsonError(405, "Method not allowed"),
+      PUT: async () => jsonError(405, "Method not allowed"),
+      PATCH: async () => jsonError(405, "Method not allowed"),
+      DELETE: async () => jsonError(405, "Method not allowed"),
+    },
+  },
+});
