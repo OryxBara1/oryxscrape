@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 /**
  * Legacy (Group B) promotion tool. Raw items are immutable evidence and are
@@ -22,8 +23,6 @@ type LegacyRawRow = {
   institution_class: Database["public"]["Enums"]["institution_class"];
   sources: { domain: string } | null;
 };
-
-import type { Database } from "@/integrations/supabase/types";
 
 async function requireStaff(supabase: {
   rpc: (fn: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>;

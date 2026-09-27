@@ -1,7 +1,9 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
+  ArchiveRestore,
   Boxes,
+  ClipboardCheck,
   Database,
   Globe2,
   KeyRound,
@@ -19,10 +21,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
+  { to: "/review", label: "Review", icon: ClipboardCheck },
   { to: "/sources", label: "Sources", icon: Globe2 },
   { to: "/jobs", label: "Collection jobs", icon: Boxes },
-  { to: "/items", label: "Collected items", icon: Database },
+  { to: "/items", label: "Advanced Review", icon: Database },
   { to: "/audit", label: "Audit log", icon: ScrollText },
+  { to: "/admin/legacy-audit", label: "Legacy audit", icon: ArchiveRestore },
   { to: "/exchange", label: "Exchange handoff", icon: Share2 },
   { to: "/lexicon", label: "Search lexicon", icon: BookMarked },
   { to: "/keys", label: "Consumer keys", icon: KeyRound },
