@@ -214,11 +214,13 @@ async function ensureSource(supabase: SupabaseClient<Database>): Promise<string>
 
 export async function runEurlexCollection(
   supabase: SupabaseClient<Database>,
+  options: { windowDays?: number } = {},
 ): Promise<CollectionResult> {
   const sourceId = await ensureSource(supabase);
 
   // Date window: first run (no previous items for this source) backfills
   // 365 days so in-force directives are captured; later runs use 7 days.
+  // options.windowDays overrides both (manual one-shot runs).
   // NOTE: the DB enum collection_method has no 'sparql' value — EUR-Lex rows
   // are stored with 'api' like the other API collectors.
   const { count } = await supabase
@@ -226,7 +228,7 @@ export async function runEurlexCollection(
     .select("id", { count: "exact", head: true })
     .eq("source_id", sourceId);
   const firstRun = (count ?? 0) === 0;
-  const windowDays = firstRun ? FIRST_RUN_WINDOW_DAYS : WINDOW_DAYS;
+  const windowDays = options.windowDays ?? (firstRun ? FIRST_RUN_WINDOW_DAYS : WINDOW_DAYS);
 
   const until = new Date();
   const since = new Date(until.getTime() - windowDays * 24 * 60 * 60 * 1000);
