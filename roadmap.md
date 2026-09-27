@@ -23,3 +23,8 @@
 - [x] metadata.json inclui bloco curation.
 - [ ] Teste logado ponta a ponta — o navegador de teste não consegue entrar (Supabase externo); validar manualmente.
 - [ ] Itens EUR-Lex não têm texto extraído: o envio ao Exchange pode precisar do texto CELLAR antes.
+
+## Fase 1 (aprovada 2026-09-27)
+- [ ] Track A: página /review guiada (fila unreviewed por collected_at, um item por vez, Aprovar→AuraMaris / Aprovar interno / Rejeitar com motivo / Pular, atalhos A/R/S/O, localStorage, contadores por país, /items vira "Advanced Review").
+- [ ] Track B: /admin/legacy-audit (Group B por domínio: contagem, verificação de proveniência, normalização, 1 audit_event por lote; raw_items nunca editados).
+- [ ] Capy (Fase 2): só placeholder recolhido na Review; sem chamadas LogoriOn até receber prompt ID + categorias AuraMaris.
