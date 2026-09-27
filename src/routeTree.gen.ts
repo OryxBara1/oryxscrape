@@ -22,6 +22,7 @@ import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as AuthenticatedAdminLegacyAuditRouteImport } from './routes/_authenticated/admin.legacy-audit'
+import { Route as ApiPublicFeedRouteImport } from './routes/api/public/feed'
 import { Route as ApiRunCollectSourcesRouteImport } from './routes/api/run/collect-sources'
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
 import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/public/cron/collect-br-dou'
@@ -100,6 +101,11 @@ const AuthenticatedAdminLegacyAuditRoute =
     path: '/admin/legacy-audit',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicFeedRoute = ApiPublicFeedRouteImport.update({
+  id: '/api/public/feed',
+  path: '/api/public/feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRunCollectSourcesRoute = ApiRunCollectSourcesRouteImport.update({
   id: '/api/run/collect-sources',
   path: '/api/run/collect-sources',
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
+  '/api/public/feed': typeof ApiPublicFeedRoute
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
+  '/api/public/feed': typeof ApiPublicFeedRoute
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -236,6 +244,7 @@ export interface FileRoutesById {
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/_authenticated/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
+  '/api/public/feed': typeof ApiPublicFeedRoute
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -264,6 +273,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sources'
     | '/admin/legacy-audit'
+    | '/api/public/feed'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
@@ -290,6 +300,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sources'
     | '/admin/legacy-audit'
+    | '/api/public/feed'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/_authenticated/review'
     | '/_authenticated/sources'
     | '/_authenticated/admin/legacy-audit'
+    | '/api/public/feed'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
@@ -335,6 +347,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicFeedRoute: typeof ApiPublicFeedRoute
   ApiRunCollectSourcesRoute: typeof ApiRunCollectSourcesRoute
   ApiPublicCronCollectRoute: typeof ApiPublicCronCollectRoute
   ApiPublicCronCollectBrDouRoute: typeof ApiPublicCronCollectBrDouRoute
@@ -441,6 +454,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/legacy-audit'
       preLoaderRoute: typeof AuthenticatedAdminLegacyAuditRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/feed': {
+      id: '/api/public/feed'
+      path: '/api/public/feed'
+      fullPath: '/api/public/feed'
+      preLoaderRoute: typeof ApiPublicFeedRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/run/collect-sources': {
       id: '/api/run/collect-sources'
@@ -562,6 +582,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicFeedRoute: ApiPublicFeedRoute,
   ApiRunCollectSourcesRoute: ApiRunCollectSourcesRoute,
   ApiPublicCronCollectRoute: ApiPublicCronCollectRoute,
   ApiPublicCronCollectBrDouRoute: ApiPublicCronCollectBrDouRoute,
