@@ -1,59 +1,55 @@
-# Backlog strategy, guided review and "Capy" — analysis and plan
+# Fix EUR-Lex collector filters (analysis + plan)
 
-## What the database shows today
-- Group A (`item_status = 'collected'`): 265 raw items, **all 265 already have a normalized item**, so all of them already appear on the Collected items page.
-- Group B (`item_status` empty): **319** raw items, not 317. Only 77 of them have a normalized item (the EUR-Lex set). The other 242 (Netherlands, piste, Brazil, old Croatia and others) **cannot be reviewed at all right now**, because every review screen works on normalized items.
-- `item_status` is a fixed list of allowed values in the database: collected, failed, pending, superseded.
+Live read-only queries against the CELLAR SPARQL endpoint were run today to answer the five questions.
 
-## 1. Backlog strategy — my opinion
-I agree with the strategy, with one change: **don't add `migration_pending`.**
-- Raw items are append-only and locked against edits by design. Marking 319 rows `migration_pending` means breaking that lock, or adding an exception for this one column. Both weaken the guarantee that raw evidence never changes.
-- "Empty status" already means "legacy, not checked". Giving it a second name adds no information.
-- Better: record the migration audit **outside** the raw row. Add one audit record per domain batch ("checked provenance for Netherlands: 68 OK / 3 missing URL"), and only then normalize those items so they enter review. Raw rows stay untouched.
-- If you still want a status value: adding a value to the list is safe and additive. The frontend would only need a label and filter option. The immutability exception is the real cost, not the frontend.
+## What the live data shows
 
-Order: review Group A first. The 77 EUR-Lex items are Group B but already normalized, so they can be reviewed now too. Then audit the other 242 one domain at a time.
+Current hardcoded IDs (all four are wrong):
 
-## 2a. Is there a review interface today?
-Yes, but it's built for experts and split across two areas on one page (Collected items):
-- **Triage panel** (top): filters, search, a table, and an eye icon that opens a dialog. The dialog shows the source link, CELEX number, type, date, raw data, country checkboxes and application status. Actions: Save scope, Approve for Exchange, Reject with reason, Reopen, Internal only. Batch reject is also available.
-- **Tier matrix** (below): one row per item and per profile, with Review, Reject, Mark eligible and Promote buttons.
-- It has no "Skip", no one-item-at-a-time mode, and no guidance. Having two different ways to review on one page is probably what confuses the product owner most.
+| ID | Real EuroVoc label |
+|---|---|
+| 3193 | goods and services |
+| 4790 | fishing area |
+| 5551 | police cooperation |
+| 1499 | iodine |
 
-## 2b. Guided review (new page "Review")
-One item at a time, in a queue of unreviewed items. The queue can be narrowed by country or source.
-```text
-[ 12 of 265 ]  FR · legifrance.gouv.fr · Decree
-Title
-Source link  [View original]
-Preview (summary + first ~2,000 chars of text)
-Step hint: "Is this about recreational boating rules?"
-[Approve -> AuraMaris queue]  [Reject (reason)]  [Skip]
-```
-- **Approve** marks the item reviewed and eligible. It then goes to the Exchange page, where it's packaged the same way as today. EU items first ask for countries and application status, the same rule as now.
-- **Reject** asks for a short reason from a preset list. It reuses the existing reject action and audit record.
-- **Skip** only moves to the next item. It is stored in the browser, not the database.
-- **View original** opens the source in a popup, as today.
-- Keyboard shortcuts: A (approve), R (reject), S (skip), O (open original).
-- Add a link to this page in the menu and make it step 3 of the "?" guide. The existing page stays as the expert view.
-- No changes to the database. Everything reuses existing server actions.
+Label lookup for the proposed list returns 5 of 7 labels:
 
-## 2c. Capy — feasible, simplest version
-Yes, this is feasible. One correction: Capy would **not** use a Supabase Edge Function, because they can't be deployed in this project. It would use a server action inside the app, the same way normalization already calls LogoriOn with the server-held `LOGORION_INTEGRATION_KEY`. No key reaches the browser.
+| Label | Real ID |
+|---|---|
+| maritime safety | 5889 |
+| maritime transport | 4522 |
+| inland waterway transport | 4515 |
+| pleasure craft | 4832 |
+| waterway transport | 5210 |
+| sea transport | not found |
+| recreational craft | not found |
 
-MVP:
-- A small side panel on the Review page with a capybara avatar and three suggested questions. It answers about **the current item only**, and the conversation resets when you move to the next item. Nothing is saved.
-- A server action loads the item on the server: title, domain, country, tags/concept, curation, and the text trimmed to about 30k characters. It adds a short description of the collection methodology and your question, then sends everything to LogoriOn.
-- Answers are shown as formatted text. Errors from LogoriOn appear in the panel. There is no automatic retry.
-- Capy only gives advice. It never approves or rejects anything.
-- **What you need to provide:** a new prompt template in LogoriOn (e.g. `oryxscrape_capy_v1`) with its prompt ID. I'll draft the template text for you. I also need your list of AuraMaris categories, otherwise Capy can't answer "which category".
+Resource types on 2024 CELEX L/R works include DIR, REG_IMPL, DIR_IMPL, REG_DEL, DIR_DEL and a large number of CORRIGENDUM (560).
 
-## Suggested build order
-1. Guided Review page (no database changes).
-2. Capy panel, once you give me the LogoriOn prompt ID and category list.
-3. Legacy audit tool for Group B, one domain at a time, with audit records (no raw item edits).
+## Answers
 
-## Technical notes
-- Queue source: normalized items with verification unreviewed, ordered by collected date. Actions call the existing `setItemReviewState`, `saveItemCuration` and `rejectItems` functions, and detail comes from `getItemDetail`.
-- Capy: `src/lib/capy.functions.ts` (staff-only middleware), `src/lib/capy.server.ts` (LogoriOn call with its own prompt ID and feature tag `oryxscrape.capy`). Text is rendered with react-markdown.
-- Legacy promotion: a staff action that runs the existing normalization for a domain's raw items with no status, after a provenance check (URL, collected date, hash present). It writes one audit record per batch.
+**1. Is label lookup feasible?** Yes. EuroVoc `skos:prefLabel` sits in the same store and resolves without SERVICE or GRAPH. Two proposed labels do not exist, so they would silently match nothing. Recommendation: keep the label list in TypeScript, but resolve labels to URIs in a small first query at the start of each run. Then run the main query with a `VALUES` list of those URIs. Log any label that resolves to nothing into `run_params`, so a bad label shows up instead of failing silently. Fallback if the lookup fails: stop the job and mark it failed, rather than running without the concept filter.
+
+**2. AND vs OR.** EuroVoc and document type should both be required. The title keyword should NOT be a hard filter. Titles such as "Directive 2014/90/EU on marine equipment" or "Regulation on ... EMSA" or "port State control" are borderline. Many amending acts are titled only "amending Directive 2009/16/EC" and would be dropped, so the risk of missing valid acts is real. Recommendation: use the title match as a relevance flag on the item (for example `payload.title_match = true/false`, plus a `title-unmatched` tag). The review screen can then sort matched items first. If you still want it strict, add "marine|seafar|crew|cargo|harbour|EMSA|SOLAS|MARPOL" to the pattern and accept some loss.
+
+**3. Performance.** Joining labels on every document is slower, because a string join runs across all concept links. Resolving to URIs once up front (see #1) removes that cost. The main query stays as fast as today's `VALUES` query.
+
+**4. Resource type coverage.** Resource type is populated on legislative works. A missing-type result did not appear in the sample, but the output was truncated, so this should be checked again during build. Do not use OPTIONAL: an act with no type should be excluded. Allowed set: DIR, REG, DIR_IMPL, REG_IMPL, DIR_DEL, REG_DEL. Delegated acts carry real maritime rules. CORRIGENDUM is excluded explicitly because it is the biggest source of noise.
+
+**5. Title reliability.** `cdm:work_title` is inconsistent: some works have several untagged titles and some have none. Earlier runs also produced mostly blank titles. Recommendation: take the title from the English expression (`cdm:expression_belongs_to_work` + `cdm:expression_uses_language <.../language/ENG>` + `cdm:expression_title`). Fall back to `work_title` and then to CELEX. Apply the relevance flag from #2 to that title.
+
+## Build steps (after approval)
+
+1. In `src/lib/eurlex-collect.server.ts`:
+   - Replace `EUROVOC_CONCEPTS` with `EUROVOC_LABELS`, using the 5 labels that exist. Optionally add verified extras such as "port", "ship", "maritime shipping" after a lookup.
+   - Add `resolveEurovocConcepts()`, which queries labels to URIs, fails the job if the list is empty, and records resolved and unresolved labels in `run_params`.
+   - Main query: resolved-URI `VALUES` + resource-type filter (6 types) + English expression title. Remove the broken STRSTARTS/REGEX filter.
+   - Title relevance: flag and tag only, never a hard filter.
+   - Bump `EU_COLLECTOR_VERSION` to `1.2.0`.
+2. Before any data is written, run a live dry query over a 365-day window and review the titles by hand.
+3. One real run through the cron route, then confirm the new items are `unreviewed` / `internal_only`.
+
+## Out of scope
+
+No schema changes, no changes to other collectors, and no changes to the 75 already-rejected items.
