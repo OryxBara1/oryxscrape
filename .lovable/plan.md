@@ -1,65 +1,59 @@
-# Triagem de itens EUR-Lex na tela "Collected items"
+# Backlog strategy, guided review and "Capy" — analysis and plan
 
-Objetivo: reduzir o tempo para uma decisão confiável por item. Nada de novos coletores; nenhuma cópia por país.
+## What the database shows today
+- Group A (`item_status = 'collected'`): 265 raw items, **all 265 already have a normalized item**, so all of them already appear on the Collected items page.
+- Group B (`item_status` empty): **319** raw items, not 317. Only 77 of them have a normalized item (the EUR-Lex set). The other 242 (Netherlands, piste, Brazil, old Croatia and others) **cannot be reviewed at all right now**, because every review screen works on normalized items.
+- `item_status` is a fixed list of allowed values in the database: collected, failed, pending, superseded.
 
-## Decisões fechadas
-- O coletor continua gravando `jurisdiction_hint = 'EU'` e nunca infere países.
-- O revisor preenche manualmente as jurisdições afetadas e o estado de aplicação.
-- Um único pacote EU vai ao Drive, com essas informações no `metadata.json`.
-- "Enviado ao Exchange" não significa "pronto para a Marin@"; extração de texto é etapa posterior.
-- Os 77 itens já coletados ficam intactos até uma decisão humana.
+## 1. Backlog strategy — my opinion
+I agree with the strategy, with one change: **don't add `migration_pending`.**
+- Raw items are append-only and locked against edits by design. Marking 319 rows `migration_pending` means breaking that lock, or adding an exception for this one column. Both weaken the guarantee that raw evidence never changes.
+- "Empty status" already means "legacy, not checked". Giving it a second name adds no information.
+- Better: record the migration audit **outside** the raw row. Add one audit record per domain batch ("checked provenance for Netherlands: 68 OK / 3 missing URL"), and only then normalize those items so they enter review. Raw rows stay untouched.
+- If you still want a status value: adding a value to the list is safe and additive. The frontend would only need a label and filter option. The immutability exception is the real cost, not the frontend.
 
-## Estados (sem criar novos valores no banco)
-Os estados existentes são combinados e mostrados na tela com rótulos claros:
+Order: review Group A first. The 77 EUR-Lex items are Group B but already normalized, so they can be reviewed now too. Then audit the other 242 one domain at a time.
 
-| Rótulo na tela | Como é guardado |
-|---|---|
-| Descoberto | `unreviewed` + `internal_only` |
-| Rejeitado / irrelevante | `rejected` + `internal_only` |
-| Revisado (escopo definido) | `reviewed` + `internal_only` + curadoria preenchida |
-| Aprovado para Exchange | `reviewed` + `eligible` |
-| Enviado (01_Pending_Review) | handoff `pending` |
-| Arquivado | handoff `archived` |
+## 2a. Is there a review interface today?
+Yes, but it's built for experts and split across two areas on one page (Collected items):
+- **Triage panel** (top): filters, search, a table, and an eye icon that opens a dialog. The dialog shows the source link, CELEX number, type, date, raw data, country checkboxes and application status. Actions: Save scope, Approve for Exchange, Reject with reason, Reopen, Internal only. Batch reject is also available.
+- **Tier matrix** (below): one row per item and per profile, with Review, Reject, Mark eligible and Promote buttons.
+- It has no "Skip", no one-item-at-a-time mode, and no guidance. Having two different ways to review on one page is probably what confuses the product owner most.
 
-Rejeitar não pede jurisdição. Aprovar para Exchange exige jurisdições + estado de aplicação.
+## 2b. Guided review (new page "Review")
+One item at a time, in a queue of unreviewed items. The queue can be narrowed by country or source.
+```text
+[ 12 of 265 ]  FR · legifrance.gouv.fr · Decree
+Title
+Source link  [View original]
+Preview (summary + first ~2,000 chars of text)
+Step hint: "Is this about recreational boating rules?"
+[Approve -> AuraMaris queue]  [Reject (reason)]  [Skip]
+```
+- **Approve** marks the item reviewed and eligible. It then goes to the Exchange page, where it's packaged the same way as today. EU items first ask for countries and application status, the same rule as now.
+- **Reject** asks for a short reason from a preset list. It reuses the existing reject action and audit record.
+- **Skip** only moves to the next item. It is stored in the browser, not the database.
+- **View original** opens the source in a popup, as today.
+- Keyboard shortcuts: A (approve), R (reject), S (skip), O (open original).
+- Add a link to this page in the menu and make it step 3 of the "?" guide. The existing page stays as the expert view.
+- No changes to the database. Everything reuses existing server actions.
 
-## Curadoria por item (3 decisões)
-1. Relevância: relevante / irrelevante (irrelevante = rejeitar com motivo).
-2. Escopo: `directly_applicable`, `requires_transposition`, `implementation_to_verify`, `not_applicable`.
-3. Destino: jurisdições afetadas (caixas ES, FR, IT, HR, PT, GR, MT, CY, NL, DE; nenhuma marcada por padrão) + nota editorial.
+## 2c. Capy — feasible, simplest version
+Yes, this is feasible. One correction: Capy would **not** use a Supabase Edge Function, because they can't be deployed in this project. It would use a server action inside the app, the same way normalization already calls LogoriOn with the server-held `LOGORION_INTEGRATION_KEY`. No key reaches the browser.
 
-Guardado como bloco `curation` (jurisdições, estado de aplicação, nota, revisor, data) e cada mudança registra um evento de auditoria com valores antigo/novo.
+MVP:
+- A small side panel on the Review page with a capybara avatar and three suggested questions. It answers about **the current item only**, and the conversation resets when you move to the next item. Nothing is saved.
+- A server action loads the item on the server: title, domain, country, tags/concept, curation, and the text trimmed to about 30k characters. It adds a short description of the collection methodology and your question, then sends everything to LogoriOn.
+- Answers are shown as formatted text. Errors from LogoriOn appear in the panel. There is no automatic retry.
+- Capy only gives advice. It never approves or rejects anything.
+- **What you need to provide:** a new prompt template in LogoriOn (e.g. `oryxscrape_capy_v1`) with its prompt ID. I'll draft the template text for you. I also need your list of AuraMaris categories, otherwise Capy can't answer "which category".
 
-## Filtros na tela
-- Jurisdição com opção "EU" visível.
-- Estado (rótulos acima), fonte/domínio, tipo de ato (Diretiva / Regulamento / Decisão, derivado do CELEX: L, R, D).
-- Estado de aplicação, período de data do documento.
-- Busca livre por CELEX, título e tag.
-- Filtros refletidos na URL para poder voltar à mesma lista.
+## Suggested build order
+1. Guided Review page (no database changes).
+2. Capy panel, once you give me the LogoriOn prompt ID and category list.
+3. Legacy audit tool for Group B, one domain at a time, with audit records (no raw item edits).
 
-## Detalhe do item
-CELEX, título, tipo, data, descritores EuroVoc, URL canônica (botão "Abrir fonte oficial" em nova aba), payload, e o formulário de curadoria com as ações: Rejeitar, Salvar escopo, Aprovar para Exchange, Marcar "precisa de implementação nacional".
-
-## Revisão em lote (segura)
-- Seleção múltipla só para Rejeitar (com motivo único) — nunca aprovação em lote.
-- Confirmação mostrando quantos itens mudam; um evento de auditoria por item.
-
-## Exchange
-- `metadata.json` do pacote EU passa a incluir `applies_to_jurisdictions`, `application_status`, `celex`, `doc_type`, `date_document`, `reviewer_note`.
-- País do pacote continua `EU`; nenhum pacote por país.
-- Edição de jurisdições depois do envio segue a regra atual: só enquanto `pending`, reescrevendo apenas o `metadata.json`.
-
-## Critérios de aceitação / teste manual
-1. Filtrar EU + Descoberto mostra os 77 itens EUR-Lex.
-2. Busca por um CELEX encontra o item exato.
-3. Rejeitar um item: some do filtro "Descoberto", auditoria registrada, nenhum país pedido.
-4. Aprovar sem jurisdição é bloqueado; com jurisdição e estado vira "Aprovado para Exchange".
-5. Enviar ao Exchange gera um único pacote EU com as jurisdições no `metadata.json` no Drive.
-6. Rejeição em lote de 3 itens gera 3 eventos de auditoria.
-7. Outras fontes nacionais continuam funcionando como hoje.
-
-## Detalhes técnicos
-- Primeiro passo: verificar se `normalized_items.payload` pode ser atualizado (sem trigger de imutabilidade). Se puder, `curation` fica em `payload.curation` — zero mudança de schema. Se não puder, uma migração mínima adiciona uma coluna `curation jsonb` com as mesmas regras de acesso staff (ponto a confirmar antes de construir).
-- A listagem hoje usa a função `get_staff_item_tier_matrix` (limite 200). Novos filtros por texto/CELEX/tipo/aplicação serão aplicados numa nova função de servidor autenticada sobre `normalized_items` + `sources`, mantendo a tabela atual.
-- Validação no servidor: aprovação exige `applies_to_jurisdictions` não vazio e `application_status` válido; apenas staff.
-- Arquivos afetados: tela de itens, `items.functions.ts`, montagem de metadados em `exchange.server.ts`.
+## Technical notes
+- Queue source: normalized items with verification unreviewed, ordered by collected date. Actions call the existing `setItemReviewState`, `saveItemCuration` and `rejectItems` functions, and detail comes from `getItemDetail`.
+- Capy: `src/lib/capy.functions.ts` (staff-only middleware), `src/lib/capy.server.ts` (LogoriOn call with its own prompt ID and feature tag `oryxscrape.capy`). Text is rendered with react-markdown.
+- Legacy promotion: a staff action that runs the existing normalization for a domain's raw items with no status, after a provenance check (URL, collected date, hash present). It writes one audit record per batch.
