@@ -35,11 +35,11 @@ const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
 const GROUPS: NavGroupData[] = [
   {
     heading: "Pipeline",
-    items: NAV.slice(0, 5).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
+    items: NAV.slice(0, 7).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
   },
   {
     heading: "Delivery",
-    items: NAV.slice(5).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
+    items: NAV.slice(7).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
   },
 ];
 

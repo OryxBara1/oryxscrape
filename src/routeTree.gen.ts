@@ -19,7 +19,9 @@ import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
 import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
+import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
+import { Route as AuthenticatedAdminLegacyAuditRouteImport } from './routes/_authenticated/admin.legacy-audit'
 import { Route as ApiRunCollectSourcesRouteImport } from './routes/api/run/collect-sources'
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
 import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/public/cron/collect-br-dou'
@@ -82,11 +84,22 @@ const AuthenticatedLexiconRoute = AuthenticatedLexiconRouteImport.update({
   path: '/lexicon',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedReviewRoute = AuthenticatedReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSourcesRoute = AuthenticatedSourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAdminLegacyAuditRoute =
+  AuthenticatedAdminLegacyAuditRouteImport.update({
+    id: '/admin/legacy-audit',
+    path: '/admin/legacy-audit',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiRunCollectSourcesRoute = ApiRunCollectSourcesRouteImport.update({
   id: '/api/run/collect-sources',
   path: '/api/run/collect-sources',
@@ -166,7 +179,9 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
+  '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
+  '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -190,7 +205,9 @@ export interface FileRoutesByTo {
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
+  '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
+  '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -216,7 +233,9 @@ export interface FileRoutesById {
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
   '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
+  '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
+  '/_authenticated/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -242,7 +261,9 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/keys'
     | '/lexicon'
+    | '/review'
     | '/sources'
+    | '/admin/legacy-audit'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
@@ -266,7 +287,9 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/keys'
     | '/lexicon'
+    | '/review'
     | '/sources'
+    | '/admin/legacy-audit'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
@@ -291,7 +314,9 @@ export interface FileRouteTypes {
     | '/_authenticated/jobs'
     | '/_authenticated/keys'
     | '/_authenticated/lexicon'
+    | '/_authenticated/review'
     | '/_authenticated/sources'
+    | '/_authenticated/admin/legacy-audit'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
     | '/api/public/cron/collect-br-dou'
@@ -396,11 +421,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLexiconRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/review': {
+      id: '/_authenticated/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof AuthenticatedReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/sources': {
       id: '/_authenticated/sources'
       path: '/sources'
       fullPath: '/sources'
       preLoaderRoute: typeof AuthenticatedSourcesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/legacy-audit': {
+      id: '/_authenticated/admin/legacy-audit'
+      path: '/admin/legacy-audit'
+      fullPath: '/admin/legacy-audit'
+      preLoaderRoute: typeof AuthenticatedAdminLegacyAuditRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/run/collect-sources': {
@@ -498,7 +537,9 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
   AuthenticatedKeysRoute: typeof AuthenticatedKeysRoute
   AuthenticatedLexiconRoute: typeof AuthenticatedLexiconRoute
+  AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
   AuthenticatedSourcesRoute: typeof AuthenticatedSourcesRoute
+  AuthenticatedAdminLegacyAuditRoute: typeof AuthenticatedAdminLegacyAuditRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -509,7 +550,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,
   AuthenticatedKeysRoute: AuthenticatedKeysRoute,
   AuthenticatedLexiconRoute: AuthenticatedLexiconRoute,
+  AuthenticatedReviewRoute: AuthenticatedReviewRoute,
   AuthenticatedSourcesRoute: AuthenticatedSourcesRoute,
+  AuthenticatedAdminLegacyAuditRoute: AuthenticatedAdminLegacyAuditRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
