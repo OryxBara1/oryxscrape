@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.schedule_eurlex_cron(text) FROM PUBLIC, anon, authenticated;

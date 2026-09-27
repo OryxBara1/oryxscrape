@@ -1,0 +1,1 @@
+DROP FUNCTION public.schedule_eurlex_cron(text);
