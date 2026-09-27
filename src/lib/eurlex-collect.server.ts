@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
 
-export const EU_COLLECTOR_VERSION = "eu-eurlex-scheduled@1.1.0";
+export const EU_COLLECTOR_VERSION = "eu-eurlex-scheduled@1.2.0";
 export const SOURCE_DOMAIN = "eur-lex.europa.eu";
 
 const SPARQL_ENDPOINT = "https://publications.europa.eu/webapi/rdf/sparql";
@@ -31,13 +31,26 @@ const FIRST_RUN_WINDOW_DAYS = 365;
 const MAX_PAGES = 5;
 const PAGE_SIZE = 100;
 
-/** EuroVoc descriptors: waterway transport, pleasure craft, maritime safety, sea transport. */
-const EUROVOC_CONCEPTS = [
-  "http://eurovoc.europa.eu/3193",
-  "http://eurovoc.europa.eu/4790",
-  "http://eurovoc.europa.eu/5551",
-  "http://eurovoc.europa.eu/1499",
+/**
+ * EuroVoc English labels (verified live 2026-09-27):
+ * maritime safety=5889, maritime transport=4522, inland waterway transport=4515,
+ * pleasure craft=4832, waterway transport=5210. Resolved to URIs at job start.
+ */
+const EUROVOC_LABELS = [
+  "maritime safety",
+  "maritime transport",
+  "inland waterway transport",
+  "pleasure craft",
+  "waterway transport",
 ];
+
+const RT_BASE = "http://publications.europa.eu/resource/authority/resource-type/";
+/** Legislative acts only. CORRIGENDUM is explicitly excluded. */
+const ALLOWED_RESOURCE_TYPES = ["DIR", "REG", "DIR_IMPL", "REG_IMPL", "DIR_DEL", "REG_DEL"];
+
+/** Relevance flag only — never used to reject an item. */
+const TITLE_KEYWORDS =
+  /maritime|marine|vessel|ship|boat|\bports?\b|harbour|recreational craft|pleasure craft|waterway|seafar|navigation|crew|cargo|emsa|solas|marpol/i;
 
 export type CollectionResult = {
   jobId: string;
@@ -51,6 +64,7 @@ type EuRecord = {
   work: string;
   celex: string;
   title: string | null;
+  titleSource: "expression" | "work" | "celex";
   date: string | null;
   url: string;
 };
@@ -58,7 +72,8 @@ type EuRecord = {
 type SparqlBinding = {
   work?: { value: string };
   celexNumber?: { value: string };
-  title?: { value: string };
+  exprTitle?: { value: string };
+  workTitle?: { value: string };
   date?: { value: string };
 };
 
@@ -66,56 +81,91 @@ function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function buildQuery(since: Date, until: Date, offset: number): string {
-  const values = EUROVOC_CONCEPTS.map((uri) => `<${uri}>`).join(" ");
-  return `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-PREFIX dc: <http://purl.org/dc/elements/1.1/>
+async function sparql<T>(query: string): Promise<T[]> {
+  const response = await fetch(`${SPARQL_ENDPOINT}?query=${encodeURIComponent(query)}`, {
+    headers: { Accept: "application/sparql-results+json", "User-Agent": "OryxScrape/1.0" },
+  });
+  if (!response.ok) {
+    throw new Error(`CELLAR SPARQL failed [${response.status}]: ${(await response.text()).slice(0, 200)}`);
+  }
+  const json = (await response.json()) as { results?: { bindings?: T[] } };
+  return json.results?.bindings ?? [];
+}
 
-SELECT DISTINCT ?work ?celexNumber ?title ?date WHERE {
+/** Resolve EuroVoc English labels to concept URIs. */
+export async function resolveEurovocConcepts(): Promise<{
+  resolved: { label: string; uri: string }[];
+  unresolved: string[];
+}> {
+  const list = EUROVOC_LABELS.map((l) => `"${l}"@en`).join(", ");
+  const rows = await sparql<{ c?: { value: string }; l?: { value: string } }>(
+    `PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+SELECT DISTINCT ?c ?l WHERE {
+  ?c skos:prefLabel ?l .
+  FILTER(?l IN (${list}))
+  FILTER(STRSTARTS(STR(?c), "http://eurovoc.europa.eu/"))
+}`,
+  );
+  const resolved = rows
+    .filter((r) => r.c?.value && r.l?.value)
+    .map((r) => ({ label: r.l!.value, uri: r.c!.value }));
+  const found = new Set(resolved.map((r) => r.label));
+  return { resolved, unresolved: EUROVOC_LABELS.filter((l) => !found.has(l)) };
+}
+
+function buildQuery(conceptUris: string[], since: Date, until: Date, offset: number): string {
+  const concepts = conceptUris.map((uri) => `<${uri}>`).join(" ");
+  const types = ALLOWED_RESOURCE_TYPES.map((t) => `<${RT_BASE}${t}>`).join(" ");
+  return `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+
+SELECT ?work ?celexNumber ?date (SAMPLE(?et) AS ?exprTitle) (SAMPLE(?wt) AS ?workTitle) WHERE {
   ?work cdm:work_date_document ?date .
   ?work cdm:resource_legal_id_celex ?celexNumber .
 
-  # CONDITION 1 (required): CELEX legislative prefix (L = Directives, R = Regulations)
-  FILTER(STRSTARTS(STR(?celexNumber), "3") || REGEX(?celexNumber, "^[LR]"))
+  # CONDITION 1 (required): legislative resource type
+  ?work cdm:work_has_resource-type ?docType .
+  VALUES ?docType { ${types} }
+  FILTER NOT EXISTS { ?work cdm:work_has_resource-type <${RT_BASE}CORRIGENDUM> }
 
-  # CONDITION 2 (required): at least one nautical EuroVoc descriptor — AND with condition 1
+  # CONDITION 2 (required): nautical EuroVoc concept (pre-resolved URIs)
   ?work cdm:work_is_about_concept_eurovoc ?concept .
-  VALUES ?concept { ${values} }
-
-  # Title in English (canonical language). Work-level titles carry no
-  # language tag (LANG = ""), so accept both "en" and untagged.
-  OPTIONAL {
-    ?work cdm:work_title ?title .
-    FILTER(LANG(?title) IN ("en", ""))
-  }
+  VALUES ?concept { ${concepts} }
 
   FILTER(?date >= "${isoDay(since)}"^^<http://www.w3.org/2001/XMLSchema#date>)
   FILTER(?date <= "${isoDay(until)}"^^<http://www.w3.org/2001/XMLSchema#date>)
+
+  OPTIONAL {
+    ?expr cdm:expression_belongs_to_work ?work ;
+          cdm:expression_uses_language <http://publications.europa.eu/resource/authority/language/ENG> ;
+          cdm:expression_title ?et .
+  }
+  OPTIONAL { ?work cdm:work_title ?wt . }
 }
-ORDER BY DESC(?date)
+GROUP BY ?work ?celexNumber ?date
+ORDER BY DESC(?date) ?celexNumber
 LIMIT ${PAGE_SIZE}
 OFFSET ${offset}`;
 }
 
-async function searchEuPage(since: Date, until: Date, offset: number): Promise<EuRecord[]> {
-  const response = await fetch(
-    `${SPARQL_ENDPOINT}?query=${encodeURIComponent(buildQuery(since, until, offset))}`,
-    { headers: { Accept: "application/sparql-results+json", "User-Agent": "OryxScrape/1.0" } },
-  );
-  if (!response.ok) {
-    throw new Error(`CELLAR SPARQL failed [${response.status}]: ${(await response.text()).slice(0, 200)}`);
-  }
-  const json = (await response.json()) as { results?: { bindings?: SparqlBinding[] } };
+async function searchEuPage(
+  conceptUris: string[],
+  since: Date,
+  until: Date,
+  offset: number,
+): Promise<EuRecord[]> {
+  const bindings = await sparql<SparqlBinding>(buildQuery(conceptUris, since, until, offset));
   const records: EuRecord[] = [];
-  for (const binding of json.results?.bindings ?? []) {
+  for (const binding of bindings) {
     const work = binding.work?.value;
     const celex = binding.celexNumber?.value;
     if (!work || !celex) continue;
+    const expr = binding.exprTitle?.value?.trim();
+    const wt = binding.workTitle?.value?.trim();
     records.push({
       work,
       celex,
-      title: binding.title?.value ?? null,
+      title: expr || wt || null,
+      titleSource: expr ? "expression" : wt ? "work" : "celex",
       date: binding.date?.value ?? null,
       url: `${EULEX_TEXT_BASE}${encodeURIComponent(celex)}`,
     });
