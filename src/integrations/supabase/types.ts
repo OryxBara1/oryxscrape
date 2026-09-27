@@ -917,6 +917,7 @@ export type Database = {
         Returns: boolean
       }
       is_valid_tier_policy: { Args: { policy: Json }; Returns: boolean }
+      schedule_eurlex_cron: { Args: { p_secret: string }; Returns: string }
     }
     Enums: {
       audit_check_type:
