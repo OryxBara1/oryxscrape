@@ -195,7 +195,11 @@ const TRANSITIONS: Record<
   }
 > = {
   review: {
-    from: [{ verification: "unreviewed", publication: "internal_only" }],
+    from: [
+      { verification: "unreviewed", publication: "internal_only" },
+      // re-review is idempotent: allows approving an already-reviewed item
+      { verification: "reviewed", publication: "internal_only" },
+    ],
     to: { verification: "reviewed", publication: "internal_only" },
   },
   reject: {
@@ -264,14 +268,8 @@ export const setItemReviewState = createServerFn({ method: "POST" })
         `This action is not allowed from ${current.verification_status}/${current.publication_status}.`,
       );
     }
-    // EU acts need explicit reviewer scope before they can reach the Exchange.
-    if (
-      data.action === "mark_eligible" &&
-      current.jurisdiction_hint === "EU" &&
-      !isCurationComplete(readCuration(current.payload))
-    ) {
-      throw new Error("EU items need affected jurisdictions and an application status before approval.");
-    }
+    // EU scope metadata (affected jurisdictions, application status) is optional
+    // enrichment set in Advanced Review — it must not block approval.
 
     const patch: {
       verification_status: VerificationStatus;
