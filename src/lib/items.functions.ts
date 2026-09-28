@@ -120,6 +120,7 @@ export const getItemDetail = createServerFn({ method: "GET" })
           ? (normalizedPayload["eurovoc_concepts"] as string[])
           : [],
       curation: readCuration(normalizedPayload),
+      relevanceScore,
       payloadJson: JSON.stringify(normalizedPayload, null, 2).slice(0, 8000),
       sourceUrl: row.source_url,
       canonicalUrl: raw?.canonical_url ?? null,
