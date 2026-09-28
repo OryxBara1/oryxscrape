@@ -72,15 +72,17 @@ export const Route = createFileRoute("/api/public/feed")({
             return jsonError(400, "invalid since");
           }
 
-          const jurisdictions = url.searchParams
-            .getAll("jurisdiction")
-            .map((v) => v.trim())
-            .filter(Boolean);
+          // Accept both repeated params (?jurisdiction=FR&jurisdiction=ES)
+          // and comma-separated values (?jurisdiction=FR,ES) — AuraMaris sends the latter.
+          const splitParam = (values: string[]) =>
+            values
+              .flatMap((v) => v.split(","))
+              .map((v) => v.trim())
+              .filter(Boolean);
 
-          let tags = url.searchParams
-            .getAll("tags")
-            .map((v) => v.trim())
-            .filter(Boolean);
+          const jurisdictions = splitParam(url.searchParams.getAll("jurisdiction"));
+
+          let tags = splitParam(url.searchParams.getAll("tags"));
           const allowedTags = keyRow.allowed_tags ?? [];
           if (allowedTags.length > 0) {
             // key's allowed_tags take priority: intersect (or restrict when no tags requested)
