@@ -40,6 +40,8 @@ export type TriageSearch = {
   from?: string | undefined;
   to?: string | undefined;
   q?: string | undefined;
+  minScore?: string | undefined; // stored as string from select ("0.3", "0.5", "0.7")
+  sortByScore?: string | undefined; // "1" when active
 };
 
 const STATE_TONE: Record<TriageState, string> = {
@@ -78,6 +80,8 @@ export function TriagePanel({
     dateFrom: search.from ?? null,
     dateTo: search.to ?? null,
     q: search.q ?? null,
+    minScore: search.minScore ? parseFloat(search.minScore) : null,
+    sortByScore: search.sortByScore === "1" ? true : null,
   };
   const list = useQuery({
     queryKey: ["triage", filters],
