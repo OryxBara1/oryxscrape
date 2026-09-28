@@ -29,7 +29,7 @@ import type { Database } from "@/integrations/supabase/types";
 const BASE = "https://narodne-novine.nn.hr";
 const UA = "OryxScrape/1.0 (+https://oryxscrape.lovable.app)";
 
-export const NN_COLLECTOR_VERSION = "nn-scheduled@1.0.0";
+export const NN_COLLECTOR_VERSION = "nn-scheduled@1.1.0";
 export const SOURCE_DOMAIN = "narodne-novine.nn.hr";
 export const WINDOW_DAYS = 7;
 /** Hard safety ceilings — a normal weekly run stays far below these. */
@@ -112,9 +112,15 @@ function fold(value: string): string {
 
 const FOLDED_TERMS = NN_TERMS.map((term) => ({ term, folded: fold(term) }));
 
+/**
+ * "marina" alone is noisy (personal names, place names), so it only counts
+ * when at least one other nautical term also matches.
+ */
 function matchTerms(text: string): string[] {
   const folded = fold(text);
-  return FOLDED_TERMS.filter((entry) => folded.includes(entry.folded)).map((e) => e.term);
+  const hits = FOLDED_TERMS.filter((entry) => folded.includes(entry.folded)).map((e) => e.term);
+  if (hits.length === 1 && hits[0] === "marina") return [];
+  return hits;
 }
 
 /** Croatian dates render as d.m.yyyy. */
