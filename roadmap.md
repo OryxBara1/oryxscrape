@@ -58,3 +58,10 @@
 - [x] GB unificado em UK (banco + coletor UK grava "UK")
 - [x] Grécia (ΦΕΚ) agendada: quartas 07:00 UTC (rota /api/public/cron/collect-gr-fek) — vale após publicar
 - [ ] Primeiro filhote comercial: adiado
+
+## Gibraltar (2026-09-28)
+- [x] Código GI separado de UK (nomes + domínios .gi / gibraltarport.com)
+- [x] Fontes: Gibraltar Port Authority + Laws of Gibraltar (manual, sem agenda)
+- [x] 1ª coleta Port Authority: 4 docs GI, não revisados
+- [ ] Laws of Gibraltar: 1ª coleta trouxe 0 — ajustar filtro/busca de leis marítimas
+- [ ] Avisos em PDF do porto (notices/*/download-pdf) e agenda semanal
