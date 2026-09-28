@@ -214,7 +214,7 @@ export async function runGibraltarCollection(input: {
 
     if (!candidates.length) {
       throw new Error(
-        `No legislation rows found in ${topics.length} topics${topicErrors.length ? `: ${topicErrors[0].error}` : "."}`,
+        `No legislation rows found in ${topics.length} topics${topicErrors[0] ? `: ${topicErrors[0].error}` : "."}`,
       );
     }
 
