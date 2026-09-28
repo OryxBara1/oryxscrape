@@ -53,7 +53,7 @@ function ProfilesScreen() {
     mutationFn: () =>
       save({
         data: {
-          id: form.id,
+          ...(form.id ? { id: form.id } : {}),
           slug: form.slug.trim(),
           name: form.name,
           description: form.description,

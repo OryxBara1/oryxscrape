@@ -163,7 +163,12 @@ export const Route = createFileRoute("/api/public/feed")({
             .eq("id", keyRow.id)
             .then(undefined, () => undefined);
 
-          const items = (data ?? []).map((row) => {
+          type FeedRow = {
+            id: string; source_url: string; jurisdiction_hint: string | null; category: string | null;
+            payload: unknown; tags: string[] | null; traceability_level: string; institution_class: string;
+            is_official_domain: boolean; is_primary_document: boolean; collected_at: string; reviewed_at: string | null;
+          };
+          const items = ((data ?? []) as unknown as FeedRow[]).map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
             return {
               id: row.id,
