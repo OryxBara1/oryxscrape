@@ -40,6 +40,8 @@ export type TriageSearch = {
   from?: string | undefined;
   to?: string | undefined;
   q?: string | undefined;
+  minScore?: string | undefined; // stored as string from select ("0.3", "0.5", "0.7")
+  sortByScore?: string | undefined; // "1" when active
 };
 
 const STATE_TONE: Record<TriageState, string> = {
@@ -78,6 +80,8 @@ export function TriagePanel({
     dateFrom: search.from ?? null,
     dateTo: search.to ?? null,
     q: search.q ?? null,
+    minScore: search.minScore ? parseFloat(search.minScore) : null,
+    sortByScore: search.sortByScore === "1" ? true : null,
   };
   const list = useQuery({
     queryKey: ["triage", filters],
@@ -170,6 +174,28 @@ export function TriagePanel({
         <Field label="Data até">
           <input type="date" className={inputClass} value={search.to ?? ""} onChange={(e) => onSearch({ to: e.target.value || undefined })} />
         </Field>
+        <Field label="Relevância mín.">
+          <select
+            className={inputClass}
+            value={search.minScore ?? ""}
+            onChange={(e) => onSearch({ minScore: e.target.value || undefined })}
+          >
+            <option value="">Qualquer</option>
+            <option value="0.7">≥ 0.7 — Alta</option>
+            <option value="0.5">≥ 0.5 — Média+</option>
+            <option value="0.3">≥ 0.3 — Mínima</option>
+          </select>
+        </Field>
+        <Field label="Ordenar por">
+          <select
+            className={inputClass}
+            value={search.sortByScore === "1" ? "score" : "date"}
+            onChange={(e) => onSearch({ sortByScore: e.target.value === "score" ? "1" : undefined })}
+          >
+            <option value="date">Data (padrão)</option>
+            <option value="score">Relevância ↓</option>
+          </select>
+        </Field>
       </div>
 
       {selected.size > 0 ? (
@@ -199,7 +225,7 @@ export function TriagePanel({
       <p className="text-xs text-muted-foreground">{list.isLoading ? "Carregando…" : `${rows.length} item(s)`}</p>
 
       <DataTable
-        headers={["", "Ato", "Tipo / data", "Fonte", "Estado", "Escopo", ""]}
+        headers={["", "Ato", "Tipo / data", "Fonte", "Estado", "Score", "Escopo", ""]}
         loading={list.isLoading}
         empty={!list.isLoading && rows.length === 0}
       >
@@ -224,6 +250,23 @@ export function TriagePanel({
             <td className="px-4 py-3 text-xs text-muted-foreground">{r.domain ?? "—"}</td>
             <td className="px-4 py-3">
               <StatusBadge label={TRIAGE_LABELS[r.state]} tone={STATE_TONE[r.state]} />
+            </td>
+            <td className="px-4 py-3 text-center">
+              {r.relevanceScore != null ? (
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold ${
+                    r.relevanceScore >= 0.7
+                      ? "bg-green-500/20 text-green-400"
+                      : r.relevanceScore >= 0.4
+                        ? "bg-yellow-500/20 text-yellow-400"
+                        : "bg-red-500/20 text-red-400"
+                  }`}
+                >
+                  {r.relevanceScore.toFixed(2)}
+                </span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">—</span>
+              )}
             </td>
             <td className="px-4 py-3 text-[11px] text-muted-foreground">
               {r.curation?.applies_to_jurisdictions.join(", ") || "—"}
@@ -325,6 +368,7 @@ function CurationDialog({ id, onClose }: { id: string | null; onClose: () => voi
                   <span>{d.documentDate ?? "—"}</span>
                   <span>Jurisdição: {d.jurisdictionHint ?? "—"}</span>
                   <span>{d.verificationStatus} / {d.publicationStatus}</span>
+                  {d.relevanceScore != null ? <span>Score: {d.relevanceScore.toFixed(2)}</span> : null}
                 </div>
               </DialogDescription>
             </DialogHeader>

@@ -86,6 +86,9 @@ export const getItemDetail = createServerFn({ method: "GET" })
     const raw = Array.isArray(row.raw_items) ? row.raw_items[0] : row.raw_items;
     const rawPayload = (raw?.raw_payload as Record<string, unknown> | null) ?? {};
     const normalizedPayload = (row.payload as Record<string, unknown> | null) ?? {};
+    const enrichment = (normalizedPayload["enrichment"] as Record<string, unknown> | undefined) ?? {};
+    const relevanceScore: number | null =
+      typeof enrichment["relevance_score"] === "number" ? enrichment["relevance_score"] : null;
 
     const title =
       typeof normalizedPayload["title"] === "string" && normalizedPayload["title"]
@@ -117,6 +120,7 @@ export const getItemDetail = createServerFn({ method: "GET" })
           ? (normalizedPayload["eurovoc_concepts"] as string[])
           : [],
       curation: readCuration(normalizedPayload),
+      relevanceScore,
       payloadJson: JSON.stringify(normalizedPayload, null, 2).slice(0, 8000),
       sourceUrl: row.source_url,
       canonicalUrl: raw?.canonical_url ?? null,
@@ -326,6 +330,8 @@ export type TriageFilters = {
   dateFrom?: string | null;
   dateTo?: string | null;
   q?: string | null;
+  minScore?: number | null; // filter out items below this relevance threshold
+  sortByScore?: boolean | null; // sort descending by relevance score when true
 };
 
 type TriageRowDb = {
@@ -379,6 +385,9 @@ export const listTriageItems = createServerFn({ method: "GET" })
       const p = r.payload ?? {};
       const celex = str(p["celexNumber"]);
       const curation = readCuration(p);
+      const enrichment = (p["enrichment"] as Record<string, unknown> | undefined) ?? {};
+      const relevanceScore: number | null =
+        typeof enrichment["relevance_score"] === "number" ? enrichment["relevance_score"] : null;
       return {
         id: r.id,
         title: str(p["title"]),
@@ -392,6 +401,7 @@ export const listTriageItems = createServerFn({ method: "GET" })
         verificationStatus: r.verification_status,
         publicationStatus: r.publication_status,
         curation,
+        relevanceScore,
         state: triageStateOf({
           verification: r.verification_status,
           publication: r.publication_status,
@@ -410,14 +420,26 @@ export const listTriageItems = createServerFn({ method: "GET" })
       const d = m.date ?? m.collectedAt.slice(0, 10);
       if (data.dateFrom && d < data.dateFrom) return false;
       if (data.dateTo && d > data.dateTo) return false;
+      if (data.minScore != null && (m.relevanceScore == null || m.relevanceScore < data.minScore))
+        return false;
       return true;
     });
 
-    if (!q) return filtered.slice(0, 300);
+    let result = filtered;
+    if (data.sortByScore) {
+      result = [...filtered].sort((a, b) => {
+        if (a.relevanceScore == null && b.relevanceScore == null) return 0;
+        if (a.relevanceScore == null) return 1;
+        if (b.relevanceScore == null) return -1;
+        return b.relevanceScore - a.relevanceScore;
+      });
+    }
+
+    if (!q) return result.slice(0, 300);
     // CELEX exact match wins over any title/tag match.
-    const exact = filtered.filter((m) => m.celex?.toLowerCase() === q);
+    const exact = result.filter((m) => m.celex?.toLowerCase() === q);
     if (exact.length) return exact;
-    return filtered
+    return result
       .filter(
         (m) =>
           m.celex?.toLowerCase().includes(q) ||
