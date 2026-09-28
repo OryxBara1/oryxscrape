@@ -153,6 +153,7 @@ export const enrichQueueBatch = createServerFn({ method: "POST" })
     const { normalizeWithLogoriOn } = await import("./logorion.server");
     let enriched = 0;
     let stopped: string | null = null;
+    let failed = 0;
     for (const row of rows ?? []) {
       let content = "";
       if (row.raw_item_id) {
@@ -178,12 +179,21 @@ export const enrichQueueBatch = createServerFn({ method: "POST" })
         if (upErr) throw new Error(upErr.message);
         enriched += 1;
       } catch (e) {
-        stopped = (e as Error).message;
+        const msg = (e as Error).message;
+        // Unreadable reply for this one document: record it and move on; gateway errors stop the batch.
+        if (/JSON|no JSON|empty normalization/i.test(msg) && !/request failed|unreachable|upstream/i.test(msg)) {
+          const payload = { ...((row.payload ?? {}) as Record<string, unknown>) };
+          payload["enrichment"] = { error: msg.slice(0, 300), enriched_at: new Date().toISOString() };
+          await context.supabase.from("normalized_items").update({ payload: payload as never }).eq("id", row.id);
+          failed += 1;
+          continue;
+        }
+        stopped = msg;
         break;
       }
     }
     const { count } = await context.supabase
       .from("normalized_items").select("id", { count: "exact", head: true })
       .eq("verification_status", "unreviewed").is("payload->enrichment", null);
-    return { enriched, remaining: count ?? 0, stopped };
+    return { enriched, failed, remaining: count ?? 0, stopped };
   });

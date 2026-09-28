@@ -70,8 +70,7 @@ function parseResultText(text: string): Partial<NormalizedDoc> {
     // Model sometimes copies legal text with stray backslashes (e.g. "\§") — escape invalid ones.
     const repaired = slice
       .replace(/\\(?!["\\/bfnrtu])/g, "\\\\")
-      .replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u")
-      .replace(/[\u0000-\u001f]/g, (c) => (c === "\n" ? "\\n" : c === "\t" ? "\\t" : " "));
+      .replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u");
     parsed = JSON.parse(repaired) as Record<string, unknown>;
   }
   const out: Partial<NormalizedDoc> = {};
