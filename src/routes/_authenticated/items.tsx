@@ -81,6 +81,7 @@ export const Route = createFileRoute("/_authenticated/items")({
     return {
       jur: pick("jur"), state: pick("state"), domain: pick("domain"), type: pick("type"),
       app: pick("app"), from: pick("from"), to: pick("to"), q: pick("q"),
+      minScore: pick("minScore"), sortByScore: pick("sortByScore"),
     };
   },
   component: ItemsScreen,
