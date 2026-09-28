@@ -368,6 +368,7 @@ function CurationDialog({ id, onClose }: { id: string | null; onClose: () => voi
                   <span>{d.documentDate ?? "—"}</span>
                   <span>Jurisdição: {d.jurisdictionHint ?? "—"}</span>
                   <span>{d.verificationStatus} / {d.publicationStatus}</span>
+                  {d.relevanceScore != null ? <span>Score: {d.relevanceScore.toFixed(2)}</span> : null}
                 </div>
               </DialogDescription>
             </DialogHeader>
