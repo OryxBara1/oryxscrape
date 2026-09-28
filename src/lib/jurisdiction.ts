@@ -11,12 +11,15 @@ const ALIASES: Record<string, string> = {
   netherlands: "NL", nederland: "NL", "the netherlands": "NL",
   germany: "DE", deutschland: "DE",
   "united kingdom": "UK", gb: "UK", "great britain": "UK",
+  gibraltar: "GI", "gibraltar gazette": "GI", "government of gibraltar": "GI", "hm government of gibraltar": "GI",
   brazil: "BR", brasil: "BR",
   turkey: "TR", "türkiye": "TR", tunisia: "TN",
   "european union": "EU", "união europeia": "EU", "union européenne": "EU",
 };
 
 const DOMAIN_HINTS: Array<[RegExp, string]> = [
+  // Gibraltar first: must never fall into UK.
+  [/\.gi(\/|$)|gibraltarlaws\.gov\.gi|gibraltarport\.com|gibraltar\.gov\.gi/i, "GI"],
   [/legifrance\.gouv\.fr|\.gouv\.fr/i, "FR"],
   [/boe\.es/i, "ES"],
   [/normattiva\.it|gazzettaufficiale\.it/i, "IT"],
