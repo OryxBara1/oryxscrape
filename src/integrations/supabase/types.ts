@@ -633,29 +633,38 @@ export type Database = {
       }
       research_profiles: {
         Row: {
+          allowed_jurisdictions: string[]
+          allowed_tags: string[]
           created_at: string
           description: string | null
           id: string
           is_active: boolean
           name: string
+          require_promotion: boolean
           slug: string
           updated_at: string
         }
         Insert: {
+          allowed_jurisdictions?: string[]
+          allowed_tags?: string[]
           created_at?: string
           description?: string | null
           id?: string
           is_active?: boolean
           name: string
+          require_promotion?: boolean
           slug: string
           updated_at?: string
         }
         Update: {
+          allowed_jurisdictions?: string[]
+          allowed_tags?: string[]
           created_at?: string
           description?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          require_promotion?: boolean
           slug?: string
           updated_at?: string
         }
