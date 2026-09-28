@@ -132,6 +132,10 @@ export const askCapy = createServerFn({ method: "POST" })
         [rp["markdown"], rp["plain_text"], rp["text"], rp["html"]].find(
           (v): v is string => typeof v === "string" && v.trim() !== "",
         ) ?? "";
+      if (!fullText && typeof rp["celexNumber"] === "string") {
+        const { fetchCellarText } = await import("./cellar.server");
+        fullText = (await fetchCellarText(rp["celexNumber"]))?.plain.slice(0, 50_000) ?? "";
+      }
     }
 
     const document = [
@@ -181,6 +185,10 @@ export const enrichQueueBatch = createServerFn({ method: "POST" })
         content = [rp["markdown"], rp["plain_text"], rp["text"], rp["html"]].find(
           (v): v is string => typeof v === "string" && v.trim() !== "",
         ) ?? "";
+        if (!content && typeof rp["celexNumber"] === "string") {
+          const { fetchCellarText } = await import("./cellar.server");
+          content = (await fetchCellarText(rp["celexNumber"]))?.plain.slice(0, 60_000) ?? "";
+        }
       }
       if (!content) content = JSON.stringify(row.payload ?? {});
       try {

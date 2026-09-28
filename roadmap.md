@@ -48,3 +48,8 @@
 - [ ] Mostrar resumo/score no cartão da revisão.
 - [ ] Texto integral EUR-Lex via CELLAR.
 - [ ] Novos coletores / perfil comercial (Portos & Cargas, ESG).
+
+## Coletas UK/NL + texto integral UE (2026-09-28)
+- [x] UK (legislation.gov.uk) agendado: terças 06:00 UTC
+- [x] NL (overheid.nl) agendado: terças 06:30 UTC; texto via repository.overheid.nl (zoek.* dá 403)
+- [x] EUR-Lex v1.3: texto integral via CELLAR em novos itens; itens antigos buscam o texto na hora (Capy/resumo)
