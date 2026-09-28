@@ -123,6 +123,43 @@ export function pdfUrlFromActPage(html: string): string | null {
   }
 }
 
+/**
+ * Some acts (notices, appointments) carry no PDF and publish the text inline
+ * inside the act page's `text-content` block instead.
+ */
+export function inlineTextFromActPage(html: string): string {
+  const start = html.indexOf('class="text-content"');
+  if (start < 0) return "";
+  const after = html.slice(start);
+  const endMarkers = [
+    "<!-- Made Under Legislation",
+    "<!-- Made From Legislation",
+    "<!-- Connected Legislation",
+    "<!-- Modified Legislations",
+    '<div id="accordion"',
+    "<footer",
+  ];
+  let end = after.length;
+  for (const marker of endMarkers) {
+    const at = after.indexOf(marker);
+    if (at > 0 && at < end) end = at;
+  }
+  return decodeEntities(
+    after
+      .slice(0, end)
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<\/(p|div|li|tr|h[1-6]|section|article)>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[ \t\u00a0]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n"),
+  );
+}
+
+
+
 async function extractPdfText(bytes: Uint8Array): Promise<string> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(bytes);
