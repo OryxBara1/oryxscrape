@@ -285,7 +285,10 @@ export async function runGibraltarCollection(input: {
       jobId: job.id,
       apifyRunId: null,
       candidates: candidates.length,
-      remaining: Math.max(0, candidates.length - stored.size - ingested),
+      remaining: Math.max(
+        0,
+        candidates.filter((c) => !stored.has(c.url)).length - ingested - duplicates,
+      ),
       ingested,
       duplicates,
       failed,
