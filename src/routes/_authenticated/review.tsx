@@ -93,7 +93,7 @@ function ReviewScreen() {
   }, []);
 
   const enrich = useMutation({
-    mutationFn: () => runEnrich(),
+    mutationFn: (itemId?: string) => runEnrich({ data: itemId ? { itemId } : {} }),
     onSuccess: (r) => {
       if (r.stopped) toast.error(`LogoriOn parou: ${r.stopped}`);
       else toast.success(`${r.enriched} enriquecidos${r.failed ? ` · ${r.failed} ilegíveis (pulados)` : ""} · faltam ${r.remaining}.`);
@@ -217,7 +217,7 @@ function ReviewScreen() {
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         <aside className="space-y-4">
-          <GlowButton onClick={() => enrich.mutate()} disabled={enrich.isPending}>
+          <GlowButton onClick={() => enrich.mutate(undefined)} disabled={enrich.isPending}>
             {enrich.isPending ? "Enriquecendo…" : "Enriquecer 5 com LogoriOn"}
           </GlowButton>
           <div className="glass-panel p-4">
@@ -336,6 +336,48 @@ function ReviewScreen() {
                   {current.docType ? <StatusBadge label={current.docType} tone="neutral" /> : null}
                   {current.domain ? <StatusBadge label={current.domain} tone="neutral" /> : null}
                 </div>
+              </div>
+
+              <div className="glass-panel p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    Resumo LogoriOn (sugestão da IA)
+                  </p>
+                  {current.enrichment?.score != null ? (
+                    <StatusBadge
+                      label={`Relevância ${Math.round(current.enrichment.score * 100)}%`}
+                      tone={current.enrichment.score >= 0.8 ? "ok" : current.enrichment.score >= 0.5 ? "warn" : "bad"}
+                    />
+                  ) : null}
+                </div>
+                {current.enrichment?.summary ? (
+                  <>
+                    <p className="mt-2 text-sm leading-relaxed">{current.enrichment.summary}</p>
+                    {current.enrichment.tags.length ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {current.enrichment.tags.map((t) => (
+                          <span key={t} className="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      {current.enrichment?.error ? "A IA não conseguiu ler este documento." : "Ainda sem resumo."}
+                    </p>
+                    <button
+                      type="button"
+                      className="glow-btn glow-btn--ghost"
+                      disabled={enrich.isPending}
+                      onClick={() => enrich.mutate(current.id)}
+                    >
+                      {enrich.isPending ? "Enriquecendo…" : "Enriquecer este item agora"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="glass-panel space-y-4 p-6">

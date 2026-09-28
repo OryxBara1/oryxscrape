@@ -26,6 +26,12 @@ export type ReviewQueueItem = {
   jurisdictionHint: string | null;
   tags: string[];
   collectedAt: string;
+  enrichment: {
+    summary: string | null;
+    tags: string[];
+    score: number | null;
+    error: string | null;
+  } | null;
 };
 
 /** Guided review queue: unreviewed normalized items, oldest first. */
@@ -58,6 +64,16 @@ export const listReviewQueue = createServerFn({ method: "GET" })
         jurisdictionHint: r.jurisdiction_hint,
         tags: r.tags ?? [],
         collectedAt: r.collected_at,
+        enrichment: (() => {
+          const e = p["enrichment"] as Record<string, unknown> | undefined;
+          if (!e || typeof e !== "object") return null;
+          return {
+            summary: str(e["summary"]),
+            tags: Array.isArray(e["suggested_tags"]) ? (e["suggested_tags"] as unknown[]).filter((t): t is string => typeof t === "string") : [],
+            score: typeof e["relevance_score"] === "number" ? (e["relevance_score"] as number) : null,
+            error: str(e["error"]),
+          };
+        })(),
       };
     });
 
@@ -139,15 +155,17 @@ export const askCapy = createServerFn({ method: "POST" })
  */
 export const enrichQueueBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input: { itemId?: string } | undefined) => ({ itemId: input?.itemId ?? null }))
+  .handler(async ({ data, context }) => {
     const BATCH = 5;
-    const { data: rows, error } = await context.supabase
+    let q = context.supabase
       .from("normalized_items")
-      .select("id, source_url, payload, raw_item_id")
-      .eq("verification_status", "unreviewed")
-      .is("payload->enrichment", null)
-      .order("collected_at", { ascending: true })
-      .limit(BATCH);
+      .select("id, source_url, payload, raw_item_id");
+    q = data.itemId
+      ? q.eq("id", data.itemId)
+      : q.eq("verification_status", "unreviewed").is("payload->enrichment", null)
+          .order("collected_at", { ascending: true }).limit(BATCH);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
 
     const { normalizeWithLogoriOn } = await import("./logorion.server");
