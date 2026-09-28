@@ -89,12 +89,19 @@ export const Route = createFileRoute("/api/public/feed")({
               .map((v) => v.trim())
               .filter(Boolean);
 
-          const jurisdictions = splitParam(url.searchParams.getAll("jurisdiction"));
+          let jurisdictions = splitParam(url.searchParams.getAll("jurisdiction"));
+          const profileJur = profile.allowed_jurisdictions ?? [];
+          if (profileJur.length > 0) {
+            // profile's countries take priority
+            jurisdictions = jurisdictions.length > 0
+              ? jurisdictions.filter((j) => profileJur.includes(j.toUpperCase()))
+              : profileJur;
+            if (jurisdictions.length === 0) return jsonError(400, "no requested jurisdictions are allowed for this key");
+          }
 
           let tags = splitParam(url.searchParams.getAll("tags"));
-          const allowedTags = keyRow.allowed_tags ?? [];
-          if (allowedTags.length > 0) {
-            // key's allowed_tags take priority: intersect (or restrict when no tags requested)
+          for (const allowedTags of [profile.allowed_tags ?? [], keyRow.allowed_tags ?? []]) {
+            if (allowedTags.length === 0) continue;
             tags = tags.length > 0 ? tags.filter((t) => allowedTags.includes(t)) : allowedTags;
             if (tags.length === 0) return jsonError(400, "no requested tags are allowed for this key");
           }
@@ -120,16 +127,25 @@ export const Route = createFileRoute("/api/public/feed")({
           }
 
           // --- data query ---
+          const baseCols =
+            "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at";
           let query = supabaseAdmin
             .from("normalized_items")
             .select(
-              "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at",
+              profile.require_promotion
+                ? `${baseCols}, normalized_item_profile_exposure!inner(profile_id, promoted)`
+                : baseCols,
               { count: "exact" },
             )
             .eq("publication_status", "eligible")
             .order("updated_at", { ascending: false })
             .range(offset, offset + limit - 1);
 
+          if (profile.require_promotion) {
+            query = query
+              .eq("normalized_item_profile_exposure.profile_id", keyRow.profile_id)
+              .eq("normalized_item_profile_exposure.promoted", true);
+          }
           if (since) query = query.gt("updated_at", since);
           if (jurisdictions.length > 0) query = query.in("jurisdiction_hint", jurisdictions);
           if (tags.length > 0) query = query.overlaps("tags", tags);
