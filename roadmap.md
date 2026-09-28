@@ -67,4 +67,5 @@
 - [x] Texto integral: PDF oficial do visualizador (unpdf) + fallback para o texto embutido na página (avisos/nomeações)
 - [x] 45 normas de Gibraltar coletadas e normalizadas como GI, todas não revisadas
 - [x] Agenda semanal: Laws of Gibraltar quartas 07:30 UTC (/api/public/cron/collect-gi-laws); Port Authority na coleta agendada geral
-- [ ] Restam ~314 normas históricas — cada rodada semanal traz 15; posso acelerar sob demanda
+- [x] Backfill GI concluído: 358 normas marítimas (1 PDF sem texto legível fica de fora)
+- [ ] Enriquecer as 362 GI pendentes com LogoriOn (botão em /review, 5 por clique) e triagem humana
