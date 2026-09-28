@@ -62,7 +62,18 @@ function parseResultText(text: string): Partial<NormalizedDoc> {
   if (start === -1 || end === -1 || end <= start) {
     throw new Error(`LogoriOn returned no JSON document: ${text.slice(0, 300)}`);
   }
-  const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  const slice = cleaned.slice(start, end + 1);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(slice) as Record<string, unknown>;
+  } catch {
+    // Model sometimes copies legal text with stray backslashes (e.g. "\§") — escape invalid ones.
+    const repaired = slice
+      .replace(/\\(?!["\\/bfnrtu])/g, "\\\\")
+      .replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u")
+      .replace(/[\u0000-\u001f]/g, (c) => (c === "\n" ? "\\n" : c === "\t" ? "\\t" : " "));
+    parsed = JSON.parse(repaired) as Record<string, unknown>;
+  }
   const out: Partial<NormalizedDoc> = {};
   for (const field of STRING_FIELDS) {
     const value = parsed[field];
