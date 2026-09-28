@@ -136,6 +136,8 @@ export async function normalizeWithLogoriOn(input: {
   }
 
   const doc = { ...EMPTY, ...parseResultText(text) };
+  const { canonicalJurisdiction } = await import("./jurisdiction");
+  doc.jurisdiction_hint = canonicalJurisdiction(doc.jurisdiction_hint, input.sourceUrl);
   if (!doc.title && !doc.category) {
     throw new Error("LogoriOn returned an empty normalization (no title and no category).");
   }
