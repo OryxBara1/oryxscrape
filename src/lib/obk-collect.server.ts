@@ -177,12 +177,12 @@ async function fetchNlText(identifier: string): Promise<{ xml: string; plain: st
     });
     const body = await response.text();
     if (!response.ok) {
-      lastError = `[${response.status}] ${attempt.url}`;
+      lastError += ` [${response.status}] ${attempt.url}`;
       continue;
     }
     const plain = stripTags(body);
     if (!plain.trim()) {
-      lastError = `empty body at ${attempt.url}`;
+      lastError += ` empty body at ${attempt.url}`;
       continue;
     }
     return { xml: body, plain };
