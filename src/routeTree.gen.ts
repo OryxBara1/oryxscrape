@@ -19,6 +19,7 @@ import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
 import { Route as AuthenticatedKeysRouteImport } from './routes/_authenticated/keys'
 import { Route as AuthenticatedLexiconRouteImport } from './routes/_authenticated/lexicon'
+import { Route as AuthenticatedProfilesRouteImport } from './routes/_authenticated/profiles'
 import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as AuthenticatedAdminLegacyAuditRouteImport } from './routes/_authenticated/admin.legacy-audit'
@@ -83,6 +84,11 @@ const AuthenticatedKeysRoute = AuthenticatedKeysRouteImport.update({
 const AuthenticatedLexiconRoute = AuthenticatedLexiconRouteImport.update({
   id: '/lexicon',
   path: '/lexicon',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfilesRoute = AuthenticatedProfilesRouteImport.update({
+  id: '/profiles',
+  path: '/profiles',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedReviewRoute = AuthenticatedReviewRouteImport.update({
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
+  '/profiles': typeof AuthenticatedProfilesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/jobs': typeof AuthenticatedJobsRoute
   '/keys': typeof AuthenticatedKeysRoute
   '/lexicon': typeof AuthenticatedLexiconRoute
+  '/profiles': typeof AuthenticatedProfilesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
   '/_authenticated/keys': typeof AuthenticatedKeysRoute
   '/_authenticated/lexicon': typeof AuthenticatedLexiconRoute
+  '/_authenticated/profiles': typeof AuthenticatedProfilesRoute
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/_authenticated/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/keys'
     | '/lexicon'
+    | '/profiles'
     | '/review'
     | '/sources'
     | '/admin/legacy-audit'
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/keys'
     | '/lexicon'
+    | '/profiles'
     | '/review'
     | '/sources'
     | '/admin/legacy-audit'
@@ -325,6 +336,7 @@ export interface FileRouteTypes {
     | '/_authenticated/jobs'
     | '/_authenticated/keys'
     | '/_authenticated/lexicon'
+    | '/_authenticated/profiles'
     | '/_authenticated/review'
     | '/_authenticated/sources'
     | '/_authenticated/admin/legacy-audit'
@@ -432,6 +444,13 @@ declare module '@tanstack/react-router' {
       path: '/lexicon'
       fullPath: '/lexicon'
       preLoaderRoute: typeof AuthenticatedLexiconRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profiles': {
+      id: '/_authenticated/profiles'
+      path: '/profiles'
+      fullPath: '/profiles'
+      preLoaderRoute: typeof AuthenticatedProfilesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/review': {
@@ -557,6 +576,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
   AuthenticatedKeysRoute: typeof AuthenticatedKeysRoute
   AuthenticatedLexiconRoute: typeof AuthenticatedLexiconRoute
+  AuthenticatedProfilesRoute: typeof AuthenticatedProfilesRoute
   AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
   AuthenticatedSourcesRoute: typeof AuthenticatedSourcesRoute
   AuthenticatedAdminLegacyAuditRoute: typeof AuthenticatedAdminLegacyAuditRoute
@@ -570,6 +590,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,
   AuthenticatedKeysRoute: AuthenticatedKeysRoute,
   AuthenticatedLexiconRoute: AuthenticatedLexiconRoute,
+  AuthenticatedProfilesRoute: AuthenticatedProfilesRoute,
   AuthenticatedReviewRoute: AuthenticatedReviewRoute,
   AuthenticatedSourcesRoute: AuthenticatedSourcesRoute,
   AuthenticatedAdminLegacyAuditRoute: AuthenticatedAdminLegacyAuditRoute,
