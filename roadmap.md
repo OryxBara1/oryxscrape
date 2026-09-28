@@ -34,3 +34,10 @@
 - [ ] Track A: página /review guiada (fila unreviewed por collected_at, um item por vez, Aprovar→AuraMaris / Aprovar interno / Rejeitar com motivo / Pular, atalhos A/R/S/O, localStorage, contadores por país, /items vira "Advanced Review").
 - [ ] Track B: /admin/legacy-audit (Group B por domínio: contagem, verificação de proveniência, normalização, 1 audit_event por lote; raw_items nunca editados).
 - [ ] Capy (Fase 2): só placeholder recolhido na Review; sem chamadas LogoriOn até receber prompt ID + categorias AuraMaris.
+
+## Perfis multi-filhotes (2026-09-28)
+- [x] Agendamentos semanais já ativos: FR seg 06:00, IT qua 06:30, ES qui 06:00, HR qui 06:30, EU seg 06:00 (UTC).
+- [x] Tela /profiles: criar/editar perfis, países e tags permitidos, liberação manual opcional, liberar itens por perfil.
+- [x] /keys: trocar o perfil de uma chave ativa.
+- [x] Feed aplica países/tags do perfil e, se ligado, só itens liberados; aceita X-API-Key e prefixo oxs_ correto.
+- [ ] Capy/IA: aguardando ID do prompt LogoriOn + categorias (decisão do usuário 28/09).

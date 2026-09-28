@@ -11,6 +11,7 @@ import {
   Share2,
   BookMarked,
   LogOut,
+  Users,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -29,6 +30,7 @@ const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
   { to: "/admin/legacy-audit", label: "Legacy audit", icon: ArchiveRestore },
   { to: "/exchange", label: "Exchange handoff", icon: Share2 },
   { to: "/lexicon", label: "Search lexicon", icon: BookMarked },
+  { to: "/profiles", label: "Perfis (filhotes)", icon: Users },
   { to: "/keys", label: "Consumer keys", icon: KeyRound },
 ];
 

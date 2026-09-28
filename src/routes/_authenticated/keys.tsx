@@ -19,6 +19,7 @@ import {
   revokeConsumerKey,
 } from "@/lib/consumer-keys.functions";
 import { listResearchProfiles } from "@/lib/items.functions";
+import { setKeyProfile } from "@/lib/profiles.functions";
 
 export const Route = createFileRoute("/_authenticated/keys")({
   head: () => ({
@@ -73,6 +74,16 @@ function KeysScreen() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["consumer-keys"] });
       toast.success("Key revoked.");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const changeProfile = useServerFn(setKeyProfile);
+  const profileMutation = useMutation({
+    mutationFn: (v: { keyId: string; profileId: string }) => changeProfile({ data: v }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["consumer-keys"] });
+      toast.success("Perfil da chave atualizado.");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -167,7 +178,22 @@ function KeysScreen() {
             </td>
             <td className="px-4 py-3 font-mono text-xs">{key.key_prefix}…</td>
             <td className="px-4 py-3 text-xs text-muted-foreground">
-              {key.research_profiles?.slug ?? "—"}
+              {key.is_active ? (
+                <select
+                  className={inputClass}
+                  value={key.profile_id}
+                  disabled={profileMutation.isPending}
+                  onChange={(e) => profileMutation.mutate({ keyId: key.id, profileId: e.target.value })}
+                >
+                  {(profiles.data ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.slug}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                key.research_profiles?.slug ?? "—"
+              )}
             </td>
             <td className="px-4 py-3">
               <StatusBadge

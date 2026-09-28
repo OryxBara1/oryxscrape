@@ -43,26 +43,35 @@ export const Route = createFileRoute("/api/public/feed")({
       GET: async ({ request }) => {
         try {
           const authHeader = request.headers.get("authorization") ?? "";
-          if (!authHeader.toLowerCase().startsWith("bearer ")) return unauthorized();
-          const rawKey = authHeader.slice(7).trim();
+          const rawKey = authHeader.toLowerCase().startsWith("bearer ")
+            ? authHeader.slice(7).trim()
+            : (request.headers.get("x-api-key") ?? "").trim();
           if (rawKey.length < 9) return unauthorized();
 
-          const prefix = rawKey.slice(0, 8);
+          // Namespaced keys (oxs_<prefix>_<secret>) store "oxs_<prefix>"; legacy keys use the first 8 chars.
+          const namespaced = rawKey.split("_");
+          const prefixes =
+            namespaced.length === 3 && namespaced[0] === "oxs" && namespaced[1]
+              ? [`oxs_${namespaced[1]}`]
+              : [rawKey.slice(0, 8), `oxs_${rawKey.slice(0, 8)}`];
           const hash = await sha256Hex(rawKey);
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-          // Match the stored prefix exactly, or the namespaced oxs_<prefix> form.
           const { data: keyRow, error: keyError } = await supabaseAdmin
             .from("consumer_keys")
-            .select("id, allowed_tags")
-            .in("key_prefix", [prefix, `oxs_${prefix}`])
+            .select(
+              "id, allowed_tags, profile_id, research_profiles(is_active, allowed_jurisdictions, allowed_tags, require_promotion)",
+            )
+            .in("key_prefix", prefixes)
             .eq("key_hash", hash)
             .eq("is_active", true)
             .is("revoked_at", null)
             .maybeSingle();
 
           if (keyError || !keyRow) return unauthorized();
+          const profile = keyRow.research_profiles;
+          if (!profile || !profile.is_active) return unauthorized();
 
           const url = new URL(request.url);
 
@@ -80,12 +89,19 @@ export const Route = createFileRoute("/api/public/feed")({
               .map((v) => v.trim())
               .filter(Boolean);
 
-          const jurisdictions = splitParam(url.searchParams.getAll("jurisdiction"));
+          let jurisdictions = splitParam(url.searchParams.getAll("jurisdiction"));
+          const profileJur = profile.allowed_jurisdictions ?? [];
+          if (profileJur.length > 0) {
+            // profile's countries take priority
+            jurisdictions = jurisdictions.length > 0
+              ? jurisdictions.filter((j) => profileJur.includes(j.toUpperCase()))
+              : profileJur;
+            if (jurisdictions.length === 0) return jsonError(400, "no requested jurisdictions are allowed for this key");
+          }
 
           let tags = splitParam(url.searchParams.getAll("tags"));
-          const allowedTags = keyRow.allowed_tags ?? [];
-          if (allowedTags.length > 0) {
-            // key's allowed_tags take priority: intersect (or restrict when no tags requested)
+          for (const allowedTags of [profile.allowed_tags ?? [], keyRow.allowed_tags ?? []]) {
+            if (allowedTags.length === 0) continue;
             tags = tags.length > 0 ? tags.filter((t) => allowedTags.includes(t)) : allowedTags;
             if (tags.length === 0) return jsonError(400, "no requested tags are allowed for this key");
           }
@@ -111,16 +127,25 @@ export const Route = createFileRoute("/api/public/feed")({
           }
 
           // --- data query ---
+          const baseCols =
+            "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at";
           let query = supabaseAdmin
             .from("normalized_items")
             .select(
-              "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at",
+              profile.require_promotion
+                ? `${baseCols}, normalized_item_profile_exposure!inner(profile_id, promoted)`
+                : baseCols,
               { count: "exact" },
             )
             .eq("publication_status", "eligible")
             .order("updated_at", { ascending: false })
             .range(offset, offset + limit - 1);
 
+          if (profile.require_promotion) {
+            query = query
+              .eq("normalized_item_profile_exposure.profile_id", keyRow.profile_id)
+              .eq("normalized_item_profile_exposure.promoted", true);
+          }
           if (since) query = query.gt("updated_at", since);
           if (jurisdictions.length > 0) query = query.in("jurisdiction_hint", jurisdictions);
           if (tags.length > 0) query = query.overlaps("tags", tags);
@@ -138,7 +163,12 @@ export const Route = createFileRoute("/api/public/feed")({
             .eq("id", keyRow.id)
             .then(undefined, () => undefined);
 
-          const items = (data ?? []).map((row) => {
+          type FeedRow = {
+            id: string; source_url: string; jurisdiction_hint: string | null; category: string | null;
+            payload: unknown; tags: string[] | null; traceability_level: string; institution_class: string;
+            is_official_domain: boolean; is_primary_document: boolean; collected_at: string; reviewed_at: string | null;
+          };
+          const items = ((data ?? []) as unknown as FeedRow[]).map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
             return {
               id: row.id,
