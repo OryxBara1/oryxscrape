@@ -490,12 +490,16 @@ function CapyPanel({ itemId }: { itemId: string | null }) {
         className="flex gap-2"
       >
         <input
-          className={inputClass}
+          className={`${inputClass} min-w-0 flex-1`}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="Pergunte ao Capy…"
         />
-        <GlowButton type="submit" disabled={mutation.isPending || !question.trim()}>
+        <GlowButton
+          type="submit"
+          className="shrink-0"
+          disabled={mutation.isPending || !question.trim()}
+        >
           {mutation.isPending ? "…" : "Enviar"}
         </GlowButton>
       </form>
