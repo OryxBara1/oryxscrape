@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { GlowButton, ScreenHeader, StatusBadge, formatDate, inputClass } from "@/components/data-ui";
 import { getItemDetail, rejectItems, setItemReviewState } from "@/lib/items.functions";
-import { askCapy, countReviewByJurisdiction, listReviewQueue } from "@/lib/review.functions";
+import { askCapy, countReviewByJurisdiction, enrichQueueBatch, listReviewQueue } from "@/lib/review.functions";
 
 const REJECT_REASONS = [
   "Fora de escopo (não é náutica de recreio)",
@@ -51,6 +51,7 @@ function ReviewScreen() {
   const fetchDetail = useServerFn(getItemDetail);
   const applyState = useServerFn(setItemReviewState);
   const applyReject = useServerFn(rejectItems);
+  const runEnrich = useServerFn(enrichQueueBatch);
 
   const [jurisdiction, setJurisdiction] = useState("");
   const [domain, setDomain] = useState("");
@@ -90,6 +91,17 @@ function ReviewScreen() {
     setRejectOpen(false);
     setIndex((i) => i + 1);
   }, []);
+
+  const enrich = useMutation({
+    mutationFn: () => runEnrich(),
+    onSuccess: (r) => {
+      if (r.stopped) toast.error(`LogoriOn parou: ${r.stopped}`);
+      else toast.success(`${r.enriched} itens enriquecidos · faltam ${r.remaining}.`);
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["review-detail"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const approveEligible = useMutation({
     mutationFn: async (id: string) => {
@@ -205,6 +217,9 @@ function ReviewScreen() {
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         <aside className="space-y-4">
+          <GlowButton onClick={() => enrich.mutate()} disabled={enrich.isPending}>
+            {enrich.isPending ? "Enriquecendo…" : "Enriquecer 5 com LogoriOn"}
+          </GlowButton>
           <div className="glass-panel p-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
               Pendentes por jurisdição

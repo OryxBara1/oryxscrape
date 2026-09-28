@@ -41,3 +41,10 @@
 - [x] /keys: trocar o perfil de uma chave ativa.
 - [x] Feed aplica países/tags do perfil e, se ligado, só itens liberados; aceita X-API-Key e prefixo oxs_ correto.
 - [ ] Capy/IA: aguardando ID do prompt LogoriOn + categorias (decisão do usuário 28/09).
+
+## Validação + enriquecimento (2026-09-28)
+- [x] Checagem no ar: fila unreviewed = FR 50, IT 3 (França unificada em FR).
+- [x] Botão "Enriquecer 5 com LogoriOn" em /review: grava payload.enrichment (resumo pt-BR, tags, score); não mexe em status/jurisdição; para no primeiro erro. Teste real OK (1 item).
+- [ ] Mostrar resumo/score no cartão da revisão.
+- [ ] Texto integral EUR-Lex via CELLAR.
+- [ ] Novos coletores / perfil comercial (Portos & Cargas, ESG).

@@ -130,3 +130,60 @@ export const askCapy = createServerFn({ method: "POST" })
     const answer = await askCapyCopilot({ document, question: data.question });
     return { answer };
   });
+
+/**
+ * Staff-triggered, bounded enrichment of the review queue with LogoriOn v2.
+ * Adds summary/tags/score to payload.enrichment only; never touches review or
+ * publication status, jurisdiction or title. Idempotent: skips enriched items.
+ * Stops on the first gateway failure (circuit breaker).
+ */
+export const enrichQueueBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const BATCH = 5;
+    const { data: rows, error } = await context.supabase
+      .from("normalized_items")
+      .select("id, source_url, payload, raw_item_id")
+      .eq("verification_status", "unreviewed")
+      .is("payload->enrichment", null)
+      .order("collected_at", { ascending: true })
+      .limit(BATCH);
+    if (error) throw new Error(error.message);
+
+    const { normalizeWithLogoriOn } = await import("./logorion.server");
+    let enriched = 0;
+    let stopped: string | null = null;
+    for (const row of rows ?? []) {
+      let content = "";
+      if (row.raw_item_id) {
+        const { data: raw } = await context.supabase
+          .from("raw_items").select("raw_payload").eq("id", row.raw_item_id).maybeSingle();
+        const rp = (raw?.raw_payload ?? {}) as Record<string, unknown>;
+        content = [rp["markdown"], rp["plain_text"], rp["text"], rp["html"]].find(
+          (v): v is string => typeof v === "string" && v.trim() !== "",
+        ) ?? "";
+      }
+      if (!content) content = JSON.stringify(row.payload ?? {});
+      try {
+        const doc = await normalizeWithLogoriOn({ sourceUrl: row.source_url, content });
+        const payload = { ...((row.payload ?? {}) as Record<string, unknown>) };
+        payload["enrichment"] = {
+          summary: doc.summary, suggested_tags: doc.suggested_tags, relevance_score: doc.relevance_score,
+          body_excerpt: doc.body_excerpt, document_reference: doc.document_reference,
+          issued_at: doc.issued_at, language: doc.language,
+          model: "logorion.v2", enriched_at: new Date().toISOString(),
+        };
+        const { error: upErr } = await context.supabase
+          .from("normalized_items").update({ payload: payload as never }).eq("id", row.id);
+        if (upErr) throw new Error(upErr.message);
+        enriched += 1;
+      } catch (e) {
+        stopped = (e as Error).message;
+        break;
+      }
+    }
+    const { count } = await context.supabase
+      .from("normalized_items").select("id", { count: "exact", head: true })
+      .eq("verification_status", "unreviewed").is("payload->enrichment", null);
+    return { enriched, remaining: count ?? 0, stopped };
+  });
