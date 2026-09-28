@@ -148,12 +148,27 @@
 
   body {
     background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-display);
+    position: relative;
+  }
+
+  /*
+   * Ambient glow lives on its own fixed, GPU-promoted layer instead of
+   * `background-attachment: fixed` on <body>. Chromium repaints a fixed
+   * background incorrectly underneath backdrop-filter panels while the page
+   * scrolls, which smeared duplicated copies of the glass cards (ghosting).
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    transform: translateZ(0);
     background-image:
       radial-gradient(900px 500px at 12% -10%, oklch(0.76 0.15 195 / 12%), transparent 70%),
       radial-gradient(700px 420px at 92% 0%, oklch(0.66 0.19 300 / 12%), transparent 70%);
-    background-attachment: fixed;
-    color: var(--color-foreground);
-    font-family: var(--font-display);
   }
 }
 
@@ -163,6 +178,9 @@
   border-radius: var(--radius-xl);
   backdrop-filter: blur(18px) saturate(140%);
   box-shadow: var(--shadow-glass);
+  /* Own compositing layer: prevents smeared repaints of blurred panels. */
+  isolation: isolate;
+  transform: translateZ(0);
 }
 
 @utility glow-ring {
