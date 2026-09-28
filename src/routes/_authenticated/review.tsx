@@ -456,8 +456,10 @@ function CapyPanel({ itemId }: { itemId: string | null }) {
   useEffect(() => setAnswers([]), [itemId]);
   const mutation = useMutation({
     mutationFn: (q: string) => ask({ data: { itemId: itemId!, question: q } }),
+    // Newest answer first: the sidebar grows downward, so appending pushed new
+    // answers off-screen and made follow-up questions look like they did nothing.
     onSuccess: (res, q) => {
-      setAnswers((prev) => [...prev, { q, a: res.answer }]);
+      setAnswers((prev) => [{ q, a: res.answer }, ...prev]);
       setQuestion("");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -497,12 +499,21 @@ function CapyPanel({ itemId }: { itemId: string | null }) {
           {mutation.isPending ? "…" : "Enviar"}
         </GlowButton>
       </form>
-      {answers.map((x, i) => (
-        <div key={i} className="space-y-1 border-t border-border pt-2">
-          <p className="font-medium text-foreground">{x.q}</p>
-          <p className="whitespace-pre-wrap text-muted-foreground">{x.a}</p>
+      {mutation.isPending ? (
+        <p className="animate-pulse border-t border-border pt-2 text-muted-foreground">
+          Capy está analisando o documento…
+        </p>
+      ) : null}
+      {answers.length ? (
+        <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+          {answers.map((x, i) => (
+            <div key={`${i}-${x.q}`} className="space-y-1 border-t border-border pt-2">
+              <p className="font-medium text-foreground">{x.q}</p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{x.a}</p>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
