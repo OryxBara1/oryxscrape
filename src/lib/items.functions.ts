@@ -326,6 +326,8 @@ export type TriageFilters = {
   dateFrom?: string | null;
   dateTo?: string | null;
   q?: string | null;
+  minScore?: number | null; // filter out items below this relevance threshold
+  sortByScore?: boolean | null; // sort descending by relevance score when true
 };
 
 type TriageRowDb = {
@@ -379,6 +381,9 @@ export const listTriageItems = createServerFn({ method: "GET" })
       const p = r.payload ?? {};
       const celex = str(p["celexNumber"]);
       const curation = readCuration(p);
+      const enrichment = (p["enrichment"] as Record<string, unknown> | undefined) ?? {};
+      const relevanceScore: number | null =
+        typeof enrichment["relevance_score"] === "number" ? enrichment["relevance_score"] : null;
       return {
         id: r.id,
         title: str(p["title"]),
@@ -392,6 +397,7 @@ export const listTriageItems = createServerFn({ method: "GET" })
         verificationStatus: r.verification_status,
         publicationStatus: r.publication_status,
         curation,
+        relevanceScore,
         state: triageStateOf({
           verification: r.verification_status,
           publication: r.publication_status,
