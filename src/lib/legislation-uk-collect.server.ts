@@ -355,7 +355,7 @@ export async function runUkLegislationCollection(supabase: SupabaseClient<Databa
                 raw_item_id: rawItem.id,
                 source_id: source.id,
                 source_url: url,
-                jurisdiction_hint: "GB",
+                jurisdiction_hint: "UK",
                 category: "nautical_sweep",
                 payload: {
                   title: entry.title,
