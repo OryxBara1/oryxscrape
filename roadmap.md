@@ -63,5 +63,8 @@
 - [x] Código GI separado de UK (nomes + domínios .gi / gibraltarport.com)
 - [x] Fontes: Gibraltar Port Authority + Laws of Gibraltar (manual, sem agenda)
 - [x] 1ª coleta Port Authority: 4 docs GI, não revisados
-- [ ] Laws of Gibraltar: 1ª coleta trouxe 0 — ajustar filtro/busca de leis marítimas
-- [ ] Avisos em PDF do porto (notices/*/download-pdf) e agenda semanal
+- [x] Laws of Gibraltar: coletor próprio por tópicos marítimos (Porto, Autoridade Portuária, Marinha Mercante GI/UK, Águas do Almirantado, Óleo em Águas Territoriais, Agentes Marítimos) — 359 normas catalogadas
+- [x] Texto integral: PDF oficial do visualizador (unpdf) + fallback para o texto embutido na página (avisos/nomeações)
+- [x] 45 normas de Gibraltar coletadas e normalizadas como GI, todas não revisadas
+- [x] Agenda semanal: Laws of Gibraltar quartas 07:30 UTC (/api/public/cron/collect-gi-laws); Port Authority na coleta agendada geral
+- [ ] Restam ~314 normas históricas — cada rodada semanal traz 15; posso acelerar sob demanda
