@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { GlowButton, ScreenHeader, StatusBadge, formatDate, inputClass } from "@/components/data-ui";
 import { getItemDetail, rejectItems, setItemReviewState } from "@/lib/items.functions";
-import { countReviewByJurisdiction, listReviewQueue } from "@/lib/review.functions";
+import { askCapy, countReviewByJurisdiction, listReviewQueue } from "@/lib/review.functions";
 
 const REJECT_REASONS = [
   "Fora de escopo (não é náutica de recreio)",
@@ -273,16 +273,10 @@ function ReviewScreen() {
             >
               <span>🦫 Capy</span>
               <span className="font-mono text-[10px] uppercase tracking-[0.22em]">
-                {capyOpen ? "ocultar" : "em breve"}
+                {capyOpen ? "ocultar" : "copiloto"}
               </span>
             </button>
-            {capyOpen ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                O assistente Capy chega na Fase 2: ele vai responder perguntas sobre o item em revisão
-                (do que trata, relevância por país, categoria AuraMaris) usando o contexto completo do
-                documento. Aguardando a configuração do prompt no LogoriOn.
-              </p>
-            ) : null}
+            {capyOpen ? <CapyPanel itemId={current?.id ?? null} /> : null}
           </div>
         </aside>
 
@@ -445,5 +439,70 @@ function ReviewScreen() {
         </div>
       </div>
     </section>
+  );
+}
+
+const CAPY_QUICK = [
+  "Do que trata este documento?",
+  "Qual o impacto para náutica e marinas?",
+  "Quais jurisdições parecem afetadas?",
+  "Por que este documento é (ou não) relevante?",
+];
+
+function CapyPanel({ itemId }: { itemId: string | null }) {
+  const ask = useServerFn(askCapy);
+  const [question, setQuestion] = useState("");
+  const [answers, setAnswers] = useState<{ q: string; a: string }[]>([]);
+  useEffect(() => setAnswers([]), [itemId]);
+  const mutation = useMutation({
+    mutationFn: (q: string) => ask({ data: { itemId: itemId!, question: q } }),
+    onSuccess: (res, q) => {
+      setAnswers((prev) => [...prev, { q, a: res.answer }]);
+      setQuestion("");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  if (!itemId) return <p className="mt-3 text-xs text-muted-foreground">Nenhum item em revisão.</p>;
+  const send = (q: string) => q.trim() && !mutation.isPending && mutation.mutate(q.trim());
+  return (
+    <div className="mt-3 space-y-3 text-xs">
+      <p className="text-muted-foreground">Copiloto consultivo: não aprova nem altera nada. Confira sempre na fonte.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {CAPY_QUICK.map((q) => (
+          <button
+            key={q}
+            type="button"
+            disabled={mutation.isPending}
+            onClick={() => send(q)}
+            className="rounded-md border border-border px-2 py-1 text-left text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          send(question);
+        }}
+        className="flex gap-2"
+      >
+        <input
+          className={inputClass}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Pergunte ao Capy…"
+        />
+        <GlowButton type="submit" disabled={mutation.isPending || !question.trim()}>
+          {mutation.isPending ? "…" : "Enviar"}
+        </GlowButton>
+      </form>
+      {answers.map((x, i) => (
+        <div key={i} className="space-y-1 border-t border-border pt-2">
+          <p className="font-medium text-foreground">{x.q}</p>
+          <p className="whitespace-pre-wrap text-muted-foreground">{x.a}</p>
+        </div>
+      ))}
+    </div>
   );
 }

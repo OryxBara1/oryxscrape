@@ -85,3 +85,48 @@ export const countReviewByJurisdiction = createServerFn({ method: "GET" })
       .map(([jurisdiction, count]) => ({ jurisdiction, count }))
       .sort((a, b) => b.count - a.count);
   });
+
+/** Capy copilot: advisory answer about one item. Never alters review state. */
+export const askCapy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { itemId: string; question: string }) => {
+    if (!input?.itemId || typeof input.question !== "string" || !input.question.trim()) {
+      throw new Error("Pergunta inválida");
+    }
+    return { itemId: input.itemId, question: input.question.trim().slice(0, 2000) };
+  })
+  .handler(async ({ data, context }) => {
+    const { data: item, error } = await context.supabase
+      .from("normalized_items")
+      .select("id, source_url, jurisdiction_hint, category, payload, raw_item_id")
+      .eq("id", data.itemId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!item) throw new Error("Item não encontrado");
+
+    let fullText = "";
+    if (item.raw_item_id) {
+      const { data: raw } = await context.supabase
+        .from("raw_items")
+        .select("raw_payload")
+        .eq("id", item.raw_item_id)
+        .maybeSingle();
+      const rp = (raw?.raw_payload ?? {}) as Record<string, unknown>;
+      fullText =
+        [rp["markdown"], rp["plain_text"], rp["text"], rp["html"]].find(
+          (v): v is string => typeof v === "string" && v.trim() !== "",
+        ) ?? "";
+    }
+
+    const document = [
+      `URL: ${item.source_url}`,
+      `Jurisdição: ${item.jurisdiction_hint ?? "—"}`,
+      `Categoria: ${item.category ?? "—"}`,
+      `Metadados normalizados: ${JSON.stringify(item.payload ?? {})}`,
+      fullText ? `Texto da fonte:\n${fullText}` : "Texto integral da fonte indisponível.",
+    ].join("\n");
+
+    const { askCapyCopilot } = await import("./logorion.server");
+    const answer = await askCapyCopilot({ document, question: data.question });
+    return { answer };
+  });
