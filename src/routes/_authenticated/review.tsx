@@ -96,7 +96,7 @@ function ReviewScreen() {
     mutationFn: () => runEnrich(),
     onSuccess: (r) => {
       if (r.stopped) toast.error(`LogoriOn parou: ${r.stopped}`);
-      else toast.success(`${r.enriched} itens enriquecidos · faltam ${r.remaining}.`);
+      else toast.success(`${r.enriched} enriquecidos${r.failed ? ` · ${r.failed} ilegíveis (pulados)` : ""} · faltam ${r.remaining}.`);
       refresh();
       queryClient.invalidateQueries({ queryKey: ["review-detail"] });
     },
