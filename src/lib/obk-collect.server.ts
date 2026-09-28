@@ -155,10 +155,20 @@ async function searchNlPage(input: {
  */
 async function fetchNlText(identifier: string): Promise<{ xml: string; plain: string }> {
   const id = encodeURIComponent(identifier);
-  const attempts: { url: string; accept: string }[] = [
+  const attempts: { url: string; accept: string }[] = [];
+  // zoek.* answers 403 to server-side callers; the open repository mirror
+  // serves the same official XML at a FRBR path (e.g. gmb-2026-446447).
+  const m = /^([a-z]+)-(\d{4})-/.exec(identifier);
+  if (m) {
+    attempts.push({
+      url: `https://repository.overheid.nl/frbr/officielepublicaties/${m[1]}/${m[2]}/${id}/1/xml/${id}.xml`,
+      accept: "application/xml",
+    });
+  }
+  attempts.push(
     { url: `${TEXT_BASE}/${id}.xml`, accept: "application/xml" },
     { url: `${TEXT_BASE}/${id}.html`, accept: "text/html" },
-  ];
+  );
 
   let lastError = "";
   for (const attempt of attempts) {
