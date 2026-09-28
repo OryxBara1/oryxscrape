@@ -14,6 +14,8 @@
 - [x] Removidos jobs 12 (FR duplicado), 14 (PT), 15 (MT), 16 (CY), 20 (GR) — apontavam para a Edge Function quebrada e não há rota no app.
 - [x] Croácia: `marina` sozinho não conta mais (nn-scheduled@1.1.0).
 - [x] Nenhum collection_job travado em running/queued.
+- [x] Teste real no site publicado: ES, HR, FR (1 novo) e IT (3 novos) — HTTP 200, itens seguem não revisados/internos.
+- [x] Alertas de segurança: restam só is_staff/is_staff_owner executáveis por usuários logados — necessário para as regras de acesso; retorna apenas se o próprio usuário é staff. Aceito.
 
 ## Pendências antigas
 - Itália (Normattiva): texto integral parcial.
