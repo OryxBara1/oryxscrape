@@ -243,16 +243,31 @@ export async function runGibraltarCollection(input: {
       try {
         const actHtml = await getText(act.url);
         const pdfUrl = pdfUrlFromActPage(actHtml);
-        if (!pdfUrl) throw new Error("No official PDF linked on the act page.");
 
-        const pdfResponse = await fetch(pdfUrl, {
-          headers: { "User-Agent": UA, Accept: "application/pdf,*/*;q=0.8" },
-          redirect: "follow",
-        });
-        if (!pdfResponse.ok) throw new Error(`HTTP ${pdfResponse.status} for the PDF`);
-        const bytes = new Uint8Array(await pdfResponse.arrayBuffer());
-        const content = await extractPdfText(bytes);
-        if (!content) throw new Error("PDF has no extractable text layer.");
+        let content = "";
+        let byteLength = 0;
+        let httpStatus: number | null = null;
+        let contentType: string | null = "text/html";
+
+        if (pdfUrl) {
+          const pdfResponse = await fetch(pdfUrl, {
+            headers: { "User-Agent": UA, Accept: "application/pdf,*/*;q=0.8" },
+            redirect: "follow",
+          });
+          if (!pdfResponse.ok) throw new Error(`HTTP ${pdfResponse.status} for the PDF`);
+          const bytes = new Uint8Array(await pdfResponse.arrayBuffer());
+          content = await extractPdfText(bytes);
+          byteLength = bytes.byteLength;
+          httpStatus = pdfResponse.status;
+          contentType = pdfResponse.headers.get("content-type");
+          if (!content) throw new Error("PDF has no extractable text layer.");
+        } else {
+          // Notices and appointments publish their text inline instead.
+          content = inlineTextFromActPage(actHtml);
+          byteLength = content.length;
+          httpStatus = 200;
+          if (content.length < 40) throw new Error("Act page has no PDF and no inline text.");
+        }
 
         const { error } = await supabase.from("raw_items").insert({
           job_id: job.id,
