@@ -8,13 +8,17 @@
 - `collection_method='sparql'` não existe no enum (apify, http, api, manual, parallel_extract) → usar 'api'.
 - `external_id`, `title`, `url`, `doc_type`, `tier`, `trust_tier` não são colunas de raw_items/normalized_items → CELEX e demais campos vão no payload JSONB.
 
+## Frente operacional (2026-09-28)
+- [x] Cron EUR-Lex (job 21) disparou sozinho em 28/09 06:00 UTC — HTTP 200.
+- [x] Jobs 11 (FR), 17 (IT), 18 (ES), 19 (HR) redirecionados da Edge Function `collect-documents` (timeout de 90s) para as rotas do app.
+- [x] Removidos jobs 12 (FR duplicado), 14 (PT), 15 (MT), 16 (CY), 20 (GR) — apontavam para a Edge Function quebrada e não há rota no app.
+- [x] Croácia: `marina` sozinho não conta mais (nn-scheduled@1.1.0).
+- [x] Nenhum collection_job travado em running/queued.
+
 ## Pendências antigas
-- Croácia: filtro `marina` (exigir segundo termo náutico) — não aplicado.
 - Itália (Normattiva): texto integral parcial.
-- Portugal (DRE): bloqueado por orçamento Apify.
+- Portugal (DRE): bloqueado por orçamento Apify. Malta/Chipre/Grécia sem rota agendada no app.
 - Brasil (DOU): ator ruidoso/caro.
-- 1 collection_job "running" travado.
-- `collect-documents` (Edge Function externa) sem gatilho/schedule neste projeto.
 
 ## Triagem EUR-Lex (/items)
 - [x] Curadoria em payload.curation (jurisdições, estado de aplicação, nota), auditada por mudança.
