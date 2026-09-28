@@ -312,6 +312,8 @@ export async function runEurlexCollection(
 
           const title = record.title?.trim() || record.celex;
           const titleMatch = record.title ? TITLE_KEYWORDS.test(record.title) : false;
+          const { fetchCellarText } = await import("./cellar.server");
+          const fullText = await fetchCellarText(record.celex);
 
           const { data: raw, error: rawError } = await supabase
             .from("raw_items")
@@ -325,6 +327,13 @@ export async function runEurlexCollection(
                 title_source: record.titleSource,
                 date: record.date,
                 cellar_work: record.work,
+                ...(fullText
+                  ? {
+                      plain_text: fullText.plain,
+                      text_url: fullText.url,
+                      text_truncated: fullText.truncated,
+                    }
+                  : {}),
               },
               content_hash: contentHash,
               collected_at: new Date().toISOString(),
@@ -335,7 +344,8 @@ export async function runEurlexCollection(
               institution_class: "intergovernmental",
               canonical_url: record.url,
               http_status: 200,
-              content_type: "application/sparql-results+json",
+              content_type: fullText ? "application/xhtml+xml" : "application/sparql-results+json",
+              payload_integrity: fullText ? (fullText.truncated ? "partial" : "verbatim") : "partial",
               language: "en",
               collector_version: EU_COLLECTOR_VERSION,
             })
