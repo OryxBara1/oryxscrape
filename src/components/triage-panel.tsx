@@ -174,6 +174,28 @@ export function TriagePanel({
         <Field label="Data até">
           <input type="date" className={inputClass} value={search.to ?? ""} onChange={(e) => onSearch({ to: e.target.value || undefined })} />
         </Field>
+        <Field label="Relevância mín.">
+          <select
+            className={inputClass}
+            value={search.minScore ?? ""}
+            onChange={(e) => onSearch({ minScore: e.target.value || undefined })}
+          >
+            <option value="">Qualquer</option>
+            <option value="0.7">≥ 0.7 — Alta</option>
+            <option value="0.5">≥ 0.5 — Média+</option>
+            <option value="0.3">≥ 0.3 — Mínima</option>
+          </select>
+        </Field>
+        <Field label="Ordenar por">
+          <select
+            className={inputClass}
+            value={search.sortByScore === "1" ? "score" : "date"}
+            onChange={(e) => onSearch({ sortByScore: e.target.value === "score" ? "1" : undefined })}
+          >
+            <option value="date">Data (padrão)</option>
+            <option value="score">Relevância ↓</option>
+          </select>
+        </Field>
       </div>
 
       {selected.size > 0 ? (
