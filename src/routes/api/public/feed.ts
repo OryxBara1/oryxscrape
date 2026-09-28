@@ -43,26 +43,35 @@ export const Route = createFileRoute("/api/public/feed")({
       GET: async ({ request }) => {
         try {
           const authHeader = request.headers.get("authorization") ?? "";
-          if (!authHeader.toLowerCase().startsWith("bearer ")) return unauthorized();
-          const rawKey = authHeader.slice(7).trim();
+          const rawKey = authHeader.toLowerCase().startsWith("bearer ")
+            ? authHeader.slice(7).trim()
+            : (request.headers.get("x-api-key") ?? "").trim();
           if (rawKey.length < 9) return unauthorized();
 
-          const prefix = rawKey.slice(0, 8);
+          // Namespaced keys (oxs_<prefix>_<secret>) store "oxs_<prefix>"; legacy keys use the first 8 chars.
+          const namespaced = rawKey.split("_");
+          const prefixes =
+            namespaced.length === 3 && namespaced[0] === "oxs" && namespaced[1]
+              ? [`oxs_${namespaced[1]}`]
+              : [rawKey.slice(0, 8), `oxs_${rawKey.slice(0, 8)}`];
           const hash = await sha256Hex(rawKey);
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-          // Match the stored prefix exactly, or the namespaced oxs_<prefix> form.
           const { data: keyRow, error: keyError } = await supabaseAdmin
             .from("consumer_keys")
-            .select("id, allowed_tags")
-            .in("key_prefix", [prefix, `oxs_${prefix}`])
+            .select(
+              "id, allowed_tags, profile_id, research_profiles(is_active, allowed_jurisdictions, allowed_tags, require_promotion)",
+            )
+            .in("key_prefix", prefixes)
             .eq("key_hash", hash)
             .eq("is_active", true)
             .is("revoked_at", null)
             .maybeSingle();
 
           if (keyError || !keyRow) return unauthorized();
+          const profile = keyRow.research_profiles;
+          if (!profile || !profile.is_active) return unauthorized();
 
           const url = new URL(request.url);
 
