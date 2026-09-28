@@ -111,7 +111,7 @@ export function parseTopicListing(
 /** Resolves the official PDF referenced by the act page's viewer iframe. */
 export function pdfUrlFromActPage(html: string): string | null {
   const match = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-  if (!match) return null;
+  if (!match?.[1]) return null;
   const src = decodeEntities(match[1]);
   const hash = src.indexOf("#");
   const target = hash >= 0 ? src.slice(hash + 1) : src;
