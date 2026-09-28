@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
+import { canonicalJurisdiction } from "./jurisdiction";
 
 export async function runNormalizeJob(input: {
   supabase: SupabaseClient<Database>;
@@ -64,6 +65,7 @@ export async function runNormalizeJob(input: {
       "";
     try {
       const doc = await normalizeWithLogoriOn({ sourceUrl: item.source_url, content });
+      doc.jurisdiction_hint = canonicalJurisdiction(doc.jurisdiction_hint, item.source_url);
       const { error } = await supabase.from("normalized_items").insert({
         raw_item_id: item.id,
         source_id: item.source_id,
