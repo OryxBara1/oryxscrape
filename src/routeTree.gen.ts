@@ -30,6 +30,7 @@ import { Route as ApiPublicCronCollectBrDouRouteImport } from './routes/api/publ
 import { Route as ApiPublicCronCollectEsBoeRouteImport } from './routes/api/public/cron/collect-es-boe'
 import { Route as ApiPublicCronCollectEuEurlexRouteImport } from './routes/api/public/cron/collect-eu-eurlex'
 import { Route as ApiPublicCronCollectFrLegifranceRouteImport } from './routes/api/public/cron/collect-fr-legifrance'
+import { Route as ApiPublicCronCollectGiLawsRouteImport } from './routes/api/public/cron/collect-gi-laws'
 import { Route as ApiPublicCronCollectGrFekRouteImport } from './routes/api/public/cron/collect-gr-fek'
 import { Route as ApiPublicCronCollectHrNnRouteImport } from './routes/api/public/cron/collect-hr-nn'
 import { Route as ApiPublicCronCollectItNormattivaRouteImport } from './routes/api/public/cron/collect-it-normattiva'
@@ -147,6 +148,12 @@ const ApiPublicCronCollectFrLegifranceRoute =
     path: '/api/public/cron/collect-fr-legifrance',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronCollectGiLawsRoute =
+  ApiPublicCronCollectGiLawsRouteImport.update({
+    id: '/api/public/cron/collect-gi-laws',
+    path: '/api/public/cron/collect-gi-laws',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronCollectGrFekRoute =
   ApiPublicCronCollectGrFekRouteImport.update({
     id: '/api/public/cron/collect-gr-fek',
@@ -209,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-eu-eurlex': typeof ApiPublicCronCollectEuEurlexRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-gi-laws': typeof ApiPublicCronCollectGiLawsRoute
   '/api/public/cron/collect-gr-fek': typeof ApiPublicCronCollectGrFekRoute
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
@@ -238,6 +246,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-eu-eurlex': typeof ApiPublicCronCollectEuEurlexRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-gi-laws': typeof ApiPublicCronCollectGiLawsRoute
   '/api/public/cron/collect-gr-fek': typeof ApiPublicCronCollectGrFekRoute
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
@@ -269,6 +278,7 @@ export interface FileRoutesById {
   '/api/public/cron/collect-es-boe': typeof ApiPublicCronCollectEsBoeRoute
   '/api/public/cron/collect-eu-eurlex': typeof ApiPublicCronCollectEuEurlexRoute
   '/api/public/cron/collect-fr-legifrance': typeof ApiPublicCronCollectFrLegifranceRoute
+  '/api/public/cron/collect-gi-laws': typeof ApiPublicCronCollectGiLawsRoute
   '/api/public/cron/collect-gr-fek': typeof ApiPublicCronCollectGrFekRoute
   '/api/public/cron/collect-hr-nn': typeof ApiPublicCronCollectHrNnRoute
   '/api/public/cron/collect-it-normattiva': typeof ApiPublicCronCollectItNormattivaRoute
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-eu-eurlex'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-gi-laws'
     | '/api/public/cron/collect-gr-fek'
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-eu-eurlex'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-gi-laws'
     | '/api/public/cron/collect-gr-fek'
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
@@ -359,6 +371,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-es-boe'
     | '/api/public/cron/collect-eu-eurlex'
     | '/api/public/cron/collect-fr-legifrance'
+    | '/api/public/cron/collect-gi-laws'
     | '/api/public/cron/collect-gr-fek'
     | '/api/public/cron/collect-hr-nn'
     | '/api/public/cron/collect-it-normattiva'
@@ -379,6 +392,7 @@ export interface RootRouteChildren {
   ApiPublicCronCollectEsBoeRoute: typeof ApiPublicCronCollectEsBoeRoute
   ApiPublicCronCollectEuEurlexRoute: typeof ApiPublicCronCollectEuEurlexRoute
   ApiPublicCronCollectFrLegifranceRoute: typeof ApiPublicCronCollectFrLegifranceRoute
+  ApiPublicCronCollectGiLawsRoute: typeof ApiPublicCronCollectGiLawsRoute
   ApiPublicCronCollectGrFekRoute: typeof ApiPublicCronCollectGrFekRoute
   ApiPublicCronCollectHrNnRoute: typeof ApiPublicCronCollectHrNnRoute
   ApiPublicCronCollectItNormattivaRoute: typeof ApiPublicCronCollectItNormattivaRoute
@@ -537,6 +551,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronCollectFrLegifranceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron/collect-gi-laws': {
+      id: '/api/public/cron/collect-gi-laws'
+      path: '/api/public/cron/collect-gi-laws'
+      fullPath: '/api/public/cron/collect-gi-laws'
+      preLoaderRoute: typeof ApiPublicCronCollectGiLawsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/cron/collect-gr-fek': {
       id: '/api/public/cron/collect-gr-fek'
       path: '/api/public/cron/collect-gr-fek'
@@ -631,6 +652,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCronCollectEsBoeRoute: ApiPublicCronCollectEsBoeRoute,
   ApiPublicCronCollectEuEurlexRoute: ApiPublicCronCollectEuEurlexRoute,
   ApiPublicCronCollectFrLegifranceRoute: ApiPublicCronCollectFrLegifranceRoute,
+  ApiPublicCronCollectGiLawsRoute: ApiPublicCronCollectGiLawsRoute,
   ApiPublicCronCollectGrFekRoute: ApiPublicCronCollectGrFekRoute,
   ApiPublicCronCollectHrNnRoute: ApiPublicCronCollectHrNnRoute,
   ApiPublicCronCollectItNormattivaRoute: ApiPublicCronCollectItNormattivaRoute,
