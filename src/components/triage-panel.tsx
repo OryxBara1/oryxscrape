@@ -225,7 +225,7 @@ export function TriagePanel({
       <p className="text-xs text-muted-foreground">{list.isLoading ? "Carregando…" : `${rows.length} item(s)`}</p>
 
       <DataTable
-        headers={["", "Ato", "Tipo / data", "Fonte", "Estado", "Escopo", ""]}
+        headers={["", "Ato", "Tipo / data", "Fonte", "Estado", "Score", "Escopo", ""]}
         loading={list.isLoading}
         empty={!list.isLoading && rows.length === 0}
       >
@@ -250,6 +250,23 @@ export function TriagePanel({
             <td className="px-4 py-3 text-xs text-muted-foreground">{r.domain ?? "—"}</td>
             <td className="px-4 py-3">
               <StatusBadge label={TRIAGE_LABELS[r.state]} tone={STATE_TONE[r.state]} />
+            </td>
+            <td className="px-4 py-3 text-center">
+              {r.relevanceScore != null ? (
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold ${
+                    r.relevanceScore >= 0.7
+                      ? "bg-green-500/20 text-green-400"
+                      : r.relevanceScore >= 0.4
+                        ? "bg-yellow-500/20 text-yellow-400"
+                        : "bg-red-500/20 text-red-400"
+                  }`}
+                >
+                  {r.relevanceScore.toFixed(2)}
+                </span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">—</span>
+              )}
             </td>
             <td className="px-4 py-3 text-[11px] text-muted-foreground">
               {r.curation?.applies_to_jurisdictions.join(", ") || "—"}
