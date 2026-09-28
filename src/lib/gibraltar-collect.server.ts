@@ -77,7 +77,7 @@ function decodeEntities(value: string): string {
 function cell(rowHtml: string, header: string): string | null {
   const pattern = new RegExp(`${header}\\s*<\\/h6>\\s*<p[^>]*>([\\s\\S]*?)<\\/p>`, "i");
   const match = rowHtml.match(pattern);
-  if (!match) return null;
+  if (!match?.[1]) return null;
   const value = decodeEntities(match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
   return value || null;
 }
