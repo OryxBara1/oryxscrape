@@ -53,3 +53,8 @@
 - [x] UK (legislation.gov.uk) agendado: terças 06:00 UTC
 - [x] NL (overheid.nl) agendado: terças 06:30 UTC; texto via repository.overheid.nl (zoek.* dá 403)
 - [x] EUR-Lex v1.3: texto integral via CELLAR em novos itens; itens antigos buscam o texto na hora (Capy/resumo)
+
+## GB→UK + Grécia (2026-09-28)
+- [x] GB unificado em UK (banco + coletor UK grava "UK")
+- [x] Grécia (ΦΕΚ) agendada: quartas 07:00 UTC (rota /api/public/cron/collect-gr-fek) — vale após publicar
+- [ ] Primeiro filhote comercial: adiado
