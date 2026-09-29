@@ -178,7 +178,10 @@ export const Route = createFileRoute("/api/public/feed")({
             payload: unknown; tags: string[] | null; traceability_level: string; institution_class: string;
             is_official_domain: boolean; is_primary_document: boolean; collected_at: string; reviewed_at: string | null;
           };
-          const items = ((data ?? []) as unknown as FeedRow[]).map((row) => {
+          const rawRows = (data ?? []) as unknown as FeedRow[];
+          // ascending mode fetched limit+1 rows; a full page means more rows follow
+          const pageRows = ascending && rawRows.length > limit ? rawRows.slice(0, limit) : rawRows;
+          const items = pageRows.map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
             const textContent =
               typeof payload["text"] === "string"
