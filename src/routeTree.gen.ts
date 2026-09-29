@@ -37,6 +37,7 @@ import { Route as ApiPublicCronCollectItNormattivaRouteImport } from './routes/a
 import { Route as ApiPublicCronCollectNlObkRouteImport } from './routes/api/public/cron/collect-nl-obk'
 import { Route as ApiPublicCronCollectUkLegislationRouteImport } from './routes/api/public/cron/collect-uk-legislation'
 import { Route as ApiPublicCronFinalizeRouteImport } from './routes/api/public/cron/finalize'
+import { Route as ApiPublicFeedStatsRouteImport } from './routes/api/public/feed.stats'
 import { Route as ApiPublicV1ItemsRouteImport } from './routes/api/public/v1/items'
 
 const IndexRoute = IndexRouteImport.update({
@@ -189,6 +190,11 @@ const ApiPublicCronFinalizeRoute = ApiPublicCronFinalizeRouteImport.update({
   path: '/api/public/cron/finalize',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicFeedStatsRoute = ApiPublicFeedStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => ApiPublicFeedRoute,
+} as any)
 const ApiPublicV1ItemsRoute = ApiPublicV1ItemsRouteImport.update({
   id: '/api/public/v1/items',
   path: '/api/public/v1/items',
@@ -209,7 +215,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
-  '/api/public/feed': typeof ApiPublicFeedRoute
+  '/api/public/feed': typeof ApiPublicFeedRouteWithChildren
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -223,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
+  '/api/public/feed/stats': typeof ApiPublicFeedStatsRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRoutesByTo {
@@ -239,7 +246,7 @@ export interface FileRoutesByTo {
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
-  '/api/public/feed': typeof ApiPublicFeedRoute
+  '/api/public/feed': typeof ApiPublicFeedRouteWithChildren
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -253,6 +260,7 @@ export interface FileRoutesByTo {
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
+  '/api/public/feed/stats': typeof ApiPublicFeedStatsRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRoutesById {
@@ -271,7 +279,7 @@ export interface FileRoutesById {
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/_authenticated/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
-  '/api/public/feed': typeof ApiPublicFeedRoute
+  '/api/public/feed': typeof ApiPublicFeedRouteWithChildren
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
   '/api/public/cron/collect-br-dou': typeof ApiPublicCronCollectBrDouRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/api/public/cron/collect-nl-obk': typeof ApiPublicCronCollectNlObkRoute
   '/api/public/cron/collect-uk-legislation': typeof ApiPublicCronCollectUkLegislationRoute
   '/api/public/cron/finalize': typeof ApiPublicCronFinalizeRoute
+  '/api/public/feed/stats': typeof ApiPublicFeedStatsRoute
   '/api/public/v1/items': typeof ApiPublicV1ItemsRoute
 }
 export interface FileRouteTypes {
@@ -317,6 +326,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
+    | '/api/public/feed/stats'
     | '/api/public/v1/items'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
+    | '/api/public/feed/stats'
     | '/api/public/v1/items'
   id:
     | '__root__'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/api/public/cron/collect-nl-obk'
     | '/api/public/cron/collect-uk-legislation'
     | '/api/public/cron/finalize'
+    | '/api/public/feed/stats'
     | '/api/public/v1/items'
   fileRoutesById: FileRoutesById
 }
@@ -385,7 +397,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicFeedRoute: typeof ApiPublicFeedRoute
+  ApiPublicFeedRoute: typeof ApiPublicFeedRouteWithChildren
   ApiRunCollectSourcesRoute: typeof ApiRunCollectSourcesRoute
   ApiPublicCronCollectRoute: typeof ApiPublicCronCollectRoute
   ApiPublicCronCollectBrDouRoute: typeof ApiPublicCronCollectBrDouRoute
@@ -600,6 +612,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronFinalizeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/feed/stats': {
+      id: '/api/public/feed/stats'
+      path: '/stats'
+      fullPath: '/api/public/feed/stats'
+      preLoaderRoute: typeof ApiPublicFeedStatsRouteImport
+      parentRoute: typeof ApiPublicFeedRoute
+    }
     '/api/public/v1/items': {
       id: '/api/public/v1/items'
       path: '/api/public/v1/items'
@@ -641,11 +660,23 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ApiPublicFeedRouteChildren {
+  ApiPublicFeedStatsRoute: typeof ApiPublicFeedStatsRoute
+}
+
+const ApiPublicFeedRouteChildren: ApiPublicFeedRouteChildren = {
+  ApiPublicFeedStatsRoute: ApiPublicFeedStatsRoute,
+}
+
+const ApiPublicFeedRouteWithChildren = ApiPublicFeedRoute._addFileChildren(
+  ApiPublicFeedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicFeedRoute: ApiPublicFeedRoute,
+  ApiPublicFeedRoute: ApiPublicFeedRouteWithChildren,
   ApiRunCollectSourcesRoute: ApiRunCollectSourcesRoute,
   ApiPublicCronCollectRoute: ApiPublicCronCollectRoute,
   ApiPublicCronCollectBrDouRoute: ApiPublicCronCollectBrDouRoute,

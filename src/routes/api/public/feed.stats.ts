@@ -70,8 +70,8 @@ export const Route = createFileRoute("/api/public/feed/stats")({
               .from("normalized_items")
               .select(
                 profile.require_promotion
-                  ? "id, normalized_item_profile_exposure!inner(profile_id, promoted)"
-                  : "id",
+                  ? "id, updated_at, normalized_item_profile_exposure!inner(profile_id, promoted)"
+                  : "id, updated_at",
                 head ? { count: "exact", head: true } : undefined,
               )
               .eq("publication_status", "eligible");
