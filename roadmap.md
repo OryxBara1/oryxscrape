@@ -71,6 +71,6 @@
 - [ ] Enriquecer as 362 GI pendentes com LogoriOn (botão em /review, 5 por clique) e triagem humana
 
 ## Sync de consumidores (2026-09-29)
-- [ ] Fase 1: feed com order=asc + next_since (keyset por updated_at) para sync incremental seguro
-- [ ] Fase 2: GET /api/public/feed/stats (total_eligible, last_updated_at) escopado pela chave
+- [x] Fase 1: feed com order=asc + next_since (keyset por updated_at) para sync incremental seguro
+- [x] Fase 2: GET /api/public/feed/stats (total_eligible, last_updated_at) escopado pela chave
 - [ ] Fase 3 (adiada): notify_url/notify_secret em consumer_keys + webhook assinado
