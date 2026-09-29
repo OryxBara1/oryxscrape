@@ -16,7 +16,7 @@ export const APPLICATION_LABELS: Record<ApplicationStatus, string> = {
   not_applicable: "Não aplicável",
 };
 
-export const COVERED_JURISDICTIONS = ["ES", "FR", "IT", "HR", "PT", "GR", "MT", "CY", "NL", "DE"] as const;
+export const COVERED_JURISDICTIONS = ["ES", "FR", "IT", "HR", "PT", "GR", "MT", "CY", "NL", "DE", "UK", "GI"] as const;
 
 export type Curation = {
   schema_version: 1;
