@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 import { sha256Hex } from "./consumer-keys.server";
+import { extractWithParallel, looksLikeSpaShell, PARALLEL_COLLECTOR_VERSION } from "./parallel-fetch.server";
 
 export const PDF_COLLECTOR_VERSION = "http-pdf-fetch@1.0.0";
 export const HTML_COLLECTOR_VERSION = "http-html-fetch@1.0.0";
