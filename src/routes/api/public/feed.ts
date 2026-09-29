@@ -177,6 +177,7 @@ export const Route = createFileRoute("/api/public/feed")({
             id: string; source_url: string; jurisdiction_hint: string | null; category: string | null;
             payload: unknown; tags: string[] | null; traceability_level: string; institution_class: string;
             is_official_domain: boolean; is_primary_document: boolean; collected_at: string; reviewed_at: string | null;
+            updated_at: string;
           };
           const rawRows = (data ?? []) as unknown as FeedRow[];
           // ascending mode fetched limit+1 rows; a full page means more rows follow

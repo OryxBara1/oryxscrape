@@ -101,10 +101,11 @@ export const Route = createFileRoute("/api/public/feed/stats")({
             return jsonError(500, "Internal server error");
           }
 
+          const latestRows = (latest ?? []) as unknown as { updated_at: string }[];
           return Response.json(
             {
               total_eligible: count ?? 0,
-              last_updated_at: latest?.[0]?.updated_at ?? null,
+              last_updated_at: latestRows[0]?.updated_at ?? null,
             },
             { headers: { "Cache-Control": "no-store" } },
           );
