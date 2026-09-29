@@ -126,6 +126,14 @@ export const Route = createFileRoute("/api/public/feed")({
             offset = parsed;
           }
 
+          // order=asc enables safe incremental sync: ascending by (updated_at, id),
+          // response carries next_since for the consumer to pass back as ?since=...
+          const orderParam = url.searchParams.get("order");
+          if (orderParam !== null && orderParam !== "asc" && orderParam !== "desc") {
+            return jsonError(400, "invalid order");
+          }
+          const ascending = orderParam === "asc";
+
           // --- data query ---
           const baseCols =
             "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at";
