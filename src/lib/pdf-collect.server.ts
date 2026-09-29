@@ -128,13 +128,31 @@ export async function runPdfCollection(input: {
         }
         const bytes = new Uint8Array(await response.arrayBuffer());
         const isPdf = looksLikePdf(bytes, contentType);
-        const content = isPdf
-          ? await extractPdfText(bytes)
-          : extractHtmlText(new TextDecoder("utf-8").decode(bytes));
-        if (!content) {
-          throw new Error(
-            isPdf ? "PDF has no extractable text layer." : "Document has no extractable text.",
-          );
+        let content: string;
+        let usedParallel = false;
+        let parallelTitle: string | null = null;
+
+        if (isPdf) {
+          content = await extractPdfText(bytes);
+          if (!content) throw new Error("PDF has no extractable text layer.");
+        } else {
+          const rawHtml = new TextDecoder("utf-8").decode(bytes);
+          const htmlText = extractHtmlText(rawHtml);
+          if (htmlText.length >= 1000) {
+            content = htmlText;
+          } else {
+            // Short HTML means likely an SPA shell (e.g. DRE Portugal OutSystems pages).
+            // Fall back to Parallel.ai which renders the page fully.
+            console.log(`[pdf-collect] SPA shell detected (${htmlText.length} chars), retrying with Parallel.ai: ${target.url}`);
+            const parallelResult = await extractWithParallel(
+              target.url,
+              `Extract the full text of this regulatory document from ${target.url}.`,
+            );
+            content = parallelResult.text;
+            usedParallel = true;
+            parallelTitle = parallelResult.title;
+            if (!content) throw new Error("Document has no extractable text (SPA shell, Parallel.ai returned empty).");
+          }
         }
 
 
@@ -142,18 +160,19 @@ export async function runPdfCollection(input: {
           job_id: job.id,
           source_id: source.id,
           source_url: target.url,
-          raw_payload: {
-            plain_text: content,
-            document_label: label,
-            byte_length: bytes.byteLength,
-            ...(target.concept_label
-              ? {
-                  concept_label: target.concept_label,
-                  concept_code: target.concept_code ?? null,
-                  concept_query: target.concept_query ?? null,
-                }
-              : {}),
-          } as unknown as never,
+        raw_payload: {
+          plain_text: content,
+          document_label: label,
+          ...(usedParallel ? { parallel_title: parallelTitle, extraction_method: "parallel_extract" } : {}),
+          byte_length: bytes.byteLength,
+          ...(target.concept_label
+            ? {
+                concept_label: target.concept_label,
+                concept_code: target.concept_code ?? null,
+                concept_query: target.concept_query ?? null,
+              }
+            : {}),
+        } as unknown as never,
           content_hash: await sha256Hex(content),
           collected_at: new Date().toISOString(),
           collection_method: "http",
