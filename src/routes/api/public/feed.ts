@@ -209,12 +209,17 @@ export const Route = createFileRoute("/api/public/feed")({
           });
 
           const total = count ?? items.length;
+          const lastRow = pageRows[pageRows.length - 1];
           return Response.json(
             {
               items,
               count: items.length,
               total,
-              has_more: offset + items.length < total,
+              has_more: ascending
+                ? rawRows.length > limit
+                : offset + items.length < total,
+              // incremental sync checkpoint: pass back as ?since=... on the next call
+              next_since: ascending && lastRow ? lastRow.updated_at : null,
               offset,
               limit,
             },
