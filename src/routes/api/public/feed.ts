@@ -171,8 +171,8 @@ export const Route = createFileRoute("/api/public/feed")({
           const items = ((data ?? []) as unknown as FeedRow[]).map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
             const textContent =
-              typeof payload["text_content"] === "string"
-                ? (payload["text_content"] as string)
+              typeof payload["text"] === "string"
+                ? (payload["text"] as string)
                 : typeof payload["plain_text"] === "string"
                   ? (payload["plain_text"] as string)
                   : null;
