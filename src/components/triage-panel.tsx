@@ -131,7 +131,7 @@ export function TriagePanel({
           <select className={inputClass} value={search.jur ?? ""} onChange={(e) => onSearch({ jur: e.target.value || undefined })}>
             <option value="">Todas</option>
             <option value="EU">EU (supranacional)</option>
-            {["ES", "FR", "IT", "HR", "PT", "GR", "MT", "CY", "NL", "DE", "GB", "BR"].map((j) => (
+            {["ES", "FR", "IT", "HR", "PT", "GR", "MT", "CY", "NL", "DE", "UK", "GI", "BR"].map((j) => (
               <option key={j} value={j}>{j}</option>
             ))}
           </select>
