@@ -146,8 +146,10 @@ export const Route = createFileRoute("/api/public/feed")({
               { count: "exact" },
             )
             .eq("publication_status", "eligible")
-            .order("updated_at", { ascending: false })
-            .range(offset, offset + limit - 1);
+            .order("updated_at", { ascending })
+            .order("id", { ascending: true })
+            // ascending mode over-fetches one row to detect a following page
+            .range(offset, offset + (ascending ? limit : limit - 1));
 
           if (profile.require_promotion) {
             query = query
