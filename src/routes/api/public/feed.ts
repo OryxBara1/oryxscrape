@@ -126,6 +126,14 @@ export const Route = createFileRoute("/api/public/feed")({
             offset = parsed;
           }
 
+          // order=asc enables safe incremental sync: ascending by (updated_at, id),
+          // response carries next_since for the consumer to pass back as ?since=...
+          const orderParam = url.searchParams.get("order");
+          if (orderParam !== null && orderParam !== "asc" && orderParam !== "desc") {
+            return jsonError(400, "invalid order");
+          }
+          const ascending = orderParam === "asc";
+
           // --- data query ---
           const baseCols =
             "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at";
@@ -138,8 +146,10 @@ export const Route = createFileRoute("/api/public/feed")({
               { count: "exact" },
             )
             .eq("publication_status", "eligible")
-            .order("updated_at", { ascending: false })
-            .range(offset, offset + limit - 1);
+            .order("updated_at", { ascending })
+            .order("id", { ascending: true })
+            // ascending mode over-fetches one row to detect a following page
+            .range(offset, offset + (ascending ? limit : limit - 1));
 
           if (profile.require_promotion) {
             query = query
@@ -167,8 +177,12 @@ export const Route = createFileRoute("/api/public/feed")({
             id: string; source_url: string; jurisdiction_hint: string | null; category: string | null;
             payload: unknown; tags: string[] | null; traceability_level: string; institution_class: string;
             is_official_domain: boolean; is_primary_document: boolean; collected_at: string; reviewed_at: string | null;
+            updated_at: string;
           };
-          const items = ((data ?? []) as unknown as FeedRow[]).map((row) => {
+          const rawRows = (data ?? []) as unknown as FeedRow[];
+          // ascending mode fetched limit+1 rows; a full page means more rows follow
+          const pageRows = ascending && rawRows.length > limit ? rawRows.slice(0, limit) : rawRows;
+          const items = pageRows.map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
             const textContent =
               typeof payload["text"] === "string"
@@ -196,12 +210,17 @@ export const Route = createFileRoute("/api/public/feed")({
           });
 
           const total = count ?? items.length;
+          const lastRow = pageRows[pageRows.length - 1];
           return Response.json(
             {
               items,
               count: items.length,
               total,
-              has_more: offset + items.length < total,
+              has_more: ascending
+                ? rawRows.length > limit
+                : offset + items.length < total,
+              // incremental sync checkpoint: pass back as ?since=... on the next call
+              next_since: ascending && lastRow ? lastRow.updated_at : null,
               offset,
               limit,
             },

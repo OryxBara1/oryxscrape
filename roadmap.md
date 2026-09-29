@@ -69,3 +69,8 @@
 - [x] Agenda semanal: Laws of Gibraltar quartas 07:30 UTC (/api/public/cron/collect-gi-laws); Port Authority na coleta agendada geral
 - [x] Backfill GI concluído: 358 normas marítimas (1 PDF sem texto legível fica de fora)
 - [ ] Enriquecer as 362 GI pendentes com LogoriOn (botão em /review, 5 por clique) e triagem humana
+
+## Sync de consumidores (2026-09-29)
+- [x] Fase 1: feed com order=asc + next_since (keyset por updated_at) para sync incremental seguro
+- [x] Fase 2: GET /api/public/feed/stats (total_eligible, last_updated_at) escopado pela chave
+- [ ] Fase 3 (adiada): notify_url/notify_secret em consumer_keys + webhook assinado
