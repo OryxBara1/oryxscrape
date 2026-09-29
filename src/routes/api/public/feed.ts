@@ -170,6 +170,13 @@ export const Route = createFileRoute("/api/public/feed")({
           };
           const items = ((data ?? []) as unknown as FeedRow[]).map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
+            const textContent =
+              typeof payload["text_content"] === "string"
+                ? (payload["text_content"] as string)
+                : typeof payload["plain_text"] === "string"
+                  ? (payload["plain_text"] as string)
+                  : null;
+
             return {
               id: row.id,
               source_url: row.source_url,
@@ -177,6 +184,7 @@ export const Route = createFileRoute("/api/public/feed")({
               category: row.category,
               title: typeof payload["title"] === "string" ? (payload["title"] as string) : null,
               doc_type: typeof payload["doc_type"] === "string" ? (payload["doc_type"] as string) : null,
+              text: textContent,
               tags: row.tags ?? [],
               traceability_level: row.traceability_level,
               institution_class: row.institution_class,
