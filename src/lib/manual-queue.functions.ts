@@ -8,15 +8,15 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 export const MANUAL_UPLOAD_COLLECTOR_VERSION = "manual-upload@1.0.0";
 
-async function assertStaff(supabase: {
-  rpc: (fn: string) => Promise<{ data: unknown; error: { message: string } | null }>;
-}) {
+async function assertStaff(supabase: SupabaseClient<Database>) {
   const { data, error } = await supabase.rpc("is_staff");
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Staff access required.");
