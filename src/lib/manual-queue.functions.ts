@@ -137,8 +137,9 @@ export const submitManualUpload = createServerFn({ method: "POST" })
       .select("id")
       .eq("supersedes_raw_item_id", blocked.id)
       .limit(1);
-    if (existingSupersede?.length) {
-      return { outcome: "already_uploaded" as const, rawItemId: existingSupersede[0].id };
+    const priorUpload = existingSupersede?.[0];
+    if (priorUpload) {
+      return { outcome: "already_uploaded" as const, rawItemId: priorUpload.id };
     }
 
     const { sha256Hex } = await import("./consumer-keys.server");
@@ -146,8 +147,8 @@ export const submitManualUpload = createServerFn({ method: "POST" })
 
     const blockedPayload = (blocked.raw_payload ?? {}) as Record<string, unknown>;
     const jurisdictionHint =
-      typeof blockedPayload.jurisdiction_hint === "string"
-        ? (blockedPayload.jurisdiction_hint as string)
+      typeof blockedPayload["jurisdiction_hint"] === "string"
+        ? (blockedPayload["jurisdiction_hint"] as string)
         : null;
 
     const now = new Date().toISOString();
