@@ -23,6 +23,7 @@ import { Route as AuthenticatedProfilesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as AuthenticatedAdminLegacyAuditRouteImport } from './routes/_authenticated/admin.legacy-audit'
+import { Route as AuthenticatedAdminManualQueueRouteImport } from './routes/_authenticated/admin.manual-queue'
 import { Route as ApiPublicFeedRouteImport } from './routes/api/public/feed'
 import { Route as ApiRunCollectSourcesRouteImport } from './routes/api/run/collect-sources'
 import { Route as ApiPublicCronCollectRouteImport } from './routes/api/public/cron/collect'
@@ -108,6 +109,12 @@ const AuthenticatedAdminLegacyAuditRoute =
   AuthenticatedAdminLegacyAuditRouteImport.update({
     id: '/admin/legacy-audit',
     path: '/admin/legacy-audit',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminManualQueueRoute =
+  AuthenticatedAdminManualQueueRouteImport.update({
+    id: '/admin/manual-queue',
+    path: '/admin/manual-queue',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const ApiPublicFeedRoute = ApiPublicFeedRouteImport.update({
@@ -215,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
+  '/admin/manual-queue': typeof AuthenticatedAdminManualQueueRoute
   '/api/public/feed': typeof ApiPublicFeedRouteWithChildren
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
@@ -246,6 +254,7 @@ export interface FileRoutesByTo {
   '/review': typeof AuthenticatedReviewRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
+  '/admin/manual-queue': typeof AuthenticatedAdminManualQueueRoute
   '/api/public/feed': typeof ApiPublicFeedRouteWithChildren
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
@@ -279,6 +288,7 @@ export interface FileRoutesById {
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/_authenticated/admin/legacy-audit': typeof AuthenticatedAdminLegacyAuditRoute
+  '/_authenticated/admin/manual-queue': typeof AuthenticatedAdminManualQueueRoute
   '/api/public/feed': typeof ApiPublicFeedRouteWithChildren
   '/api/run/collect-sources': typeof ApiRunCollectSourcesRoute
   '/api/public/cron/collect': typeof ApiPublicCronCollectRoute
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sources'
     | '/admin/legacy-audit'
+    | '/admin/manual-queue'
     | '/api/public/feed'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
@@ -343,6 +354,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sources'
     | '/admin/legacy-audit'
+    | '/admin/manual-queue'
     | '/api/public/feed'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
@@ -375,6 +387,7 @@ export interface FileRouteTypes {
     | '/_authenticated/review'
     | '/_authenticated/sources'
     | '/_authenticated/admin/legacy-audit'
+    | '/_authenticated/admin/manual-queue'
     | '/api/public/feed'
     | '/api/run/collect-sources'
     | '/api/public/cron/collect'
@@ -514,6 +527,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminLegacyAuditRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/manual-queue': {
+      id: '/_authenticated/admin/manual-queue'
+      path: '/admin/manual-queue'
+      fullPath: '/admin/manual-queue'
+      preLoaderRoute: typeof AuthenticatedAdminManualQueueRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/feed': {
       id: '/api/public/feed'
       path: '/api/public/feed'
@@ -641,6 +661,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
   AuthenticatedSourcesRoute: typeof AuthenticatedSourcesRoute
   AuthenticatedAdminLegacyAuditRoute: typeof AuthenticatedAdminLegacyAuditRoute
+  AuthenticatedAdminManualQueueRoute: typeof AuthenticatedAdminManualQueueRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -655,6 +676,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedReviewRoute: AuthenticatedReviewRoute,
   AuthenticatedSourcesRoute: AuthenticatedSourcesRoute,
   AuthenticatedAdminLegacyAuditRoute: AuthenticatedAdminLegacyAuditRoute,
+  AuthenticatedAdminManualQueueRoute: AuthenticatedAdminManualQueueRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

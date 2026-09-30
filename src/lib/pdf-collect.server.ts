@@ -13,8 +13,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
 
+import { recordBlockedItem } from "./blocked-items.server";
 import { sha256Hex } from "./consumer-keys.server";
 import { extractWithParallel, looksLikeSpaShell, PARALLEL_COLLECTOR_VERSION } from "./parallel-fetch.server";
+
+/** Errors that mean "no automated collector can get this URL" → manual queue. */
+function isBlockingError(message: string): boolean {
+  return (
+    /HTTP (401|403|407)/.test(message) ||
+    /SSL|certificate|handshake/i.test(message) ||
+    /timeout|timed out/i.test(message) ||
+    /no extractable text/i.test(message)
+  );
+}
 
 export const PDF_COLLECTOR_VERSION = "http-pdf-fetch@1.0.0";
 export const HTML_COLLECTOR_VERSION = "http-html-fetch@1.0.0";
@@ -216,6 +227,21 @@ export async function runPdfCollection(input: {
         failed += 1;
         const message = (error as Error).message;
         console.error("[pdf-collect] failed", target.url, message);
+        if (isBlockingError(message)) {
+          // URL is unreachable for every automated collector — send it to the
+          // Manual Upload Queue instead of dropping it. Never fails the job.
+          try {
+            await recordBlockedItem({
+              supabase,
+              source,
+              url: target.url,
+              error: message,
+              jobId: job.id,
+            });
+          } catch (blockError) {
+            console.error("[pdf-collect] blocked-record failed", target.url, (blockError as Error).message);
+          }
+        }
         perTarget.push({
           url: target.url,
           document_label: label,

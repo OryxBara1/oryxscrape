@@ -9,6 +9,7 @@ import {
   KeyRound,
   ScrollText,
   Share2,
+  Upload,
   BookMarked,
   LogOut,
   Users,
@@ -25,6 +26,7 @@ const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
   { to: "/review", label: "Review", icon: ClipboardCheck },
   { to: "/sources", label: "Sources", icon: Globe2 },
   { to: "/jobs", label: "Collection jobs", icon: Boxes },
+  { to: "/admin/manual-queue", label: "Manual queue", icon: Upload },
   { to: "/items", label: "Advanced Review", icon: Database },
   { to: "/audit", label: "Audit log", icon: ScrollText },
   { to: "/admin/legacy-audit", label: "Legacy audit", icon: ArchiveRestore },
@@ -37,11 +39,11 @@ const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
 const GROUPS: NavGroupData[] = [
   {
     heading: "Pipeline",
-    items: NAV.slice(0, 7).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
+    items: NAV.slice(0, 8).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
   },
   {
     heading: "Delivery",
-    items: NAV.slice(7).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
+    items: NAV.slice(8).map((n) => ({ id: n.to, title: n.label, icon: n.icon })),
   },
 ];
 
