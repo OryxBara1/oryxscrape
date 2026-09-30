@@ -67,10 +67,11 @@ export const listBlockedItems = createServerFn({ method: "GET" })
         collectedAt: r.collected_at,
         collectionMethod: r.collection_method,
         jurisdictionHint:
-          typeof r.raw_payload?.jurisdiction_hint === "string"
-            ? (r.raw_payload.jurisdiction_hint as string)
+          typeof r.raw_payload?.["jurisdiction_hint"] === "string"
+            ? (r.raw_payload["jurisdiction_hint"] as string)
             : null,
-        error: typeof r.raw_payload?.error === "string" ? (r.raw_payload.error as string) : null,
+        error:
+          typeof r.raw_payload?.["error"] === "string" ? (r.raw_payload["error"] as string) : null,
       }));
   });
 
