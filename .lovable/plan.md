@@ -1,45 +1,48 @@
-# Consumer sync: architecture review and recommendation
+# Manual Upload Queue
 
-## Current state (verified)
-
-1. **Webhook column:** `consumer_keys` has no `webhook_url` / `notify_url`. It has `consumer_app`, `profile_id`, `allowed_tags`, `is_active`, `last_used_at`, `revoked_at`. OryxScrape cannot push anything to consumers today.
-2. **Stats endpoint:** none exists. The only consumer endpoints are `/api/public/feed` and the older `/api/public/v1/items`.
-3. **`since` on the feed:** already supported. `?since=<ISO>` filters `updated_at > since`. Because `set_normalized_items_updated_at` bumps `updated_at` on every update, an item moving to `eligible` gets a fresh timestamp, so `since` catches newly published items as well as edits.
-
-### Gap in the existing `since`
-The feed sorts `updated_at DESC` and pages with `offset`. That is fine for browsing but unsafe for incremental sync: if items change while a consumer pages through, rows shift between pages and some get skipped. A consumer also cannot tell a new item from an edited one, and it never learns about items that were withdrawn (moved back to `internal_only` or rejected).
-
-The main bug you found is on the AuraMaris side (its sync only updates existing rows and never inserts). No OryxScrape change fixes that. AuraMaris needs to upsert by `id`.
-
-## Recommendation
-
-Make pull reliable first. Add push later, and only as a wake-up signal.
-
-**Phase 1 (do now): stable incremental pull on `/api/public/feed`**
-- Add `order=asc` (the default for incremental use) plus a keyset cursor: `next_cursor` = (updated_at, id). The same pattern already works in `/v1/items`.
-- Return `next_since` = the last item's `updated_at` so the consumer can store its checkpoint.
-- Keep `offset` and `DESC` for backward compatibility.
-- Consumer loop: store `next_since` → call `?since=X&order=asc` every N minutes → upsert by `id` → repeat while `has_more`.
-
-**Phase 2 (do now, small): cheap change detection**
-- `GET /api/public/feed/stats` (same auth, same profile scoping): `{ total_eligible, last_updated_at }`.
-- The consumer polls this every few minutes and fetches the feed only when `last_updated_at` is newer than its checkpoint. This answers question 2, and it should respect the key's scope rather than being fully public.
-
-**Phase 3 (optional, later): webhook notification**
-- Add `notify_url` and a `notify_secret` per consumer key (the secret signs the payload with HMAC; it is never returned by the API).
-- Trigger it with a Supabase Database Webhook on `normalized_items` updates to `eligible`, which calls an internal server route. The route debounces and batches (for example, at most one notification per consumer per 5 minutes) and POSTs `{ event: "new_items", count, since }`, signed.
-- The payload carries no document data. The consumer still pulls through the feed, so a missed webhook costs only latency, never data.
-- Reason to defer: it adds retry, signing and delivery tracking for a single consumer, and Phase 1+2 polling already gives delivery within minutes.
+A staff screen listing documents our collectors could not download. Staff download each file in their own browser, upload it here, and it goes into the normal pipeline. Review stays human: nothing is approved or published automatically.
 
 ## Answers to your questions
-1. There is no webhook column. It is worth adding later (Phase 3) as a signed, data-free ping, not as the main sync mechanism.
-2. Yes, but scoped to the key, not public. It is the cheapest win.
-3. `since` already exists. It needs ascending order and a cursor to be safe for incremental sync.
 
-## Out of scope for OryxScrape
-- Fixing AuraMaris's sync to insert new items (upsert by `id`) and to schedule it instead of relying on a button click.
-- Tombstones for withdrawn items: I suggest a follow-up that adds `?include_withdrawn=true`, returning `{ id, withdrawn: true }`.
+1. **Does `item_status` include `'blocked'`?** No. Current values are `collected, failed, pending, superseded`. One migration adds it: `ALTER TYPE public.item_status_type ADD VALUE 'blocked';`. `'failed'` exists but has never meant "needs a manual upload", so the queue uses only `'blocked'`.
+2. **Is `unpdf` available?** Yes, `unpdf ^1.8.1` is already installed. The Gibraltar and PDF collectors use it on the server. It also runs in the browser, so no new package is needed for PDFs.
+3. **How is normalization triggered?** Collectors do not trigger it. Normalization runs as a separate staff step: `runNormalizeJob` (per job, in `normalize.server.ts`, called from `collection.functions.ts`), which calls `normalizeWithLogoriOn` and inserts `normalized_items`. The review and legacy screens also call `normalizeWithLogoriOn` directly for single items. The upload flow will call `normalizeWithLogoriOn` for the one new raw item and use the same insert fields as `runNormalizeJob`. The new item starts as `unreviewed` / `internal_only`.
+4. **Is there a storage bucket?** No bucket exists. The MVP handles files in the browser only. Text is extracted in the browser and only the text goes to the server. The original file is not stored. The trade-off: no file copy is kept for audit. A private bucket can be added later.
+5. **Where does it go in the sidebar?** Right after "Collection jobs" in the operations group, labeled "Manual queue". It will live at `/admin/manual-queue`, next to the existing `/admin/legacy-audit` screen.
 
-## Technical notes
-- Files: `src/routes/api/public/feed.ts` (order/cursor/next_since) and a new `src/routes/api/public/feed.stats.ts`. The cursor helpers already exist in `consumer-keys.server.ts`.
-- Phase 3 needs a migration that adds nullable columns to `consumer_keys`, plus a route under `/api/public/hooks/`.
+## Corrections to the spec (these follow the project's rules)
+
+- **`raw_items` is immutable.** The project's rules say raw items are never changed, and the database only allows inserting and reading them. So the upload does **not** update the blocked record. It **inserts a new raw item** with `supersedes_raw_item_id` pointing to the blocked record. The queue hides blocked records that already have a replacement, so the full history stays in place.
+- The field names differ from the spec. Here is how they map:
+  - `payload` → `raw_payload`
+  - `payload_integrity_type` → `payload_integrity`
+  - `jurisdiction_hint` is not a column on `raw_items`. It will be stored as `raw_payload.jurisdiction_hint` on blocked records and shown from there.
+- The new raw item uses `raw_payload = { text, plain_text, jurisdiction_hint, original_filename, upload_mime, blocked_error }`, plus `collection_method = 'manual'`, `payload_integrity = 'verbatim'`, `item_status = 'collected'`, `collector_version = 'manual-upload@1.0.0'` and `content_hash = sha256(text)`. The source's facts (official domain, traceability, and so on) are copied from `sources`.
+- The Sources screen is at `/sources`, not `/admin/sources`. The "Add to queue" button goes there.
+
+## What gets built
+
+1. **Migration:** add the `'blocked'` value to `item_status_type`. No other schema changes are needed; existing staff insert and read permissions already cover this.
+2. **Server functions** in `src/lib/manual-queue.functions.ts`, staff-only through the existing auth middleware and `is_staff` check:
+   - `listBlockedItems`: blocked raw items with no superseding row, joined to the source name, newest first.
+   - `addBlockedItem({ sourceId, url, jurisdiction, note })`: inserts a blocked raw item with `raw_payload = { error: 'manual_queue', attempted_at, jurisdiction_hint }`. The hash comes from url + timestamp to avoid the unique index.
+   - `submitManualUpload({ blockedId, text, filename, mime })`: inserts the replacement raw item, then normalizes it with LogoriOn if no normalized item exists yet. If the text duplicates an existing document, it reports "already in pipeline" instead of failing. If LogoriOn fails, the raw item is kept and a warning comes back, so normalization can be retried from Jobs.
+3. **Helper** `src/lib/blocked-items.server.ts`: `recordBlockedItem(supabase, { source, url, error, jurisdiction })`, shared by collectors.
+4. **Collector hook (limited to the MVP):** wire `recordBlockedItem` into the generic direct-download collector (`pdf-collect.server.ts`) for 403, 401, SSL, timeout and empty-extraction failures. Other collectors can adopt the helper later without further design work.
+5. **Screen** `src/routes/_authenticated/admin.manual-queue.tsx`:
+   - Columns: Source, URL (opens in a new tab), Jurisdiction, Collected at, Method, Error, and an "Upload file" button. Styling matches the existing dark glass design.
+   - The upload dialog shows the link and the instruction "Open this link in your browser, download the file, then upload it here."
+   - It accepts PDF, HTML, TXT and DOCX:
+     - PDF: text extracted in the browser with `unpdf`.
+     - HTML: tags stripped.
+     - TXT: read as plain text.
+     - DOCX: shows "not supported yet — save as PDF" in the MVP.
+   - It previews the first 500 characters and the total length, and blocks files with empty text.
+   - "Insert into pipeline" runs the upload, then shows a success message and refreshes the list.
+6. **Sources screen:** an "Add to queue" button per source that opens a small form (URL, jurisdiction, note).
+7. **Sidebar:** add a "Manual queue" entry.
+8. Update `roadmap.md` and `_CONVENCAO.md` to add the `blocked` status and the supersede rule.
+
+## Out of scope
+
+Keeping the original file in storage, a DOCX parser, and blocked-item hooks in every country collector.
