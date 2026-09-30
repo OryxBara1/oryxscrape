@@ -83,3 +83,9 @@
 - [x] Fase 1: feed com order=asc + next_since (keyset por updated_at) para sync incremental seguro
 - [x] Fase 2: GET /api/public/feed/stats (total_eligible, last_updated_at) escopado pela chave
 - [ ] Fase 3 (adiada): notify_url/notify_secret em consumer_keys + webhook assinado
+
+## Texto integral no feed (30-09-2026)
+- [x] Fix 1: feed `include_body=true` (limit ≤ 50) entrega body_text / content_source / text_length do registro coletado; padrão false, sem quebra
+- [ ] Reenvio único (touch updated_at) — só após o consumidor publicar suporte a include_body
+- [ ] Fix 2: pedido de re-extração sob demanda pelo consumidor
+- [ ] Coletor Malta com fallback para fila manual (plano pronto, não construído)
