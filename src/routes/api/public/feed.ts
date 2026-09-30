@@ -1,9 +1,11 @@
-// OryxScrape public read API v1.0
+// Regulatory feed public read API v1.0
 import { createFileRoute } from "@tanstack/react-router";
+
+import { contentSourceFor, pickBodyText } from "@/lib/body-text";
 
 /**
  * GET /api/public/feed — read-only feed of approved regulatory documents
- * for external consumer apps (e.g. AuraMaris).
+ * for external consumer apps.
  *
  * Auth: Authorization: Bearer <raw_key>
  *   raw key = {8-char prefix}{secret}; consumer_keys stores key_prefix + sha256 hex hash.
@@ -12,12 +14,16 @@ import { createFileRoute } from "@tanstack/react-router";
  *   since        ISO 8601 — items with updated_at > since (incremental pulls)
  *   jurisdiction repeatable — jurisdiction_hint IN (...)
  *   tags         repeatable — tags overlap; intersected with key's allowed_tags when set
- *   limit        1..500, default 100
+ *   limit        1..500, default 100 (1..50 when include_body=true)
  *   offset       >= 0, default 0
+ *   include_body "true" adds body_text / content_source / text_length read from
+ *                the collected record (omitted when no text). Default false.
  *
  * Never exposes: raw_item_id, reviewed_by, payload, verification_status, publication_status.
  * Raw keys are never logged. Self-contained — no shared auth middleware.
  */
+
+const MAX_BODY_LIMIT = 50;
 
 const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 100;

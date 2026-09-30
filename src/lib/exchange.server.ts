@@ -5,6 +5,7 @@ import {
   MANIFEST_VERSION,
   suggestLocale,
 } from "./exchange-config";
+import { pickBodyText } from "./body-text";
 
 export type NormalizedPayload = Record<string, unknown>;
 
@@ -26,7 +27,7 @@ export function extractArtifactText(
   rawPayload: NormalizedPayload,
   normalizedPayload: NormalizedPayload,
 ): string {
-  const raw = pickString(rawPayload, ["plain_text", "text", "extracted_text", "content", "body"]);
+  const raw = pickBodyText(rawPayload);
   if (raw) return raw;
   return extractText(normalizedPayload);
 }
