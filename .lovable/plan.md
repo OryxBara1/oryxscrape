@@ -15,8 +15,19 @@ Every approved document in the feed will carry its full text, taken from the col
 
 1. **Shared text rule.** Create `src/lib/body-text.ts` (it has no server-only imports, so the route can use it). It exports `pickBodyText(rawPayload)`, which reads the keys in this order: `plain_text`, `text`, `extracted_text`, `markdown`, `content`, `body`. It returns the first one that is not empty after trimming, otherwise `null`. It also exports `contentSourceFor(collection_method)`, which maps `manual` → `"manual_upload"`, `parallel_extract` → `"parallel"`, `apify` → `"apify"`, `http` → `"direct_http"`, and `api` → `"official_api"`. `exchange.server.ts`, which prepares the Drive handoff, switches to the same rule, so the feed and the handoff can never disagree.
 2. **Feed query** (`feed.ts`). Add `raw_item_id` to the selected columns. After the page of summaries is fetched, run one more query: `raw_items.select("id, raw_payload, collection_method").in("id", ids)`. That is one extra call per page, with no per-item loop. Then attach the three new fields to each item. `raw_item_id` itself is still never returned.
-3. **Size guard.** Add a new parameter `include_body`, which defaults to `true`. When body text is included, the largest allowed `limit` drops from 500 to **50**. A request above 50 gets `400 "limit > 50 with include_body"`; nothing is quietly shortened. Sending `include_body=false` restores the current limit of 500 and skips the extra query. `next_since` and `has_more` work the same either way. The worst case is about 50 × 0.4 MB, around 20 MB, which is acceptable.
-4. **Retroactive delivery.** This is one data update, approved by you and run once, with no schema change. It sets `updated_at = now()` on eligible items whose collected record has body text but whose summary has none (CYC 2025 is one). The trigger that records review changes fires only when a status changes, so it does not fire here. The next `since` sync then re-sends those items with their text. The consumer app already updates items by `id`, so there are no duplicates. The other option needs no data change: ask the consumer to do one full re-sync from the start.
+3. **Size guard, backward-compatible.** Add a new parameter `include_body`, which defaults to **`false`**.
+   - With the default (`false`), the feed behaves exactly as it does today: limit up to 500, no extra query, and the three new fields are left out completely.
+   - With `include_body=true`, the largest allowed `limit` is **50**. A request above 50 gets `400 "limit > 50 with include_body"`; nothing is quietly shortened.
+   - `next_since` and `has_more` work the same either way. The worst case with body text is about 50 × 0.4 MB, around 20 MB, which is acceptable.
+4. **Retroactive delivery (runs only after Auramaris is updated).** This is one data update, approved by you and run once, with no schema change. It sets `updated_at = now()` on eligible items whose collected record has body text but whose summary has none (CYC 2025 is one). The trigger that records review changes fires only when a status changes, so it does not fire here. Auramaris's next `include_body=true` sync then re-sends those items with their text, and it already updates items by `id`, so there are no duplicates. **Run it only after Auramaris has deployed its update; if it runs earlier, those items re-sync without text.** It is not part of this build.
+
+**Deployment order**
+
+```text
+1. Deploy this feed change (off by default)      -> Auramaris keeps working unchanged
+2. Update Auramaris: include_body=true&limit=50   -> it reads body_text, content_source, text_length
+3. Run the one-time re-send (step 4)             -> old items such as CYC 2025 arrive with text
+```
 5. **Stats endpoint** (`feed.stats.ts`): unchanged.
 6. **Docs.** Update the header comment of `feed.ts`, and in `roadmap.md` mark Fix 1 done. Fix 2 (the consumer app asking for a re-extraction) stays open as a later item.
 
@@ -44,7 +55,7 @@ Every approved document in the feed will carry its full text, taken from the col
 }
 ```
 
-When no text exists, the item has `"body_text": null, "content_source": null, "text_length": 0`, never an empty string. With `include_body=false`, all three fields are left out.
+This shape applies only to requests with `include_body=true`. When no text exists, the item has `"body_text": null, "content_source": null, "text_length": 0`, never an empty string. With the default (`include_body=false`), all three fields are left out and items look exactly as they do today.
 
 ## Files
 
@@ -52,11 +63,12 @@ When no text exists, the item has `"body_text": null, "content_source": null, "t
 - `src/routes/api/public/feed.ts`: edited
 - `src/lib/exchange.server.ts`: uses the shared rule
 - `roadmap.md`
-- Plus the one-time data update in step 4
+- The one-time data update in step 4 is run separately, only after Auramaris is updated.
 
 ## Risks
 
-- **The consumer syncs with `limit` above 50.** It would get a 400 until it lowers its page size or sends `include_body=false`. This must be communicated before publishing.
+- **Page size with body text:** Auramaris must send `limit=50` or lower whenever it sends `include_body=true`, or it gets a 400. The default path has no breaking change.
+- **Timing of the re-send:** step 4 must wait until Auramaris is live with its update.
 - **Scanned PDFs** have no text layer, so they still show `text_length: 0` until OCR exists (out of scope).
 - **`markdown` from Apify** can include menus and page chrome. It is still the verbatim collected text, and `content_source` shows where it came from.
 - **`src/routes/api/public/v1/items.ts`** is a separate older endpoint and is not changed in this fix.
