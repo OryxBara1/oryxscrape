@@ -163,7 +163,7 @@ export const submitManualUpload = createServerFn({ method: "POST" })
           ...(jurisdictionHint ? { jurisdiction_hint: jurisdictionHint } : {}),
           ...(data.filename ? { original_filename: data.filename } : {}),
           ...(data.mime ? { upload_mime: data.mime } : {}),
-          blocked_error: typeof blockedPayload.error === "string" ? blockedPayload.error : null,
+          blocked_error: typeof blockedPayload["error"] === "string" ? (blockedPayload["error"] as string) : null,
         } as unknown as never,
         content_hash: contentHash,
         collected_at: now,
