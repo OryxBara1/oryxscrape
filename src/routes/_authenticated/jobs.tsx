@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { listCollectionJobs } from "@/lib/jobs.functions";
 import { listSources } from "@/lib/sources.functions";
+import { startMaltaCollection } from "@/lib/malta.functions";
 
 import {
   normalizeCollectionJob,
@@ -58,6 +59,7 @@ function JobsScreen() {
   const startJob = useServerFn(startCollectionJob);
   const syncJob = useServerFn(syncCollectionJob);
   const normalizeJob = useServerFn(normalizeCollectionJob);
+  const startMalta = useServerFn(startMaltaCollection);
 
   const [sourceId, setSourceId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -120,9 +122,14 @@ function JobsScreen() {
         </Select>
         <GlowButton
           disabled={!sourceId || busy === "start"}
-          onClick={() =>
-            run("Collection started", () => startJob({ data: { sourceId } }), "start")
-          }
+          onClick={() => {
+            const selected = activeSources.find((s) => s.id === sourceId);
+            if (selected?.start_url?.includes("transport.gov.mt")) {
+              void run("Malta collection finished", () => startMalta({ data: {} }), "start");
+              return;
+            }
+            void run("Collection started", () => startJob({ data: { sourceId } }), "start");
+          }}
         >
           {busy === "start" ? "Starting…" : "Run collection"}
         </GlowButton>
