@@ -88,7 +88,7 @@ export const Route = createFileRoute("/api/public/feed")({
           }
 
           // Accept both repeated params (?jurisdiction=FR&jurisdiction=ES)
-          // and comma-separated values (?jurisdiction=FR,ES) — AuraMaris sends the latter.
+          // and comma-separated values (?jurisdiction=FR,ES).
           const splitParam = (values: string[]) =>
             values
               .flatMap((v) => v.split(","))
@@ -112,12 +112,18 @@ export const Route = createFileRoute("/api/public/feed")({
             if (tags.length === 0) return jsonError(400, "no requested tags are allowed for this key");
           }
 
+          // Default false: callers without the param get the exact previous response.
+          const includeBody = url.searchParams.get("include_body") === "true";
+
           const limitParam = url.searchParams.get("limit");
-          let limit = DEFAULT_LIMIT;
+          let limit = includeBody ? MAX_BODY_LIMIT : DEFAULT_LIMIT;
           if (limitParam !== null) {
             const parsed = Number.parseInt(limitParam, 10);
             if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
               return jsonError(400, "invalid limit");
+            }
+            if (includeBody && parsed > MAX_BODY_LIMIT) {
+              return jsonError(400, "limit must be ≤ 50 when include_body=true");
             }
             limit = parsed;
           }
@@ -142,7 +148,7 @@ export const Route = createFileRoute("/api/public/feed")({
 
           // --- data query ---
           const baseCols =
-            "id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at";
+            "id, raw_item_id, source_url, jurisdiction_hint, category, payload, tags, traceability_level, institution_class, is_official_domain, is_primary_document, collected_at, reviewed_at, updated_at";
           let query = supabaseAdmin
             .from("normalized_items")
             .select(
@@ -180,7 +186,7 @@ export const Route = createFileRoute("/api/public/feed")({
             .then(undefined, () => undefined);
 
           type FeedRow = {
-            id: string; source_url: string; jurisdiction_hint: string | null; category: string | null;
+            id: string; raw_item_id: string; source_url: string; jurisdiction_hint: string | null; category: string | null;
             payload: unknown; tags: string[] | null; traceability_level: string; institution_class: string;
             is_official_domain: boolean; is_primary_document: boolean; collected_at: string; reviewed_at: string | null;
             updated_at: string;
@@ -188,6 +194,22 @@ export const Route = createFileRoute("/api/public/feed")({
           const rawRows = (data ?? []) as unknown as FeedRow[];
           // ascending mode fetched limit+1 rows; a full page means more rows follow
           const pageRows = ascending && rawRows.length > limit ? rawRows.slice(0, limit) : rawRows;
+
+          // Body text lives on the immutable collected record; one lookup per page.
+          const rawById = new Map<string, { raw_payload: unknown; collection_method: string }>();
+          if (includeBody && pageRows.length > 0) {
+            const ids = [...new Set(pageRows.map((r) => r.raw_item_id))];
+            const { data: collected, error: rawError } = await supabaseAdmin
+              .from("raw_items")
+              .select("id, raw_payload, collection_method")
+              .in("id", ids);
+            if (rawError) {
+              console.error("[api/public/feed] body lookup failed", rawError.message);
+              return jsonError(500, "Internal server error");
+            }
+            for (const r of collected ?? []) rawById.set(r.id, r);
+          }
+
           const items = pageRows.map((row) => {
             const payload = (row.payload ?? {}) as Record<string, unknown>;
             const textContent =
@@ -197,7 +219,7 @@ export const Route = createFileRoute("/api/public/feed")({
                   ? (payload["plain_text"] as string)
                   : null;
 
-            return {
+            const item: Record<string, unknown> = {
               id: row.id,
               source_url: row.source_url,
               jurisdiction: row.jurisdiction_hint,
@@ -213,6 +235,19 @@ export const Route = createFileRoute("/api/public/feed")({
               collected_at: row.collected_at,
               reviewed_at: row.reviewed_at,
             };
+
+            if (includeBody) {
+              const raw = rawById.get(row.raw_item_id);
+              const bodyText = raw
+                ? pickBodyText(raw.raw_payload as Record<string, unknown> | null)
+                : null;
+              if (bodyText) {
+                item["body_text"] = bodyText;
+                item["content_source"] = contentSourceFor(raw?.collection_method);
+                item["text_length"] = bodyText.length;
+              }
+            }
+            return item;
           });
 
           const total = count ?? items.length;
