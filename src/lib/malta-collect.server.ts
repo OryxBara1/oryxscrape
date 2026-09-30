@@ -311,9 +311,9 @@ async function finishJob(
 
 export async function runMaltaCollection(input: {
   supabase: Db;
-  profileId?: string | null;
-  urls?: string[];
-  maxDocuments?: number;
+  profileId?: string | null | undefined;
+  urls?: string[] | undefined;
+  maxDocuments?: number | undefined;
 }) {
   const { supabase } = input;
   const source = await getMaltaSource(supabase);
@@ -374,7 +374,7 @@ export async function runMaltaCollection(input: {
 }
 
 /** Retries still-open blocked Malta items through the same engine chain. */
-export async function runMaltaRetroactivePass(input: { supabase: Db; limit?: number }) {
+export async function runMaltaRetroactivePass(input: { supabase: Db; limit?: number | undefined }) {
   const { supabase } = input;
   const source = await getMaltaSource(supabase);
   const limit = Math.min(Math.max(input.limit ?? 5, 1), 15);
