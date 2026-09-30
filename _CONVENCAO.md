@@ -98,6 +98,17 @@
 | `internal_only` | Visível só internamente |
 | `eligible` | Elegível para entrega via API ao consumidor |
 
+### `item_status_type` (em `raw_items`)
+| Valor | Significado |
+|---|---|
+| `collected` | Coletado com sucesso |
+| `failed` | Falha transitória da coleta |
+| `pending` | Aguardando processamento |
+| `blocked` | URL inacessível a coletores automatizados (403, SSL, JS-only) — entra na Manual Upload Queue |
+| `superseded` | Substituído por outro raw_item |
+
+Regra: `raw_items` é imutável. Um upload manual **nunca** edita o registro `blocked`; insere um novo raw_item `collected` com `supersedes_raw_item_id` apontando para o bloqueado (`collection_method = 'manual'`, `payload_integrity = 'verbatim'`, `collector_version = 'manual-upload@1.0.0'`).
+
 ### `search_term_lifecycle`
 `candidate` → `promising` → `validated` | `ambiguous` | `cooldown` | `disabled_auto` | `manual_only` | `deprecated`
 

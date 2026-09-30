@@ -968,7 +968,12 @@ export type Database = {
         | "registered_media"
         | "commercial"
         | "unknown"
-      item_status_type: "collected" | "failed" | "pending" | "superseded"
+      item_status_type:
+        | "collected"
+        | "failed"
+        | "pending"
+        | "superseded"
+        | "blocked"
       job_status:
         | "queued"
         | "running"
@@ -1161,7 +1166,13 @@ export const Constants = {
         "commercial",
         "unknown",
       ],
-      item_status_type: ["collected", "failed", "pending", "superseded"],
+      item_status_type: [
+        "collected",
+        "failed",
+        "pending",
+        "superseded",
+        "blocked",
+      ],
       job_status: [
         "queued",
         "running",

@@ -14,6 +14,7 @@ import {
   inputClass,
 } from "@/components/data-ui";
 import { AnimatedStatusBadge } from "@/components/ui/animated-status-badge";
+import { addBlockedItem } from "@/lib/manual-queue.functions";
 import { createSource, deleteSource, listSources, updateSource } from "@/lib/sources.functions";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -78,10 +79,13 @@ function SourcesScreen() {
   const create = useServerFn(createSource);
   const update = useServerFn(updateSource);
   const remove = useServerFn(deleteSource);
+  const queueItem = useServerFn(addBlockedItem);
 
   const [draft, setDraft] = useState(emptyDraft);
   const [showForm, setShowForm] = useState(false);
   const [savedPulse, setSavedPulse] = useState(false);
+  const [queueFor, setQueueFor] = useState<Source | null>(null);
+  const [queueDraft, setQueueDraft] = useState({ url: "", jurisdiction: "", note: "" });
 
   const sources = useQuery({ queryKey: ["sources"], queryFn: () => fetchSources() });
 
@@ -110,6 +114,28 @@ function SourcesScreen() {
     onSuccess: () => {
       toast.success("Source deleted.");
       invalidate();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const queueMutation = useMutation({
+    mutationFn: () =>
+      queueItem({
+        data: {
+          sourceId: queueFor!.id,
+          url: queueDraft.url,
+          jurisdiction: queueDraft.jurisdiction || undefined,
+          note: queueDraft.note || undefined,
+        },
+      }),
+    onSuccess: (result) => {
+      if (result.result === "duplicate") {
+        toast.info("That URL is already in the manual queue.");
+      } else {
+        toast.success("Added to the Manual Upload Queue.");
+      }
+      setQueueFor(null);
+      setQueueDraft({ url: "", jurisdiction: "", note: "" });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -392,19 +418,83 @@ function SourcesScreen() {
               {formatDate(source.created_at)}
             </td>
             <td className="px-4 py-3">
-              <GlowButton
-                variant="ghost"
-                disabled={deleteMutation.isPending}
-                onClick={() => {
-                  if (confirm(`Delete source "${source.name}"?`)) deleteMutation.mutate(source.id);
-                }}
-              >
-                Delete
-              </GlowButton>
+              <div className="flex flex-col gap-2">
+                <GlowButton
+                  variant="ghost"
+                  onClick={() => {
+                    setQueueFor(source);
+                    setQueueDraft({ url: "", jurisdiction: "", note: "" });
+                  }}
+                >
+                  Add to queue
+                </GlowButton>
+                <GlowButton
+                  variant="ghost"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (confirm(`Delete source "${source.name}"?`)) deleteMutation.mutate(source.id);
+                  }}
+                >
+                  Delete
+                </GlowButton>
+              </div>
             </td>
           </tr>
         ))}
       </DataTable>
+
+      {queueFor ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setQueueFor(null)}
+        >
+          <form
+            className="glass-panel w-full max-w-md space-y-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              queueMutation.mutate();
+            }}
+          >
+            <h2 className="glow-text text-lg font-semibold">Add to Manual Upload Queue</h2>
+            <p className="text-xs text-muted-foreground">
+              {queueFor.name} — pre-register a URL the collectors cannot download, so it appears on
+              the Manual queue screen.
+            </p>
+            <Field label="Document URL">
+              <input
+                required
+                type="url"
+                className={inputClass}
+                value={queueDraft.url}
+                onChange={(e) => setQueueDraft({ ...queueDraft, url: e.target.value })}
+              />
+            </Field>
+            <Field label="Jurisdiction (optional, e.g. GI)">
+              <input
+                className={inputClass}
+                value={queueDraft.jurisdiction}
+                onChange={(e) => setQueueDraft({ ...queueDraft, jurisdiction: e.target.value })}
+              />
+            </Field>
+            <Field label="Note (optional)">
+              <input
+                className={inputClass}
+                value={queueDraft.note}
+                onChange={(e) => setQueueDraft({ ...queueDraft, note: e.target.value })}
+              />
+            </Field>
+            <div className="flex justify-end gap-3">
+              <GlowButton variant="ghost" type="button" onClick={() => setQueueFor(null)}>
+                Cancel
+              </GlowButton>
+              <GlowButton type="submit" disabled={queueMutation.isPending}>
+                {queueMutation.isPending ? "Adding…" : "Add to queue"}
+              </GlowButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }
