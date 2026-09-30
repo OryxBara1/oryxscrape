@@ -70,6 +70,15 @@
 - [x] Backfill GI concluído: 358 normas marítimas (1 PDF sem texto legível fica de fora)
 - [ ] Enriquecer as 362 GI pendentes com LogoriOn (botão em /review, 5 por clique) e triagem humana
 
+## Fila de upload manual (2026-09-30)
+- [x] Enum `item_status_type` ganhou `blocked` (URLs que nenhum coletor consegue baixar)
+- [x] Tela /admin/manual-queue: lista bloqueados, upload de PDF/HTML/TXT com extração no navegador (unpdf), preview 500 chars, insere novo raw_item que supersede o bloqueado (raw_items nunca editados), normaliza via LogoriOn
+- [x] Coletor http-pdf registra `blocked` em 401/403/SSL/timeout/extração vazia em vez de descartar
+- [x] Botão "Add to queue" em /sources pré-registra URL bloqueada sem rodar coletor
+- [ ] Parser DOCX no upload (hoje pede salvar como PDF)
+- [ ] Hooks de `blocked` nos demais coletores por país
+- [ ] Bucket de storage para guardar o arquivo original (hoje só o texto vai ao banco)
+
 ## Sync de consumidores (2026-09-29)
 - [x] Fase 1: feed com order=asc + next_since (keyset por updated_at) para sync incremental seguro
 - [x] Fase 2: GET /api/public/feed/stats (total_eligible, last_updated_at) escopado pela chave
