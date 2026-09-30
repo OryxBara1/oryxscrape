@@ -1,0 +1,1 @@
+ALTER TYPE public.item_status_type ADD VALUE IF NOT EXISTS 'blocked';
