@@ -1,7 +1,7 @@
 // Regulatory feed public read API v1.0
 import { createFileRoute } from "@tanstack/react-router";
 
-import { contentSourceFor, pickBodyText } from "@/lib/body-text";
+import { contentSourceFor } from "@/lib/body-text";
 
 /**
  * GET /api/public/feed — read-only feed of approved regulatory documents
@@ -196,18 +196,27 @@ export const Route = createFileRoute("/api/public/feed")({
           const pageRows = ascending && rawRows.length > limit ? rawRows.slice(0, limit) : rawRows;
 
           // Body text lives on the immutable collected record; one lookup per page.
-          const rawById = new Map<string, { raw_payload: unknown; collection_method: string }>();
+          // The RPC returns only text candidates, never the full raw_payload,
+          // so large records no longer blow up the response.
+          const rawById = new Map<string, { body_text: string | null; collection_method: string }>();
           if (includeBody && pageRows.length > 0) {
             const ids = [...new Set(pageRows.map((r) => r.raw_item_id))];
-            const { data: collected, error: rawError } = await supabaseAdmin
-              .from("raw_items")
-              .select("id, raw_payload, collection_method")
-              .in("id", ids);
+            const { data: collected, error: rawError } = await supabaseAdmin.rpc(
+              "fetch_body_text_candidates",
+              { p_ids: ids },
+            );
             if (rawError) {
               console.error("[api/public/feed] body lookup failed", rawError.message);
               return jsonError(500, "Internal server error");
             }
-            for (const r of collected ?? []) rawById.set(r.id, r);
+            for (const r of collected ?? []) {
+              const candidates = [
+                r.plain_text, r.text_field, r.body_text_field, r.extracted_text,
+                r.content_text, r.full_text, r.text_content, r.text_en,
+              ];
+              const first = candidates.find((c) => typeof c === "string" && c.trim().length > 0);
+              rawById.set(r.id, { body_text: first ? first.trim() : null, collection_method: r.collection_method });
+            }
           }
 
           const items = pageRows.map((row) => {
@@ -238,9 +247,7 @@ export const Route = createFileRoute("/api/public/feed")({
 
             if (includeBody) {
               const raw = rawById.get(row.raw_item_id);
-              const bodyText = raw
-                ? pickBodyText(raw.raw_payload as Record<string, unknown> | null)
-                : null;
+              const bodyText = raw?.body_text ?? null;
               if (bodyText) {
                 item["body_text"] = bodyText;
                 item["content_source"] = contentSourceFor(raw?.collection_method);

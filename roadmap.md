@@ -92,4 +92,5 @@
 
 ## Seletores de fonte (01-10-2026)
 - [x] Listas de fontes mostram "País — Fonte", ordenadas por país e nome
-- [ ] Correção do lookup de texto integral no feed (plano aguardando aprovação)
+- [x] Correção do lookup de texto integral no feed (RPC fetch_body_text_candidates)
+- [ ] Incluir markdown/content/body na RPC (migração futura)
