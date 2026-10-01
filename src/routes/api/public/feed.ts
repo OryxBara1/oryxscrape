@@ -196,18 +196,27 @@ export const Route = createFileRoute("/api/public/feed")({
           const pageRows = ascending && rawRows.length > limit ? rawRows.slice(0, limit) : rawRows;
 
           // Body text lives on the immutable collected record; one lookup per page.
-          const rawById = new Map<string, { raw_payload: unknown; collection_method: string }>();
+          // The RPC returns only text candidates, never the full raw_payload,
+          // so large records no longer blow up the response.
+          const rawById = new Map<string, { body_text: string | null; collection_method: string }>();
           if (includeBody && pageRows.length > 0) {
             const ids = [...new Set(pageRows.map((r) => r.raw_item_id))];
-            const { data: collected, error: rawError } = await supabaseAdmin
-              .from("raw_items")
-              .select("id, raw_payload, collection_method")
-              .in("id", ids);
+            const { data: collected, error: rawError } = await supabaseAdmin.rpc(
+              "fetch_body_text_candidates",
+              { p_ids: ids },
+            );
             if (rawError) {
               console.error("[api/public/feed] body lookup failed", rawError.message);
               return jsonError(500, "Internal server error");
             }
-            for (const r of collected ?? []) rawById.set(r.id, r);
+            for (const r of collected ?? []) {
+              const candidates = [
+                r.plain_text, r.text_field, r.body_text_field, r.extracted_text,
+                r.content_text, r.full_text, r.text_content, r.text_en,
+              ];
+              const first = candidates.find((c) => typeof c === "string" && c.trim().length > 0);
+              rawById.set(r.id, { body_text: first ? first.trim() : null, collection_method: r.collection_method });
+            }
           }
 
           const items = pageRows.map((row) => {
