@@ -15,6 +15,7 @@ import {
 import { listCollectionJobs } from "@/lib/jobs.functions";
 import { listSources } from "@/lib/sources.functions";
 import { startMaltaCollection } from "@/lib/malta.functions";
+import { sortSourcesForPicker, sourceLabel } from "@/lib/source-label";
 
 import {
   normalizeCollectionJob,
@@ -75,7 +76,7 @@ function JobsScreen() {
   });
 
   const rows = data ?? [];
-  const activeSources = (sources ?? []).filter((source) => source.is_active);
+  const activeSources = sortSourcesForPicker((sources ?? []).filter((source) => source.is_active));
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["collection-jobs"] });
 
   const run = async (label: string, action: () => Promise<unknown>, key: string) => {
@@ -114,7 +115,7 @@ function JobsScreen() {
             ) : (
               activeSources.map((source) => (
                 <SelectItem key={source.id} value={source.id}>
-                  {source.name}
+                  {sourceLabel(source)}
                 </SelectItem>
               ))
             )}
