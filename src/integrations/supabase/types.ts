@@ -894,6 +894,21 @@ export type Database = {
             }
             Returns: Database["public"]["Enums"]["tier_label"]
           }
+      fetch_body_text_candidates: {
+        Args: { p_ids: string[] }
+        Returns: {
+          body_text_field: string
+          collection_method: string
+          content_text: string
+          extracted_text: string
+          full_text: string
+          id: string
+          plain_text: string
+          text_content: string
+          text_en: string
+          text_field: string
+        }[]
+      }
       get_staff_item_tier_matrix: {
         Args: never
         Returns: {
