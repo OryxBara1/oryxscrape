@@ -32,6 +32,10 @@ export async function recordBlockedItem(input: {
   error: string;
   jobId?: string | null;
   jurisdictionHint?: string | null;
+  /** Per-engine attempts, stored in raw_payload.attempts when given. */
+  attempts?: { engine: string; ok: boolean; error?: string }[];
+  /** Overrides the default blocked-record collector_version. */
+  collectorVersion?: string;
 }): Promise<"recorded" | "duplicate"> {
   const { supabase, source } = input;
   const now = new Date().toISOString();

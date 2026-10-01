@@ -87,6 +87,13 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     if (sourceError) throw new Error(sourceError.message);
     if (!source.is_active) throw new Error("This source is not active.");
 
+    // Transport Malta blocks plain HTTP: route to the fixed HTTP → Parallel → Apify → blocked chain.
+    if (source.start_url.includes("transport.gov.mt")) {
+      const { runMaltaCollection } = await import("./malta-collect.server");
+      const urls = data.documents?.map((d) => d.url).filter(Boolean);
+      return runMaltaCollection({ supabase, profileId: data.profileId ?? null, urls });
+    }
+
     // Greek gazette: open JSON search API + public PDF blobs.
     if (source.collection_method === "api" && source.domain.includes("et.gr")) {
       const { runFekCollection } = await import("./fek-collect.server");
