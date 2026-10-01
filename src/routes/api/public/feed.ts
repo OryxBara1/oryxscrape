@@ -1,7 +1,7 @@
 // Regulatory feed public read API v1.0
 import { createFileRoute } from "@tanstack/react-router";
 
-import { contentSourceFor, pickBodyText } from "@/lib/body-text";
+import { contentSourceFor } from "@/lib/body-text";
 
 /**
  * GET /api/public/feed — read-only feed of approved regulatory documents
@@ -247,9 +247,7 @@ export const Route = createFileRoute("/api/public/feed")({
 
             if (includeBody) {
               const raw = rawById.get(row.raw_item_id);
-              const bodyText = raw
-                ? pickBodyText(raw.raw_payload as Record<string, unknown> | null)
-                : null;
+              const bodyText = raw?.body_text ?? null;
               if (bodyText) {
                 item["body_text"] = bodyText;
                 item["content_source"] = contentSourceFor(raw?.collection_method);
