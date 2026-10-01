@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { domainLabel, sortDomainsForPicker } from "@/lib/source-label";
 import { ExternalLink, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -147,8 +148,8 @@ export function TriagePanel({
         <Field label="Fonte">
           <select className={inputClass} value={search.domain ?? ""} onChange={(e) => onSearch({ domain: e.target.value || undefined })}>
             <option value="">Todas</option>
-            {Array.from(new Set([...(search.domain ? [search.domain] : []), ...domains])).map((d) => (
-              <option key={d} value={d}>{d}</option>
+            {sortDomainsForPicker(Array.from(new Set([...(search.domain ? [search.domain] : []), ...domains]))).map((d) => (
+              <option key={d} value={d}>{domainLabel(d)}</option>
             ))}
           </select>
         </Field>
