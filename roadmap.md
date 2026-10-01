@@ -89,3 +89,7 @@
 - [ ] Reenvio único (touch updated_at) — só após o consumidor publicar suporte a include_body
 - [ ] Fix 2: pedido de re-extração sob demanda pelo consumidor
 - [ ] Coletor Malta com fallback para fila manual (plano pronto, não construído)
+
+## Seletores de fonte (01-10-2026)
+- [x] Listas de fontes mostram "País — Fonte", ordenadas por país e nome
+- [ ] Correção do lookup de texto integral no feed (plano aguardando aprovação)
