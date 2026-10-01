@@ -19,6 +19,7 @@ import { extractWithParallel, searchWithParallel } from "./parallel-fetch.server
 export const COLLECTOR_VERSION = "malta-collect@1.0.0";
 const MALTA_HOST = "transport.gov.mt";
 const MIN_HTML_CHARS = 1000;
+const MIN_PARALLEL_CHARS = 200;
 const APIFY_ACTOR = "apify~website-content-crawler";
 
 type Db = SupabaseClient<Database>;
@@ -203,6 +204,9 @@ export async function collectMaltaDocument(url: string): Promise<MaltaDocumentRe
 
   try {
     const r = await extractWithParallel(url, "Extract the full text of this Maltese maritime regulatory document.");
+    if ((r.text ?? "").trim().length < MIN_PARALLEL_CHARS) {
+      throw new Error(`Parallel text too short (${(r.text ?? "").trim().length} chars)`);
+    }
     attempts.push({ engine: "parallel_extract", ok: true, chars: r.text.length });
     return { ...base, ok: true, text: r.text, title: r.title, engine: "parallel_extract", httpStatus: null, contentType: null, attempts };
   } catch (e) {
@@ -328,9 +332,10 @@ export async function runMaltaCollection(input: {
   const counts = { fetched: 0, ingested: 0, duplicates: 0, failed: 0 };
   let blocked = 0;
   try {
+    // The start page itself is a document too; discovered links follow it.
     const urls = input.urls?.length
       ? input.urls
-      : (await discoverMaltaDocuments(source.start_url)).urls;
+      : [...new Set([source.start_url, ...(await discoverMaltaDocuments(source.start_url).catch(() => ({ urls: [] as string[] }))).urls])];
     const targets = urls.slice(0, max);
     counts.fetched = targets.length;
 
@@ -351,6 +356,8 @@ export async function runMaltaCollection(input: {
           error: summarizeFailure(result.attempts),
           jobId,
           jurisdictionHint: "MT",
+          attempts: result.attempts,
+          collectorVersion: COLLECTOR_VERSION,
         });
         if (rec === "recorded") blocked += 1;
       } catch (e) {
