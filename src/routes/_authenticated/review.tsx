@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { GlowButton, ScreenHeader, StatusBadge, formatDate, inputClass } from "@/components/data-ui";
 import { getItemDetail, rejectItems, setItemReviewState } from "@/lib/items.functions";
+import { domainLabel, sortDomainsForPicker } from "@/lib/source-label";
 import { askCapy, countReviewByJurisdiction, enrichQueueBatch, listReviewQueue } from "@/lib/review.functions";
 
 const REJECT_REASONS = [
@@ -201,7 +202,7 @@ function ReviewScreen() {
   }, [current]);
 
   const domains = useMemo(
-    () => Array.from(new Set((queue.data ?? []).map((i) => i.domain).filter((d): d is string => !!d))).sort(),
+    () => sortDomainsForPicker(Array.from(new Set((queue.data ?? []).map((i) => i.domain).filter((d): d is string => !!d)))),
     [queue.data],
   );
 
@@ -274,7 +275,7 @@ function ReviewScreen() {
               <option value="">Todas as fontes</option>
               {domains.map((d) => (
                 <option key={d} value={d}>
-                  {d}
+                  {domainLabel(d)}
                 </option>
               ))}
             </select>

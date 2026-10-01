@@ -46,3 +46,14 @@ export function sortSourcesForPicker<T extends LabelSource>(sources: T[]): T[] {
     sourceLabel(a).localeCompare(sourceLabel(b), undefined, { sensitivity: "base" }),
   );
 }
+
+/** Same label and order for filters that list sources by domain only. */
+export function domainLabel(domain: string): string {
+  return sourceLabel({ name: domain, domain });
+}
+
+export function sortDomainsForPicker(domains: string[]): string[] {
+  return [...domains].sort((a, b) =>
+    domainLabel(a).localeCompare(domainLabel(b), undefined, { sensitivity: "base" }),
+  );
+}
