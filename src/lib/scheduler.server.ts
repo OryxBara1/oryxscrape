@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 import { postSlack } from "./slack-notify.server";
+import { getApiCollector } from "./api-collector";
 
 const MAX_PAGES = 25;
 const COLLECTOR_VERSION = "apify-boe-static-url@1.0.0";
@@ -57,7 +58,8 @@ async function collectOne(
 ): Promise<SourceRunResult> {
   const base = { sourceId: source.id, sourceName: source.name };
   try {
-    if (source.collection_method === "api" && source.domain.includes("et.gr")) {
+    const apiCollector = source.collection_method === "api" ? getApiCollector(source.domain) : null;
+    if (apiCollector === "fek") {
       const { runFekCollection } = await import("./fek-collect.server");
       const result = await runFekCollection({
         supabase,
@@ -74,7 +76,7 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api" && source.domain.includes("eur-lex.europa.eu")) {
+    if (apiCollector === "eurlex") {
       const { runEurlexCollection } = await import("./eurlex-collect.server");
       const result = await runEurlexCollection(supabase);
       return {
@@ -86,7 +88,7 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api" && source.domain.includes("normattiva.it")) {
+    if (apiCollector === "normattiva") {
       const { runNormattivaCollection } = await import("./normattiva-collect.server");
       const result = await runNormattivaCollection(supabase);
       return {
@@ -98,7 +100,7 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api" && source.domain.includes("boe.es")) {
+    if (apiCollector === "boe") {
       const { runBoeCollection } = await import("./boe-collect.server");
       const result = await runBoeCollection(supabase);
       return {
@@ -125,10 +127,7 @@ async function collectOne(
       };
     }
 
-    if (
-      source.collection_method === "api" &&
-      source.domain.includes("legislation.gov.uk")
-    ) {
+    if (apiCollector === "uk") {
       const { runUkLegislationCollection } = await import("./legislation-uk-collect.server");
       const result = await runUkLegislationCollection(supabase);
       return {
@@ -140,7 +139,7 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api" && source.domain.includes("officielebekendmakingen.nl")) {
+    if (apiCollector === "obk") {
       const { runObkCollection } = await import("./obk-collect.server");
       const result = await runObkCollection(supabase);
       return {
@@ -152,7 +151,7 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api" && source.domain.includes("dou.gov.br")) {
+    if (apiCollector === "dou") {
       const { runDouCollection } = await import("./dou-collect.server");
       const result = await runDouCollection(supabase);
       return {
@@ -164,7 +163,7 @@ async function collectOne(
       };
     }
 
-    if (source.collection_method === "api") {
+    if (apiCollector === "piste") {
 
 
       const { runPisteCollection } = await import("./piste-collect.server");
@@ -193,6 +192,10 @@ async function collectOne(
         ingested: result.ingested,
         duplicates: result.duplicates,
       };
+    }
+
+    if (source.collection_method === "api") {
+      throw new Error(`No API collector is configured for ${source.domain}. This source cannot use the French PISTE collector.`);
     }
 
     if (source.collection_method === "http") {
