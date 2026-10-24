@@ -44,7 +44,7 @@ export async function getWebshareProxy(countryCode: string): Promise<string> {
   if (!usable.length) {
     throw new WebshareProxyError(`No Webshare proxies available for ${countryCode}`);
   }
-  const chosen = usable[Math.floor(Math.random() * usable.length)];
+  const chosen = usable[Math.floor(Math.random() * usable.length)] as WebshareProxy;
   return `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${chosen.proxy_address}:${chosen.port}`;
 }
 
