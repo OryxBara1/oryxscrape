@@ -225,7 +225,7 @@ export async function runPdfCollection(input: {
           traceability_level: source.traceability_level,
           institution_class: source.institution_class,
           canonical_url: target.url,
-          http_status: response.status,
+          http_status: httpStatus,
           content_type: contentType,
           language: input.language ?? null,
           apify_actor_id: null,
@@ -239,7 +239,7 @@ export async function runPdfCollection(input: {
             perTarget.push({
               url: target.url,
               document_label: label,
-              http_status: response.status,
+              http_status: httpStatus,
               chars: content.length,
               result: "duplicate",
             });
@@ -251,7 +251,7 @@ export async function runPdfCollection(input: {
           perTarget.push({
             url: target.url,
             document_label: label,
-            http_status: response.status,
+            http_status: httpStatus,
             chars: content.length,
             result: "ingested",
           });

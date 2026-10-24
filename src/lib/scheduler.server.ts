@@ -231,11 +231,24 @@ async function collectOne(
           maxCrawlPages,
           crawlerType,
           ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
+          ...(proxy ? { proxy } : {}),
         },
       })
       .select("id")
       .single();
     if (jobError) throw new Error(jobError.message);
+
+    let proxyUrls: string[] | undefined;
+    try {
+      proxyUrls = await resolveProxyUrls(proxy);
+    } catch (proxyError) {
+      const message = `Proxy resolution failed: ${(proxyError as Error).message}`;
+      await supabase
+        .from("collection_jobs")
+        .update({ status: "failed", finished_at: new Date().toISOString(), error_text: message })
+        .eq("id", job.id);
+      throw new Error(message);
+    }
 
     try {
       const { startCrawl } = await import("./apify.server");
@@ -244,6 +257,7 @@ async function collectOne(
         maxCrawlPages,
         crawlerType,
         ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
+        ...(proxyUrls ? { proxyUrls } : {}),
       });
       await supabase
         .from("collection_jobs")

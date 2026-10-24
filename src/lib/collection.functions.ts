@@ -149,6 +149,10 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     const includeUrlGlobs = source.include_url_globs ?? undefined;
     /** Per-source named Apify actor; NULL keeps the generic content crawler. */
     const actorId = source.apify_actor_id ?? "apify~website-content-crawler";
+    // proxy_config may not exist yet in this schema: read it via select("*").
+    const { data: fullSource } = await supabase.from("sources").select("*").eq("id", source.id).maybeSingle();
+    const { readProxyConfig, resolveProxyUrls } = await import("./webshare-proxy.server");
+    const proxy = readProxyConfig(fullSource);
 
 
     const { data: job, error: jobError } = await supabase
@@ -165,11 +169,24 @@ export const startCollectionJob = createServerFn({ method: "POST" })
           ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
           // Read back at sync time and stamped onto every crawled row.
           ...(runConcept ? { concept: runConcept } : {}),
+          ...(proxy ? { proxy } : {}),
         },
       })
       .select("id")
       .single();
     if (jobError) throw new Error(jobError.message);
+
+    let proxyUrls: string[] | undefined;
+    try {
+      proxyUrls = await resolveProxyUrls(proxy);
+    } catch (proxyError) {
+      const message = `Proxy resolution failed: ${(proxyError as Error).message}`;
+      await supabase
+        .from("collection_jobs")
+        .update({ status: "failed", finished_at: new Date().toISOString(), error_text: message })
+        .eq("id", job.id);
+      throw new Error(message);
+    }
 
     try {
       const { startCrawl } = await import("./apify.server");
@@ -179,6 +196,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         crawlerType,
         actorId,
         ...(includeUrlGlobs?.length ? { includeUrlGlobs } : {}),
+        ...(proxyUrls ? { proxyUrls } : {}),
       });
 
       const { error } = await supabase
