@@ -126,45 +126,78 @@ export async function runPdfCollection(input: {
     for (const target of targets) {
       const label = target.document_label ?? null;
       try {
-        const response = await fetch(target.url, {
-          headers: {
-            Accept: "application/pdf,text/html;q=0.9,*/*;q=0.8",
-            "User-Agent": "OryxScrape/1.0 (+official document collection)",
-          },
-          redirect: "follow",
-        });
-        const contentType = response.headers.get("content-type");
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const isPdf = looksLikePdf(bytes, contentType);
         let content: string;
         let usedParallel = false;
         let parallelTitle: string | null = null;
+        let isPdf = false;
+        let bytes = new Uint8Array(0);
+        let contentType: string | null = null;
+        let httpStatus: number | null = null;
 
-        if (isPdf) {
-          content = await extractPdfText(bytes);
-          if (!content) throw new Error("PDF has no extractable text layer.");
-        } else {
-          const rawHtml = new TextDecoder("utf-8").decode(bytes);
-          const htmlText = extractHtmlText(rawHtml);
-          if (htmlText.length >= 1000) {
-            content = htmlText;
-          } else {
-            // Short HTML means likely an SPA shell (e.g. DRE Portugal OutSystems pages).
-            // Fall back to Parallel.ai which renders the page fully.
-            console.log(`[pdf-collect] SPA shell detected (${htmlText.length} chars), retrying with Parallel.ai: ${target.url}`);
+        let fetchError: string | null = null;
+        let response: Response | null = null;
+        try {
+          response = await fetch(target.url, {
+            headers: {
+              Accept: "application/pdf,text/html;q=0.9,*/*;q=0.8",
+              "User-Agent": "OryxScrape/1.0 (+official document collection)",
+            },
+            redirect: "follow",
+          });
+          httpStatus = response.status;
+          if (!response.ok) fetchError = `HTTP ${response.status}`;
+        } catch (networkError) {
+          fetchError = `Network error: ${(networkError as Error).message}`;
+        }
+
+        if (fetchError) {
+          // 404 means the document does not exist; retrying elsewhere is pointless.
+          if (httpStatus === 404) throw new Error(fetchError);
+          console.log(`[pdf-collect] direct fetch failed (${fetchError}), retrying with Parallel.ai: ${target.url}`);
+          let parallelText = "";
+          try {
             const parallelResult = await extractWithParallel(
               target.url,
               `Extract the full text of this regulatory document from ${target.url}.`,
             );
-            content = parallelResult.text;
-            usedParallel = true;
+            parallelText = parallelResult.text;
             parallelTitle = parallelResult.title;
-            if (!content) throw new Error("Document has no extractable text (SPA shell, Parallel.ai returned empty).");
+          } catch (parallelError) {
+            throw new Error(`${fetchError}; Parallel: ${(parallelError as Error).message}`);
+          }
+          if (!parallelText) throw new Error(`${fetchError}; Parallel: no extractable text`);
+          content = parallelText;
+          usedParallel = true;
+        } else {
+          const okResponse = response as Response;
+          contentType = okResponse.headers.get("content-type");
+          bytes = new Uint8Array(await okResponse.arrayBuffer());
+          isPdf = looksLikePdf(bytes, contentType);
+
+          if (isPdf) {
+            content = await extractPdfText(bytes);
+            if (!content) throw new Error("PDF has no extractable text layer.");
+          } else {
+            const rawHtml = new TextDecoder("utf-8").decode(bytes);
+            const htmlText = extractHtmlText(rawHtml);
+            if (htmlText.length >= 1000) {
+              content = htmlText;
+            } else {
+              // Short HTML means likely an SPA shell; Parallel.ai renders the page fully.
+              console.log(`[pdf-collect] SPA shell detected (${htmlText.length} chars), retrying with Parallel.ai: ${target.url}`);
+              const parallelResult = await extractWithParallel(
+                target.url,
+                `Extract the full text of this regulatory document from ${target.url}.`,
+              );
+              content = parallelResult.text;
+              usedParallel = true;
+              parallelTitle = parallelResult.title;
+              if (!content) throw new Error("Document has no extractable text (SPA shell, Parallel.ai returned empty).");
+            }
           }
         }
+
+
 
 
         const { error } = await supabase.from("raw_items").insert({
@@ -192,7 +225,7 @@ export async function runPdfCollection(input: {
           traceability_level: source.traceability_level,
           institution_class: source.institution_class,
           canonical_url: target.url,
-          http_status: response.status,
+          http_status: httpStatus,
           content_type: contentType,
           language: input.language ?? null,
           apify_actor_id: null,
@@ -206,7 +239,7 @@ export async function runPdfCollection(input: {
             perTarget.push({
               url: target.url,
               document_label: label,
-              http_status: response.status,
+              http_status: httpStatus,
               chars: content.length,
               result: "duplicate",
             });
@@ -218,7 +251,7 @@ export async function runPdfCollection(input: {
           perTarget.push({
             url: target.url,
             document_label: label,
-            http_status: response.status,
+            http_status: httpStatus,
             chars: content.length,
             result: "ingested",
           });

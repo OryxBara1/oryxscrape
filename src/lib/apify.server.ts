@@ -61,6 +61,8 @@ export async function startCrawl(input: {
   /** Optional link filters so a listing page yields documents, not navigation. */
   includeUrlGlobs?: string[];
   excludeUrlGlobs?: string[];
+  /** Custom proxies (e.g. Webshare); absent keeps Apify Proxy. */
+  proxyUrls?: string[];
 }): Promise<ApifyRun> {
   const actorId = input.actorId ?? DEFAULT_ACTOR_ID;
   const body = {
@@ -70,7 +72,9 @@ export async function startCrawl(input: {
     crawlerType: input.crawlerType ?? "cheerio",
     saveMarkdown: true,
     saveHtml: true,
-    proxyConfiguration: { useApifyProxy: true },
+    proxyConfiguration: input.proxyUrls?.length
+      ? { useApifyProxy: false, proxyUrls: input.proxyUrls }
+      : { useApifyProxy: true },
     ...(input.includeUrlGlobs?.length ? { includeUrlGlobs: input.includeUrlGlobs } : {}),
     ...(input.excludeUrlGlobs?.length ? { excludeUrlGlobs: input.excludeUrlGlobs } : {}),
   };
