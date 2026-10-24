@@ -98,4 +98,4 @@
 ## Coleta resiliente + alerta de falha (2026-10-24)
 - [ ] Corrigir payload do Parallel Extract ({urls, objective})
 - [ ] Orquestrador Direto → Parallel → Webshare (via Apify; só se proxy_config setado) → blocked
-- [ ] E-mail de falha via Resend (destinatário a confirmar: ops@auramaris.app ou ops@oryxbara.com)
+- [ ] E-mail de falha via Resend PRÓPRIO do OryxScrape (nova conexão, não a da Auramaris) → ops@auramaris.app
