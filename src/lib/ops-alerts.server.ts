@@ -67,7 +67,7 @@ export async function sendCollectionFailureAlert(a: CollectionFailureAlert): Pro
       console.error("[ops-alert] email not configured; skipping alert for", a.url);
       return false;
     }
-    const from = process.env["OPS_ALERT_FROM"] || "OryxScrape <onboarding@resend.dev>";
+    const from = process.env["OPS_ALERT_FROM"] || "OryxScrape Alerts <alerts@oryxbara.com>";
     const { subject, html } = buildFailureEmail(a);
     const res = await fetch(`${GATEWAY_URL}/emails`, {
       method: "POST",

@@ -99,4 +99,4 @@
 - [x] Corrigir payload do Parallel Extract ({urls, objective})
 - [x] Orquestrador Direto → Parallel → Webshare (via Apify; só se proxy_config setado) → blocked
 - [x] E-mail de falha via Resend PRÓPRIO do OryxScrape (nova conexão, não a da Auramaris) → ops@auramaris.app
-- [ ] Verificar domínio de envio no Resend do OryxScrape (aguarda usuário)
+- [x] Remetente alerts@oryxbara.com verificado; alerta de teste enviado
