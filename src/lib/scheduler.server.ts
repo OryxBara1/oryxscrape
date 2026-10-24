@@ -217,6 +217,9 @@ async function collectOne(
       source.crawler_type === "playwright:firefox" ? "playwright:firefox" : "cheerio";
     const includeUrlGlobs = source.include_url_globs ?? undefined;
     const maxCrawlPages = 10;
+    const { readProxyConfig, resolveProxyUrls } = await import("./webshare-proxy.server");
+    // Source rows are loaded with select("*"); proxy_config may be absent.
+    const proxy = readProxyConfig(source);
 
     const { data: job, error: jobError } = await supabase
       .from("collection_jobs")
