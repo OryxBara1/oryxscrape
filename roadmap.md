@@ -94,3 +94,8 @@
 - [x] Listas de fontes mostram "País — Fonte", ordenadas por país e nome
 - [x] Correção do lookup de texto integral no feed (RPC fetch_body_text_candidates)
 - [ ] Incluir markdown/content/body na RPC (migração futura)
+
+## Coleta resiliente + alerta de falha (2026-10-24)
+- [ ] Corrigir payload do Parallel Extract ({urls, objective})
+- [ ] Orquestrador Direto → Parallel → Webshare (via Apify; só se proxy_config setado) → blocked
+- [ ] E-mail de falha via Resend (destinatário a confirmar: ops@auramaris.app ou ops@oryxbara.com)
