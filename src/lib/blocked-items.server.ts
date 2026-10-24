@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 import { sha256Hex } from "./consumer-keys.server";
+import { sendCollectionFailureAlert } from "./ops-alerts.server";
 
 export const BLOCKED_COLLECTOR_VERSION = "blocked-record@1.0.0";
 
@@ -36,16 +37,18 @@ export async function recordBlockedItem(input: {
   attempts?: { engine: string; ok: boolean; error?: string }[];
   /** Overrides the default blocked-record collector_version. */
   collectorVersion?: string;
+  sourceName?: string | null;
 }): Promise<"recorded" | "duplicate"> {
   const { supabase, source } = input;
   const now = new Date().toISOString();
-  const { error } = await supabase.from("raw_items").insert({
+  const { data, error } = await supabase.from("raw_items").insert({
     job_id: input.jobId ?? null,
     source_id: source.id,
     source_url: input.url,
     raw_payload: {
       error: input.error.slice(0, 500),
       attempted_at: now,
+      ...(input.attempts?.length ? { attempts: input.attempts } : {}),
       ...(input.jurisdictionHint ? { jurisdiction_hint: input.jurisdictionHint } : {}),
     } as unknown as never,
     content_hash: await sha256Hex(`blocked|${source.id}|${input.url}`),
@@ -56,12 +59,22 @@ export async function recordBlockedItem(input: {
     traceability_level: source.traceability_level,
     institution_class: source.institution_class,
     canonical_url: input.url,
-    collector_version: BLOCKED_COLLECTOR_VERSION,
+    collector_version: input.collectorVersion ?? BLOCKED_COLLECTOR_VERSION,
     item_status: "blocked",
-  });
+  }).select("id").single();
   if (error) {
+    // Duplicate = already blocked and already alerted once; never re-alert.
     if (error.code === "23505") return "duplicate";
     throw new Error(error.message);
   }
+  await sendCollectionFailureAlert({
+    url: input.url,
+    sourceId: source.id,
+    sourceName: input.sourceName ?? (source as { name?: string }).name ?? null,
+    jobId: input.jobId ?? null,
+    rawItemId: (data as { id: string } | null)?.id ?? null,
+    finalError: input.error,
+    attempts: input.attempts,
+  });
   return "recorded";
 }

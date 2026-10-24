@@ -98,14 +98,11 @@ export async function extractWithParallel(
   const response = await fetch(endpoint("extract"), {
     method: "POST",
     headers,
+    // Only {urls, objective}: extra top-level fields are rejected with 422
+    // "Extra inputs are not permitted".
     body: JSON.stringify({
       urls: [url],
       objective: objective ?? "Extract the full text of this regulatory or legal document.",
-      excerpts: false,
-      full_content: { max_chars_per_result: 100000 },
-      advanced_settings: {
-        fetch_policy: { timeout_seconds: 60 },
-      },
     }),
   });
 
