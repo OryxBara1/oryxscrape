@@ -755,6 +755,7 @@ export type Database = {
           last_scheduled_run_at: string | null
           name: string
           notes: string | null
+          proxy_config: Json | null
           robots_checked_at: string | null
           robots_status: string
           schedule_enabled: boolean
@@ -781,6 +782,7 @@ export type Database = {
           last_scheduled_run_at?: string | null
           name: string
           notes?: string | null
+          proxy_config?: Json | null
           robots_checked_at?: string | null
           robots_status?: string
           schedule_enabled?: boolean
@@ -807,6 +809,7 @@ export type Database = {
           last_scheduled_run_at?: string | null
           name?: string
           notes?: string | null
+          proxy_config?: Json | null
           robots_checked_at?: string | null
           robots_status?: string
           schedule_enabled?: boolean
