@@ -2,7 +2,7 @@
 
 ## Correção da coleta manual italiana (2026-10-24)
 - [x] Normattiva manual usa o coletor italiano existente; PISTE restrito às fontes francesas nos caminhos manual e agendado.
-- [ ] Validar regressão do despacho e resultado da API italiana.
+- [x] 12 testes de despacho passaram; API Normattiva respondeu HTTP 200 com 7 resultados.
 - [ ] Nova coleta pelo painel logado — Supabase externo não permite sessão de teste gerenciada.
 
 ## Concluído
