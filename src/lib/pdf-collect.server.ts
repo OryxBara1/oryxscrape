@@ -15,6 +15,8 @@ import type { Database } from "@/integrations/supabase/types";
 
 import { recordBlockedItem } from "./blocked-items.server";
 import { sha256Hex } from "./consumer-keys.server";
+import { extractWithWebshare, WEBSHARE_COLLECTOR_VERSION } from "./webshare-fallback.server";
+import { readProxyConfig } from "./webshare-proxy.server";
 import { extractWithParallel, looksLikeSpaShell, PARALLEL_COLLECTOR_VERSION } from "./parallel-fetch.server";
 
 /** Errors that mean "no automated collector can get this URL" → manual queue. */
@@ -123,6 +125,8 @@ export async function runPdfCollection(input: {
       error?: string;
     }[] = [];
 
+    const proxy = readProxyConfig(input.source);
+    let attempts: { engine: string; ok: boolean; error?: string }[] = [];
     for (const target of targets) {
       const label = target.document_label ?? null;
       try {
@@ -135,6 +139,8 @@ export async function runPdfCollection(input: {
         let httpStatus: number | null = null;
 
         let fetchError: string | null = null;
+        let usedWebshare = false;
+        attempts = [];
         let response: Response | null = null;
         try {
           response = await fetch(target.url, {
@@ -154,7 +160,9 @@ export async function runPdfCollection(input: {
           // 404 means the document does not exist; retrying elsewhere is pointless.
           if (httpStatus === 404) throw new Error(fetchError);
           console.log(`[pdf-collect] direct fetch failed (${fetchError}), retrying with Parallel.ai: ${target.url}`);
+          attempts.push({ engine: "direct", ok: false, error: fetchError });
           let parallelText = "";
+          let parallelError = "";
           try {
             const parallelResult = await extractWithParallel(
               target.url,
@@ -162,10 +170,26 @@ export async function runPdfCollection(input: {
             );
             parallelText = parallelResult.text;
             parallelTitle = parallelResult.title;
-          } catch (parallelError) {
-            throw new Error(`${fetchError}; Parallel: ${(parallelError as Error).message}`);
+          } catch (e) {
+            parallelError = (e as Error).message;
           }
-          if (!parallelText) throw new Error(`${fetchError}; Parallel: no extractable text`);
+          if (!parallelText) {
+            attempts.push({ engine: "parallel", ok: false, error: (parallelError || "no extractable text").slice(0, 300) });
+            if (!proxy) throw new Error(`${fetchError}; Parallel: ${parallelError || "no extractable text"}`);
+            try {
+              const ws = await extractWithWebshare(target.url, proxy);
+              parallelText = ws.text;
+              parallelTitle = ws.title;
+              usedWebshare = true;
+              attempts.push({ engine: `webshare:${proxy.country_code}`, ok: true });
+            } catch (e) {
+              const wsError = (e as Error).message;
+              attempts.push({ engine: `webshare:${proxy.country_code}`, ok: false, error: wsError.slice(0, 300) });
+              throw new Error(`${fetchError}; Parallel: ${parallelError || "no extractable text"}; Webshare: ${wsError}`);
+            }
+          } else {
+            attempts.push({ engine: "parallel", ok: true });
+          }
           content = parallelText;
           usedParallel = true;
         } else {
@@ -207,7 +231,11 @@ export async function runPdfCollection(input: {
         raw_payload: {
           plain_text: content,
           document_label: label,
-          ...(usedParallel ? { parallel_title: parallelTitle, extraction_method: "parallel_extract" } : {}),
+          ...(usedWebshare
+            ? { parallel_title: parallelTitle, extraction_method: "webshare_proxy", attempts }
+            : usedParallel
+              ? { parallel_title: parallelTitle, extraction_method: "parallel_extract", attempts }
+              : {}),
           byte_length: bytes.byteLength,
           ...(target.concept_label
             ? {
@@ -230,7 +258,7 @@ export async function runPdfCollection(input: {
           language: input.language ?? null,
           apify_actor_id: null,
           apify_run_id: null,
-          collector_version: isPdf ? PDF_COLLECTOR_VERSION : usedParallel ? PARALLEL_COLLECTOR_VERSION : HTML_COLLECTOR_VERSION,
+          collector_version: isPdf ? PDF_COLLECTOR_VERSION : usedWebshare ? WEBSHARE_COLLECTOR_VERSION : usedParallel ? PARALLEL_COLLECTOR_VERSION : HTML_COLLECTOR_VERSION,
         });
 
         if (error) {
@@ -270,6 +298,7 @@ export async function runPdfCollection(input: {
               url: target.url,
               error: message,
               jobId: job.id,
+              attempts,
             });
           } catch (blockError) {
             console.error("[pdf-collect] blocked-record failed", target.url, (blockError as Error).message);
