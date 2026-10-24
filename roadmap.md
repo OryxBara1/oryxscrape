@@ -1,5 +1,10 @@
 # Roadmap
 
+## Correção da coleta manual italiana (2026-10-24)
+- [x] Normattiva manual usa o coletor italiano existente; PISTE restrito às fontes francesas nos caminhos manual e agendado.
+- [x] 12 testes de despacho passaram; API Normattiva respondeu HTTP 200 com 7 resultados.
+- [ ] Nova coleta pelo painel logado — Supabase externo não permite sessão de teste gerenciada.
+
 ## Concluído
 - Coletor EUR-Lex (`collect-eu-eurlex`): spec exata do usuário implementada (hash SHA-256 do CELEX, raw_payload com metadados, sem fetch de texto por causa do WAF, rota no scheduler.server.ts, fonte eur-lex.europa.eu criada). Run real: 77 itens novos, 4 duplicados, 0 falhas, títulos em inglês corretos.
 

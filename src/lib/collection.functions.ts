@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getApiCollector } from "./api-collector";
 
 /**
  * Phase 5 pipeline (manual trigger only — no scheduling yet):
@@ -94,8 +95,43 @@ export const startCollectionJob = createServerFn({ method: "POST" })
       return runMaltaCollection({ supabase, profileId: data.profileId ?? null, urls });
     }
 
+    const apiCollector = source.collection_method === "api" ? getApiCollector(source.domain) : null;
+
+    // Reuse each country's existing collector, just like scheduled runs.
+    if (apiCollector && apiCollector !== "piste" && apiCollector !== "fek") {
+      const result = await (async () => {
+        switch (apiCollector) {
+          case "normattiva": {
+            const { runNormattivaCollection } = await import("./normattiva-collect.server");
+            return runNormattivaCollection(supabase);
+          }
+          case "eurlex": {
+            const { runEurlexCollection } = await import("./eurlex-collect.server");
+            return runEurlexCollection(supabase);
+          }
+          case "boe": {
+            const { runBoeCollection } = await import("./boe-collect.server");
+            return runBoeCollection(supabase);
+          }
+          case "uk": {
+            const { runUkLegislationCollection } = await import("./legislation-uk-collect.server");
+            return runUkLegislationCollection(supabase);
+          }
+          case "obk": {
+            const { runObkCollection } = await import("./obk-collect.server");
+            return runObkCollection(supabase);
+          }
+          case "dou": {
+            const { runDouCollection } = await import("./dou-collect.server");
+            return runDouCollection(supabase);
+          }
+        }
+      })();
+      return { jobId: result.jobId, apifyRunId: null, ingested: result.new_items, duplicates: result.duplicates };
+    }
+
     // Greek gazette: open JSON search API + public PDF blobs.
-    if (source.collection_method === "api" && source.domain.includes("et.gr")) {
+    if (apiCollector === "fek") {
       const { runFekCollection } = await import("./fek-collect.server");
       return runFekCollection({
         supabase,
@@ -108,7 +144,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
 
     // Authenticated structured APIs (e.g. PISTE / Légifrance) are fetched
     // synchronously here; there is no external run to poll afterwards.
-    if (source.collection_method === "api") {
+    if (apiCollector === "piste") {
       const { runPisteCollection } = await import("./piste-collect.server");
       const concepts =
         data.concepts?.length
@@ -121,6 +157,10 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         concepts,
         maxItems: Math.min(Math.max(data.maxPages ?? 2, 1), 5),
       });
+    }
+
+    if (source.collection_method === "api") {
+      throw new Error(`No API collector is configured for ${source.domain}. This source cannot use the French PISTE collector.`);
     }
 
     // PDF-only portals: the documents are fetched directly and their text layer
