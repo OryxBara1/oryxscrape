@@ -22,7 +22,8 @@ import { extractWithParallel, looksLikeSpaShell, PARALLEL_COLLECTOR_VERSION } fr
 /** Errors that mean "no automated collector can get this URL" → manual queue. */
 function isBlockingError(message: string): boolean {
   return (
-    /HTTP (401|403|407)/.test(message) ||
+    /HTTP (401|403|407|429|5\d\d)/.test(message) ||
+    /Network error/i.test(message) ||
     /SSL|certificate|handshake/i.test(message) ||
     /timeout|timed out/i.test(message) ||
     /no extractable text/i.test(message)
