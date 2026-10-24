@@ -16,7 +16,7 @@ export type CollectionFailureAlert = {
   jobId?: string | null;
   rawItemId?: string | null;
   finalError: string;
-  attempts?: FailureAttempt[];
+  attempts?: FailureAttempt[] | undefined;
   occurredAt?: Date;
 };
 
@@ -61,13 +61,13 @@ ${attempts ? `<h3>Tentativas</h3><ul>${attempts}</ul>` : ""}
 
 export async function sendCollectionFailureAlert(a: CollectionFailureAlert): Promise<boolean> {
   try {
-    const lovableKey = process.env.LOVABLE_API_KEY;
-    const resendKey = process.env.RESEND_API_KEY;
+    const lovableKey = process.env["LOVABLE_API_KEY"];
+    const resendKey = process.env["RESEND_API_KEY"];
     if (!lovableKey || !resendKey) {
       console.error("[ops-alert] email not configured; skipping alert for", a.url);
       return false;
     }
-    const from = process.env.OPS_ALERT_FROM || "OryxScrape <onboarding@resend.dev>";
+    const from = process.env["OPS_ALERT_FROM"] || "OryxScrape <onboarding@resend.dev>";
     const { subject, html } = buildFailureEmail(a);
     const res = await fetch(`${GATEWAY_URL}/emails`, {
       method: "POST",

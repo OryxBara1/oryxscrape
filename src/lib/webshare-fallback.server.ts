@@ -24,7 +24,7 @@ export async function extractWithWebshare(
     startUrl: url,
     maxCrawlPages: 1,
     crawlerType: "playwright:firefox",
-    proxyUrls,
+    ...(proxyUrls ? { proxyUrls } : {}),
   });
 
   const deadline = Date.now() + MAX_WAIT_MS;
