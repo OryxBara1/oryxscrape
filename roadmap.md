@@ -96,6 +96,7 @@
 - [ ] Incluir markdown/content/body na RPC (migração futura)
 
 ## Coleta resiliente + alerta de falha (2026-10-24)
-- [ ] Corrigir payload do Parallel Extract ({urls, objective})
-- [ ] Orquestrador Direto → Parallel → Webshare (via Apify; só se proxy_config setado) → blocked
-- [ ] E-mail de falha via Resend PRÓPRIO do OryxScrape (nova conexão, não a da Auramaris) → ops@auramaris.app
+- [x] Corrigir payload do Parallel Extract ({urls, objective})
+- [x] Orquestrador Direto → Parallel → Webshare (via Apify; só se proxy_config setado) → blocked
+- [x] E-mail de falha via Resend PRÓPRIO do OryxScrape (nova conexão, não a da Auramaris) → ops@auramaris.app
+- [ ] Verificar domínio de envio no Resend do OryxScrape (aguarda usuário)
