@@ -180,6 +180,374 @@ export type Database = {
           },
         ]
       }
+      discovery_candidates: {
+        Row: {
+          collection_job_id: string | null
+          confidence: Json
+          confirmed_identifier: string | null
+          confirmed_source_url: string | null
+          confirmed_title: string | null
+          country_code: string | null
+          created_at: string
+          doc_type_guess: string | null
+          found_at: string
+          found_identifier: string | null
+          found_title: string | null
+          found_url: string | null
+          id: string
+          is_priority: boolean
+          issuing_authority: string | null
+          key_identifier: string | null
+          key_provider: string | null
+          key_url: string | null
+          language: string | null
+          needs_review: boolean
+          outcome: string
+          outcome_history: Json
+          outcome_reason: string | null
+          prefilled_stages: string[]
+          provider: string
+          provider_source: string | null
+          provider_source_id: string | null
+          query_id: string | null
+          raw_item_id: string | null
+          relevance_note: string | null
+          retrieval_state: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string | null
+          same_as_candidate_id: string | null
+          source_id: string | null
+          stage: string
+          updated_at: string
+        }
+        Insert: {
+          collection_job_id?: string | null
+          confidence?: Json
+          confirmed_identifier?: string | null
+          confirmed_source_url?: string | null
+          confirmed_title?: string | null
+          country_code?: string | null
+          created_at?: string
+          doc_type_guess?: string | null
+          found_at?: string
+          found_identifier?: string | null
+          found_title?: string | null
+          found_url?: string | null
+          id?: string
+          is_priority?: boolean
+          issuing_authority?: string | null
+          key_identifier?: string | null
+          key_provider?: string | null
+          key_url?: string | null
+          language?: string | null
+          needs_review?: boolean
+          outcome?: string
+          outcome_history?: Json
+          outcome_reason?: string | null
+          prefilled_stages?: string[]
+          provider: string
+          provider_source?: string | null
+          provider_source_id?: string | null
+          query_id?: string | null
+          raw_item_id?: string | null
+          relevance_note?: string | null
+          retrieval_state?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+          same_as_candidate_id?: string | null
+          source_id?: string | null
+          stage?: string
+          updated_at?: string
+        }
+        Update: {
+          collection_job_id?: string | null
+          confidence?: Json
+          confirmed_identifier?: string | null
+          confirmed_source_url?: string | null
+          confirmed_title?: string | null
+          country_code?: string | null
+          created_at?: string
+          doc_type_guess?: string | null
+          found_at?: string
+          found_identifier?: string | null
+          found_title?: string | null
+          found_url?: string | null
+          id?: string
+          is_priority?: boolean
+          issuing_authority?: string | null
+          key_identifier?: string | null
+          key_provider?: string | null
+          key_url?: string | null
+          language?: string | null
+          needs_review?: boolean
+          outcome?: string
+          outcome_history?: Json
+          outcome_reason?: string | null
+          prefilled_stages?: string[]
+          provider?: string
+          provider_source?: string | null
+          provider_source_id?: string | null
+          query_id?: string | null
+          raw_item_id?: string | null
+          relevance_note?: string | null
+          retrieval_state?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string | null
+          same_as_candidate_id?: string | null
+          source_id?: string | null
+          stage?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_candidates_collection_job_id_fkey"
+            columns: ["collection_job_id"]
+            isOneToOne: false
+            referencedRelation: "collection_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_candidates_query_id_fkey"
+            columns: ["query_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_queries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_candidates_raw_item_id_fkey"
+            columns: ["raw_item_id"]
+            isOneToOne: false
+            referencedRelation: "raw_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_candidates_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_candidates_same_as_candidate_id_fkey"
+            columns: ["same_as_candidate_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_candidates_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discovery_queries: {
+        Row: {
+          attempt: number
+          counted_against_budget: boolean
+          created_at: string
+          error_code: string | null
+          error_kind: string | null
+          http_status: number | null
+          id: string
+          param_country: string | null
+          param_language: string | null
+          param_namespace: string | null
+          purpose: string
+          query_text: string
+          result_count: number | null
+          retry_after: string | null
+          run_id: string
+          search_term_id: string | null
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempt?: number
+          counted_against_budget?: boolean
+          created_at?: string
+          error_code?: string | null
+          error_kind?: string | null
+          http_status?: number | null
+          id?: string
+          param_country?: string | null
+          param_language?: string | null
+          param_namespace?: string | null
+          purpose?: string
+          query_text: string
+          result_count?: number | null
+          retry_after?: string | null
+          run_id: string
+          search_term_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt?: number
+          counted_against_budget?: boolean
+          created_at?: string
+          error_code?: string | null
+          error_kind?: string | null
+          http_status?: number | null
+          id?: string
+          param_country?: string | null
+          param_language?: string | null
+          param_namespace?: string | null
+          purpose?: string
+          query_text?: string
+          result_count?: number | null
+          retry_after?: string | null
+          run_id?: string
+          search_term_id?: string | null
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_queries_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_queries_search_term_id_fkey"
+            columns: ["search_term_id"]
+            isOneToOne: false
+            referencedRelation: "search_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discovery_runs: {
+        Row: {
+          calls_reserved: number
+          calls_used: number
+          created_at: string
+          error_code: string | null
+          error_detail: string | null
+          finished_at: string | null
+          heartbeat_at: string
+          id: string
+          provider: string
+          quota_minute_remaining: number | null
+          quota_period_remaining: number | null
+          quota_reset_at: string | null
+          quota_window_remaining: number | null
+          started_at: string
+          status: string
+          triggered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          calls_reserved?: number
+          calls_used?: number
+          created_at?: string
+          error_code?: string | null
+          error_detail?: string | null
+          finished_at?: string | null
+          heartbeat_at?: string
+          id?: string
+          provider: string
+          quota_minute_remaining?: number | null
+          quota_period_remaining?: number | null
+          quota_reset_at?: string | null
+          quota_window_remaining?: number | null
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          calls_reserved?: number
+          calls_used?: number
+          created_at?: string
+          error_code?: string | null
+          error_detail?: string | null
+          finished_at?: string | null
+          heartbeat_at?: string
+          id?: string
+          provider?: string
+          quota_minute_remaining?: number | null
+          quota_period_remaining?: number | null
+          quota_reset_at?: string | null
+          quota_window_remaining?: number | null
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      discovery_sightings: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          id: string
+          matched_key: string
+          provider: string
+          query_id: string | null
+          run_id: string | null
+          seen_at: string
+          seen_url: string | null
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          id?: string
+          matched_key: string
+          provider: string
+          query_id?: string | null
+          run_id?: string | null
+          seen_at?: string
+          seen_url?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          matched_key?: string
+          provider?: string
+          query_id?: string | null
+          run_id?: string | null
+          seen_at?: string
+          seen_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_sightings_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_sightings_query_id_fkey"
+            columns: ["query_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_queries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_sightings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exchange_handoffs: {
         Row: {
           artifact_filename: string
@@ -881,6 +1249,7 @@ export type Database = {
           updated_at: string
         }[]
       }
+      discovery_confidence_is_valid: { Args: { c: Json }; Returns: boolean }
       eval_policy_node: { Args: { facts: Json; node: Json }; Returns: boolean }
       evaluate_tier_policy:
         | {
