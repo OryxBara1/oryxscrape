@@ -105,3 +105,9 @@
 - [x] Orquestrador Direto → Parallel → Webshare (via Apify; só se proxy_config setado) → blocked
 - [x] E-mail de falha via Resend PRÓPRIO do OryxScrape (nova conexão, não a da Auramaris) → ops@auramaris.app
 - [x] Remetente alerts@oryxbara.com verificado; alerta de teste enviado
+
+## Discovery queue (2026-11-02)
+- [x] Fase 0: TRUNCATE revogado de anon/authenticated nas 13 tabelas
+- [ ] Fase 1A: fila de descoberta (4 tabelas) — aplicação + bateria de testes
+- [ ] Fase 2 (pendente, antes do builder de chaves): canonicalização de URL conservadora — não assumir http=https, barras repetidas ou barra final sem confirmação; resolver compatibilidade com o CHECK de key_url (hoje exige 'url:https://')
+- [ ] Fases 1B/1C, integração LDH, agendamento: não autorizados
