@@ -405,7 +405,8 @@ grant insert on public.document_copy_links, public.document_copy_sightings,
 -- service_role: no INSERT on legal_document_versions; no DELETE/TRUNCATE anywhere.
 
 revoke execute on function public.document_append_only(), public.document_copies_guard(),
-  public.document_assessments_supersede_guard() from public, anon, authenticated;
+  public.document_assessments_supersede_guard(), public.legal_documents_guard()
+  from public, anon, authenticated;
 
 -- RLS
 alter table public.legal_documents enable row level security;
