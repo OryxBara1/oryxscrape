@@ -548,6 +548,322 @@ export type Database = {
           },
         ]
       }
+      document_assessments: {
+        Row: {
+          assessed_by: string | null
+          basis: string
+          copy_id: string | null
+          created_at: string
+          dimension: string
+          extraction_id: string | null
+          id: string
+          note: string | null
+          reasons: string[]
+          sighting_id: string | null
+          supersedes_assessment_id: string | null
+          tool: string | null
+          tool_version: string | null
+          value: string
+        }
+        Insert: {
+          assessed_by?: string | null
+          basis: string
+          copy_id?: string | null
+          created_at?: string
+          dimension: string
+          extraction_id?: string | null
+          id?: string
+          note?: string | null
+          reasons?: string[]
+          sighting_id?: string | null
+          supersedes_assessment_id?: string | null
+          tool?: string | null
+          tool_version?: string | null
+          value: string
+        }
+        Update: {
+          assessed_by?: string | null
+          basis?: string
+          copy_id?: string | null
+          created_at?: string
+          dimension?: string
+          extraction_id?: string | null
+          id?: string
+          note?: string | null
+          reasons?: string[]
+          sighting_id?: string | null
+          supersedes_assessment_id?: string | null
+          tool?: string | null
+          tool_version?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_assessments_copy_id_fkey"
+            columns: ["copy_id"]
+            isOneToOne: false
+            referencedRelation: "document_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_assessments_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "document_extractions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_assessments_sighting_id_fkey"
+            columns: ["sighting_id"]
+            isOneToOne: false
+            referencedRelation: "document_copy_sightings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_assessments_supersedes_assessment_id_fkey"
+            columns: ["supersedes_assessment_id"]
+            isOneToOne: false
+            referencedRelation: "document_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_copies: {
+        Row: {
+          created_at: string
+          detected_mime_type: string | null
+          file_sha256: string
+          id: string
+          size_bytes: number
+          storage_bucket: string
+          storage_path: string
+          storage_status: string
+          stored_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          detected_mime_type?: string | null
+          file_sha256: string
+          id?: string
+          size_bytes: number
+          storage_bucket?: string
+          storage_path: string
+          storage_status?: string
+          stored_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          detected_mime_type?: string | null
+          file_sha256?: string
+          id?: string
+          size_bytes?: number
+          storage_bucket?: string
+          storage_path?: string
+          storage_status?: string
+          stored_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      document_copy_links: {
+        Row: {
+          copy_id: string
+          created_at: string
+          document_id: string
+          id: string
+          link_basis: string
+          linked_by: string | null
+          note: string | null
+        }
+        Insert: {
+          copy_id: string
+          created_at?: string
+          document_id: string
+          id?: string
+          link_basis: string
+          linked_by?: string | null
+          note?: string | null
+        }
+        Update: {
+          copy_id?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          link_basis?: string
+          linked_by?: string | null
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_copy_links_copy_id_fkey"
+            columns: ["copy_id"]
+            isOneToOne: false
+            referencedRelation: "document_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_copy_links_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_copy_sightings: {
+        Row: {
+          byte_outcome: string
+          collection_job_id: string | null
+          copy_id: string | null
+          created_at: string
+          declared_size_bytes: number | null
+          document_id: string | null
+          fetch_method: string
+          fetched_url: string
+          id: string
+          informed_mime_type: string | null
+          is_manual_recheck: boolean
+          raw_item_id: string | null
+          received_filename: string | null
+          seen_at: string
+          seen_by: string | null
+          source_id: string | null
+        }
+        Insert: {
+          byte_outcome: string
+          collection_job_id?: string | null
+          copy_id?: string | null
+          created_at?: string
+          declared_size_bytes?: number | null
+          document_id?: string | null
+          fetch_method: string
+          fetched_url: string
+          id?: string
+          informed_mime_type?: string | null
+          is_manual_recheck?: boolean
+          raw_item_id?: string | null
+          received_filename?: string | null
+          seen_at?: string
+          seen_by?: string | null
+          source_id?: string | null
+        }
+        Update: {
+          byte_outcome?: string
+          collection_job_id?: string | null
+          copy_id?: string | null
+          created_at?: string
+          declared_size_bytes?: number | null
+          document_id?: string | null
+          fetch_method?: string
+          fetched_url?: string
+          id?: string
+          informed_mime_type?: string | null
+          is_manual_recheck?: boolean
+          raw_item_id?: string | null
+          received_filename?: string | null
+          seen_at?: string
+          seen_by?: string | null
+          source_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_copy_sightings_collection_job_id_fkey"
+            columns: ["collection_job_id"]
+            isOneToOne: false
+            referencedRelation: "collection_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_copy_sightings_copy_id_fkey"
+            columns: ["copy_id"]
+            isOneToOne: false
+            referencedRelation: "document_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_copy_sightings_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_copy_sightings_raw_item_id_fkey"
+            columns: ["raw_item_id"]
+            isOneToOne: false
+            referencedRelation: "raw_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_copy_sightings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_extractions: {
+        Row: {
+          char_count: number
+          copy_id: string
+          created_at: string
+          created_by: string | null
+          extractor_tool: string
+          extractor_version: string
+          id: string
+          normalization_version: string | null
+          page_count_detected: number | null
+          text_inline: string | null
+          text_sha256_exact: string
+          text_sha256_normalized: string | null
+          text_storage_path: string | null
+          truncation_status: string
+        }
+        Insert: {
+          char_count: number
+          copy_id: string
+          created_at?: string
+          created_by?: string | null
+          extractor_tool: string
+          extractor_version: string
+          id?: string
+          normalization_version?: string | null
+          page_count_detected?: number | null
+          text_inline?: string | null
+          text_sha256_exact: string
+          text_sha256_normalized?: string | null
+          text_storage_path?: string | null
+          truncation_status?: string
+        }
+        Update: {
+          char_count?: number
+          copy_id?: string
+          created_at?: string
+          created_by?: string | null
+          extractor_tool?: string
+          extractor_version?: string
+          id?: string
+          normalization_version?: string | null
+          page_count_detected?: number | null
+          text_inline?: string | null
+          text_sha256_exact?: string
+          text_sha256_normalized?: string | null
+          text_storage_path?: string | null
+          truncation_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_extractions_copy_id_fkey"
+            columns: ["copy_id"]
+            isOneToOne: false
+            referencedRelation: "document_copies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exchange_handoffs: {
         Row: {
           artifact_filename: string
@@ -714,6 +1030,124 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "exchange_handoffs"
             referencedColumns: ["exchange_item_id"]
+          },
+        ]
+      }
+      legal_document_versions: {
+        Row: {
+          created_at: string
+          created_by: string
+          document_id: string
+          id: string
+          note: string | null
+          supporting_copy_id: string
+          supporting_extraction_id: string | null
+          valid_from: string | null
+          valid_to: string | null
+          version_label: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          document_id: string
+          id?: string
+          note?: string | null
+          supporting_copy_id: string
+          supporting_extraction_id?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
+          version_label: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          document_id?: string
+          id?: string
+          note?: string | null
+          supporting_copy_id?: string
+          supporting_extraction_id?: string | null
+          valid_from?: string | null
+          valid_to?: string | null
+          version_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "legal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "legal_document_versions_supporting_copy_id_fkey"
+            columns: ["supporting_copy_id"]
+            isOneToOne: false
+            referencedRelation: "document_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "versions_copy_linked_to_document"
+            columns: ["supporting_copy_id", "document_id"]
+            isOneToOne: false
+            referencedRelation: "document_copy_links"
+            referencedColumns: ["copy_id", "document_id"]
+          },
+          {
+            foreignKeyName: "versions_extraction_of_copy"
+            columns: ["supporting_extraction_id", "supporting_copy_id"]
+            isOneToOne: false
+            referencedRelation: "document_extractions"
+            referencedColumns: ["id", "copy_id"]
+          },
+        ]
+      }
+      legal_documents: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          created_by: string | null
+          discovery_candidate_id: string | null
+          doc_type: string | null
+          id: string
+          identifier: string | null
+          issuing_authority: string | null
+          language: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          discovery_candidate_id?: string | null
+          doc_type?: string | null
+          id?: string
+          identifier?: string | null
+          issuing_authority?: string | null
+          language?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          discovery_candidate_id?: string | null
+          doc_type?: string | null
+          id?: string
+          identifier?: string | null
+          issuing_authority?: string | null
+          language?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_documents_discovery_candidate_id_fkey"
+            columns: ["discovery_candidate_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_candidates"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1226,7 +1660,19 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      document_assessment_current: {
+        Row: {
+          current_assessment_id: string | null
+          current_basis: string | null
+          current_value: string | null
+          dimension: string | null
+          latest_automatic_value: string | null
+          needs_review: boolean | null
+          target_id: string | null
+          target_kind: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       api_list_items: {
