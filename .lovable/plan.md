@@ -1,144 +1,144 @@
-# Discovery Candidates Queue + LDH Discovery Job
+# Discovery Queue, Document Versions and Layering — Revised Design (no SQL yet)
 
-LDH is a discovery index only: metadata + official link. Candidates never become data until a human approves them, and they then go through the existing collection chain (official API → Parallel → Apify/Webshare → recordBlockedItem). Three phases, each approved separately; Phase 1 is the only schema change.
+OryxScrape is an independent internal tool. This work finds documents and the paths to obtain them. "Approve" only authorizes the next operational step inside OryxScrape. It never means official, in force, legally validated or publishable. No consumer connection, sync, export or reference.
 
-## Phase 1 — Migration only
+## 0. What the real schema shows today (inspected)
 
-New migration (applied via the project migration tool, no code in the same step).
+- **Staff check:** both `is_staff()` (no args, uses `auth.uid()`) and `is_staff(uuid)` exist. Both are SECURITY DEFINER with search_path locked. EXECUTE is revoked from anon/public and granted to authenticated and service_role. Existing table policies use `is_staff(auth.uid())`. New tables follow the same pattern and add no new definer functions.
+- **raw_items** is append-only (INSERT/SELECT only; UPDATE and DELETE denied). It is unique on `(source_id, content_hash)`. Version-like fields already exist: `supersedes_raw_item_id`, `canonical`, `payload_integrity` (verbatim/partial/synthesized), `item_status` (collected/failed/pending/superseded/blocked) and `canonical_url`.
+- **Supersedes today** is used by the Manual Upload Queue (a manual row supersedes a `blocked` row), Malta, EUR-Lex and the legacy flows. A "done" check means "some row supersedes me". The old row is never updated.
+- **Exposure today:** GET /feed reads `normalized_items` through supabaseAdmin with:
+  - `publication_status='eligible'`
+  - a profile jurisdiction/tag filter
+  - `normalized_item_profile_exposure.promoted=true` when `require_promotion` is set.
 
-```sql
--- runs first (FK target)
-create table public.discovery_runs (
-  id uuid primary key default gen_random_uuid(),
-  method text not null check (method in ('ldh','parallel_search','manual','other')),
-  started_at timestamptz not null default now(),
-  finished_at timestamptz,
-  queries jsonb not null default '[]'::jsonb,      -- query strings sent only
-  credits_used integer not null default 0 check (credits_used >= 0),
-  candidates_found integer not null default 0,
-  candidates_new integer not null default 0,
-  status text not null default 'running'
-    check (status in ('running','succeeded','failed','budget_exhausted')),
-  error_text text,
-  triggered_by uuid,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint discovery_runs_error_required
-    check (status not in ('failed','budget_exhausted') or error_text is not null)
-);
+  `api_list_items` also requires `verification_status='reviewed'`. A trigger blocks `rejected`+`eligible`. Raw rows are never exposed. So a working layer (raw_items plus anything not eligible) and an exposed layer (eligible plus promoted) already exist.
+- **Gap:** raw_items has no document identity across sources or URLs, no quality grade, no defect reason and no source version label. Its `canonical` boolean cannot be flipped later, because rows are immutable.
 
-create table public.discovery_candidates (
-  id uuid primary key default gen_random_uuid(),
-  discovered_at timestamptz not null default now(),
-  discovery_method text not null check (discovery_method in ('ldh','parallel_search','manual','other')),
-  discovery_run_id uuid references public.discovery_runs(id),
-  country_code text check (country_code ~ '^[A-Z]{2}$'),
-  title text check (title is null or length(title) <= 500),
-  official_url text not null check (length(btrim(official_url)) > 0),
-  external_ref jsonb not null default '{}'::jsonb,  -- {provider, source, source_id} only
-  language text,
-  doc_type_guess text,
-  relevance_note text check (relevance_note is null or length(relevance_note) <= 280),
-  status text not null default 'new'
-    check (status in ('new','approved_for_collection','collected','rejected','duplicate')),
-  duplicate_of_raw_item_id uuid references public.raw_items(id),
-  source_id uuid references public.sources(id),
-  collection_job_id uuid references public.collection_jobs(id),
-  dedup_key text not null unique,                  -- sha256 of canonicalized official_url
-  reviewed_by uuid,
-  reviewed_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint discovery_candidates_external_ref_shape check (
-    jsonb_typeof(external_ref) = 'object'
-    and not (external_ref ?| array['text','full_text','snippet','excerpt','content','body','summary'])
-  ),
-  constraint discovery_candidates_review_stamp
-    check (status in ('new','duplicate') or reviewed_at is not null)
-);
+## 1. Phase 1 proposals (separate migrations, each approved on its own)
 
-create index on public.discovery_candidates (status, country_code);
-create index on public.discovery_candidates (discovery_run_id);
-create index on public.discovery_candidates (discovered_at desc);
-create index on public.discovery_runs (method, started_at desc);
+### 1A — Discovery queue (provider-agnostic)
 
--- deny by default
-revoke all on public.discovery_runs, public.discovery_candidates from public, anon, authenticated;
-grant select, insert, update on public.discovery_runs, public.discovery_candidates to authenticated;
-grant all on public.discovery_runs, public.discovery_candidates to service_role;
-alter table public.discovery_runs enable row level security;
-alter table public.discovery_candidates enable row level security;
+Three tables:
 
--- staff-only, same pattern as existing tables; no DELETE policy (denied)
-create policy discovery_runs_staff_select on public.discovery_runs
-  for select to authenticated using (public.is_staff(auth.uid()));
-create policy discovery_runs_staff_insert on public.discovery_runs
-  for insert to authenticated with check (public.is_staff(auth.uid()));
-create policy discovery_runs_staff_update on public.discovery_runs
-  for update to authenticated using (public.is_staff(auth.uid())) with check (public.is_staff(auth.uid()));
--- identical three policies for discovery_candidates
+**`discovery_runs`**
+- Columns: provider (free text plus a check list: `ldh`, `parallel_search`, `manual`, `other`), started_at, finished_at, heartbeat_at, `status` (running / succeeded / partial / failed / budget_exhausted / interrupted), error_text, credits_reserved, credits_used, triggered_by.
+- `error_text` is required for every non-success status.
 
-create trigger set_updated_at before update on public.discovery_runs
-  for each row execute function public.set_updated_at();
-create trigger set_updated_at before update on public.discovery_candidates
-  for each row execute function public.set_updated_at();
+**`discovery_queries`** (one row per call)
+- Columns: run_id, query_text, params (country, language, namespace), status, http_status, error_text, credits, result_count.
+- This gives the link candidate → query → run.
+
+**`discovery_candidates`**
+- **Origin, never edited after insert:** run_id, query_id, provider, provider_ref (jsonb: source and source_id only), found_url (nullable, stored exactly as returned), found_title, found_identifier (norm number, ELI/CELEX, publication reference), found_at.
+- **Working fields:**
+  - country_code, language, doc_type_guess
+  - relevance_note (our own words, ≤280 characters)
+  - confirmed_source_url (nullable)
+  - document_id (nullable FK to 1B)
+- **Per-field confidence:** jsonb `{title, url, identifier, country: 'hypothesis' | 'confirmed'}`.
+- **Stage** (progressive, see below), `outcome_reason`, reviewed_by, reviewed_at, source_id, collection_job_id.
+- **Dedup keys:** `key_provider`, `key_identifier`, `key_url`. All are nullable, and each has a partial unique index.
+- **Constraints:** at least one of found_url, found_identifier or found_title is required. A CHECK forbids text-like keys (`snippet`, `text`, `full_text`, `excerpt`, `content`, `body`) in provider_ref.
+- **No provider text** is ever stored in any row, log or error.
+
+**Stage model**
+
+```text
+lead -> identified -> source_located -> collection_decided -> retrieval_attempted -> retrieved_verified
+side outcomes (not terminal, all reopenable): not_found | access_failed | out_of_scope | duplicate | rejected
 ```
 
-Notes:
-- No new SECURITY DEFINER functions. Reuses existing `is_staff` (already definer with locked search_path). Step 0 confirms which signature is live (`is_staff()` vs `is_staff(uuid)`) and uses that one.
-- Dedup against raw_items is done in app code at insert time (match canonicalized URL against `raw_items.source_url` / `canonical_url`, then insert with `status='duplicate'` + `duplicate_of_raw_item_id`). No trigger, so raw_items stays untouched and no definer is needed.
-- The `external_ref` CHECK is a backstop against storing LDH text; the code whitelists fields anyway.
+- `access_failed` keeps the document and allows another location through the unchanged hierarchy (official API → Parallel → Apify/Webshare → recordBlockedItem).
+- Only `out_of_scope` and `rejected` are human decisions. Both can be reopened by staff.
 
-Validation (read-only after apply):
-- `begin; set local role anon; select … from discovery_candidates;` → permission denied. Rollback.
-- `begin; set local role authenticated; set local request.jwt.claims = '{"sub":"<non-staff uuid>","role":"authenticated"}';` → select returns 0 rows, insert fails RLS. Rollback.
-- Same with a real staff user's uuid → select/insert/update succeed, delete denied. Rollback (nothing kept).
-- Check constraints: insert with empty URL, `external_ref` containing `snippet`, status `approved_for_collection` without `reviewed_at` → all rejected.
-- Run Supabase advisors/linter; report anything new.
+**Dedup (conservative)**
+- An insert first matches on provider key, then on normalized identifier, then on canonicalized found_url.
+- A match does not drop the new row. It is inserted as `duplicate` with `duplicate_of_candidate_id`, so the origin trail stays intact.
+- Matches against raw_items `source_url`/`canonical_url` set `stage=retrieval_attempted` plus a link. They are not discarded.
+- Two candidates found to be the same later are linked through `document_id` (1B). Nothing is deleted.
 
-## Phase 2 — Admin UI (`/admin/discovery`)
+### 1B — Document identity and versions (minimal addition to raw_items)
 
-Files:
-- `src/routes/_authenticated/admin.discovery.tsx` — list with filters (country, status, method), checkboxes, Approve / Reject / Mark duplicate, bulk actions, link to run history, bulk import box (JSON or CSV: `official_url,title,country_code,language,doc_type_guess,relevance_note`).
-- `src/lib/discovery.functions.ts` — server functions with `requireSupabaseAuth` + staff check: `listCandidates`, `reviewCandidates({ids, status})` (sets status, reviewed_by, reviewed_at; allowed transitions only from `new`), `importCandidates(rows)` (method `manual`, creates a `discovery_runs` row, per-row result: inserted / duplicate / invalid with reason — no silent drops).
-- `src/lib/discovery-url.ts` — pure `canonicalizeUrl` + `dedupKey` (lowercase host, strip fragment/tracking params, trailing slash) + unit tests.
-- Nav link in the authenticated layout.
+- **New `documents` table** (the identity of a document across sources):
+  - title, identifier, country_code, jurisdiction, status_note
+  - `preferred_raw_item_id` (the promoted best copy; it can change, because this table is mutable and raw_items is not)
+  - created_at, updated_at
+- **New `raw_item_assessments` table**, append-only, so assessments can change without mutating raw_items:
+  - raw_item_id, document_id
+  - `quality` (clean / defective / truncated / unreadable / unknown), defect_reason
+  - source_version_label, in_force_from
+  - assessed_by, assessed_at
+  - The latest row wins.
+- **One new raw_items column:** `document_id uuid null`, set at insert time.
+- **Reused:** `content_hash`, `supersedes_raw_item_id` (a new copy points to the previous copy of the same document), `payload_integrity`, `item_status`, `collected_at`, `collection_method`.
+- **New copies:**
+  - A new hash for the same document produces a new raw row. The old row is kept.
+  - The same hash is ignored by the existing unique constraint, and its re-check result is recorded as an assessment.
+  - Promotion is an explicit staff action that updates `documents.preferred_raw_item_id`.
+- **Defective copies are never blocked.** A "Re-check defective" action re-runs collection through the existing hierarchy for documents whose preferred copy is not `clean`. It is manual only; scheduling comes later via the SQL editor.
+- **Conflict:** a defective copy today may carry `item_status='collected'`. It stays that way, and quality lives in assessments rather than overloading `item_status` (which describes retrieval, not quality).
 
-Approve only sets status. No collection is triggered in this phase.
+### 1C — Layering (recommendation: same schema, existing mechanism)
 
-Verification: vitest for canonicalization/dedup + import parsing (invalid URL, duplicate within batch, duplicate of raw_items). Signed-in browser test is not possible here (external Supabase), so the owner checks the page manually.
+| Option | Pros | Cons |
+|---|---|---|
+| A. Same `public` schema; the working layer is raw_items plus the new tables plus normalized_items not eligible; the exposed layer is `normalized_items` eligible (+ promoted) | Already how /feed works; no feed contract change; RLS unchanged | Separation is by filter, so discipline is needed |
+| B. Separate `working` schema for discovery/assessments | Hard isolation from the Data API | Generated types/grants work, cross-schema FKs, more RLS surface; PostgREST needs schema exposure |
+| C. Layer/visibility column on normalized_items | Explicit | Duplicates `publication_status` + promotion |
 
-## Phase 3 — LDH discovery job
+**Recommendation: A.**
+- Add one guard: promotion to `eligible` must require the normalized item's raw copy to have a latest assessment of `clean`, and the source must be official.
+- This is enforced in the existing review transition trigger (a change for 1C, separately approved).
+- Provenance (found_url, provider, run, query, retrieval method, hash, timestamps) stays readable at every layer, and nothing is ever rewritten.
 
-Files:
-- `src/lib/ldh.server.ts` — `searchLdh({country:[code], query, namespace})`: POST `https://legaldatahunter.com/v1/search`, `Authorization: Bearer ${process.env.LDH_API_KEY}` read inside the handler. Missing key → run row `failed`, `error_text='LDH_API_KEY not configured'`. Response mapped immediately to `{title, official_url, source, source_id, country}`; everything else dropped in memory, never logged. `get_document` / `include_full_text` never referenced. UK sent as `"UK"`.
-- `src/lib/discovery-ldh.server.ts` — builds queries from `search_terms` (active lifecycle states, not in cooldown, native `language_code` per country), one call = 1 credit, budget guard.
-- `discovery.functions.ts` — `runLdhDiscovery({countries?, maxQueries?})`, staff-only, called by the "Run now" button.
+## 2. Impact on Phases 2 and 3
 
-Budget guard:
-- Daily cap default 15 (constant, owner can change), computed as `sum(credits_used)` of today's (UTC) `ldh` runs before each call.
-- Cap reached → stop, status `budget_exhausted` with error_text.
-- Throttle: max 10 calls/min (≥6 s between calls); one run is capped at ~8 calls so it stays inside the Worker request time.
-- HTTP 429 → stop run, status `failed`, `error_text='LDH 429 rate limited'`, no retry. Any other non-2xx/network/parse error → `failed` with status code, never an empty success.
-- `credits_used` persisted after every call (so a crash still records spend).
-- `search_terms.attempt_count` / `last_run_at` updated; `useful_count` only incremented when a candidate is later approved (Phase 2 action).
+**Phase 2 (`/admin/discovery`, staff only)**
+- List and filter by stage, provider, country and confidence.
+- Actions: advance stage, mark not_found / out_of_scope, reopen, link to a document, link to a source.
+- Bulk JSON/CSV import (provider `manual`, per-row result: inserted / duplicate / invalid with reason).
+- A documents view showing copies, assessments and the promoted copy, with a "Re-check defective" button.
+- "Approve" equals `collection_decided` and starts nothing by itself.
 
-Verification: vitest with mocked fetch — mapper drops snippet/text fields, missing key, 429, budget exhaustion, dedup to `duplicate`. One real "Run now" with 1–2 queries after the owner adds the key, then SQL check that candidates hold no text.
+**Phase 3 (provider integration)**
+- Each provider is a module behind one interface: `search(query) -> {found_url?, title?, identifier?, provider_ref}`.
+- LDH requirements and limits will be presented separately before activation (key name, terms, rate, budget).
+- Reliability controls:
+  - Rolling 24 h budget = sum of credits over the last 24 h.
+  - Atomic reservation: `credits_reserved` is set by a single conditional insert or update that refuses when the window is full, so two runs cannot spend the same balance.
+  - Heartbeat + timeout: `running` with no heartbeat for over 10 min becomes `interrupted` on the next run or page load.
+  - 429 becomes an explicit failed query with no blind retry.
+  - Errors are recorded with status codes only, never with headers or keys.
 
-## Credit estimate
+## 3. Decisions for the owner
 
-- Free tier 20/day; we cap at 15 → max ~15 queries/day, ~105/week.
-- Initial pass: ~5 countries (GR, MT, IT, UK, EU) × ~3 terms = 15 credits → one full day.
-- Phase 3 test: 1–2 credits.
+1. Layering: option A (recommended), or B or C?
+2. Should `document_id` live on raw_items (one new nullable column), or only in a link table so raw_items is untouched?
+3. Quality grades: is clean / defective / truncated / unreadable / unknown enough? Who may assess — staff, or also automated heuristics as "hypothesis"?
+4. Should promotion to `eligible` hard-require a `clean` assessment (a trigger), or only show a UI warning?
+5. Should re-check also run for `clean` documents at a slow cadence, to catch source corrections?
+6. Should `rejected` / `out_of_scope` hide a candidate from rediscovery matches, or keep it showing as a reopenable match?
+7. Budget window: rolling 24 h, or provider calendar day? What default cap?
+8. Is the stage list acceptable, or should any step be merged?
 
-## Risks / open questions
+## 4. Real constraints
 
-1. LDH response field names (which one is the official URL vs the LDH page URL) — I will confirm against their docs before coding Phase 3; if only an LDH URL is returned, the candidate is skipped and counted, not stored.
-2. `namespace` values: which ones to use per country? Default proposal: leave empty unless you give a list.
-3. Approved → collection link: this plan stops at status. Next step (separate approval) maps an approved candidate to a `sources` row and starts a job through the existing chain, filling `collection_job_id` and `collected`.
-4. Should `rejected` candidates block rediscovery forever? Proposed: yes (unique dedup_key keeps them rejected).
-5. Daily budget uses UTC days — confirm vs LDH's reset time.
+- **Cloudflare Workers:** no HTTP proxy in fetch, request-time limits (runs must be short or chunked), no Node APIs, secrets read inside handlers only. No Edge Functions and no pg_cron from Lovable.
+- **raw_items immutability:** all "mutable" state (quality, promotion, document link changes) must live outside raw_items or be set at insert time.
+- **GET /feed contract must not change:** it keeps reading `normalized_items` eligible (+ promoted), with the same fields, cursors and filters. New tables are never read by the feed.
+- **Existing triggers:** the review-transition trigger, the review audit trigger and the tier policy remain authoritative. Any 1C guard extends them; it does not replace them.
+- **Fixed chain:** the fallback chain and the exact-hostname API resolver stay unchanged.
+- **Validation per migration:**
+  - `SET LOCAL ROLE anon`: denied.
+  - authenticated non-staff via jwt claims: 0 rows and writes refused.
+  - staff: allowed, DELETE denied.
+  - All checks run inside a rolled-back transaction, followed by the linter/advisors.
 
-## Technical decisions to record in AGENTS.md (when built)
+## 5. SQL
 
-- Discovery providers store metadata + official link only; candidates enter data only via human approval and the existing collection chain.
+Final DDL for 1A, 1B and 1C will be written only after the decisions in section 3 are closed. Each will be submitted as its own migration.
+
+## Note
+
+`roadmap.md` cannot be edited in plan mode. These phases will be added to it once building starts.
