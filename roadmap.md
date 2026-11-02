@@ -111,3 +111,15 @@
 - [x] Fase 1A: fila de descoberta (4 tabelas) aplicada (20261102070833) — 46/46 testes ok, nada gravado
 - [ ] Fase 2 (pendente, antes do builder de chaves): canonicalização de URL conservadora — não assumir http=https, barras repetidas ou barra final sem confirmação; resolver compatibilidade com o CHECK de key_url (hoje exige 'url:https://')
 - [ ] Fases 1B/1C, integração LDH, agendamento: não autorizados
+
+## Phase 1A — closed (limitations)
+- Authorization tested by simulated DB role/identity, not real browser logins; real-login test deferred to UI phase.
+- No DELETE/TRUNCATE verified for anon, authenticated, service_role only — not owner/admin roles.
+- Dedup tests proved constraints/uniqueness of supplied keys; key construction, URL canonicalization and conflict handling in code untested until that code exists.
+- Exposed schemas NOT verified; schema exposure, grants and RLS are separate layers.
+- Pending, separate: conservative URL canonicalization (before Phase 2); 4 old advisor warnings (own round).
+
+## Phase 1B
+- [x] Step 1 database structures (migration 20261102081642) — 74/74 rolled-back checks passed.
+- [ ] Step 2 private bucket document-originals + Storage policies — awaiting approval.
+- [ ] Step 3 storage code + collector integration (streaming, verify-on-exists, 50 MB real-environment test) — awaiting approval.
