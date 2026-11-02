@@ -1,112 +1,147 @@
-# Phase 1A (discovery queue): corrected final SQL for review
+# Phase 1A: discovery queue (final SQL for review)
 
-Status:
-- **Phase 0:** applied on 02 Nov 2026 as migration `20261102064116_d5b3f344-a9c6-415e-8214-49eea9f34b9f.sql` and verified.
-- **Phase 1A:** not authorized. Nothing in this document has been applied.
-- **Phases 1B, 1C, LDH calls and scheduling:** not authorized.
-- **Independence:** OryxScrape stays independent, with no connection to any consumer product.
+**Status**
+- Phase 0 is applied (02 Nov 2026, migration `20261102064116_d5b3f344-a9c6-415e-8214-49eea9f34b9f.sql`) and verified.
+- Phase 1A is not authorized. Nothing in this document has been applied.
+- Phases 1B and 1C, LDH calls and scheduling are not authorized.
+- OryxScrape stays independent, with no connection to any consumer product.
 
-## What changed in this revision
+## Fixes in this revision
 
-1. **Explicit privileges.** The script now revokes everything from `public`, `anon`, `authenticated` and `service_role` on the 4 new tables, then grants only what is intended.
-   - This is needed because of the live default privileges in `public` (read earlier this session). New tables created by `postgres` give `Dxtm` (TRUNCATE, REFERENCES, TRIGGER) to anon, authenticated and service_role. Tables created by `supabase_admin` give `arwdDxtm` (everything) to all three.
-   - The final privileges no longer depend on which role creates the tables.
-   - Existing tables are not touched.
-2. **Dedup keys.**
-   - `key_provider` is a generated column, so the database builds it.
-   - `key_identifier` and `key_url` have a fixed, prefixed format that the database checks.
-   - Ambiguous identifiers are never merged. The key stays null and the row is flagged for human review.
-   - Key conflicts always produce an explicit per-row result.
-3. **No provider text.**
-   - The `provider_ref` jsonb is replaced by two short, pattern-checked columns.
-   - The `params` jsonb is replaced by three short, pattern-checked columns.
-   - The `provider_quota` jsonb is replaced by integer columns.
-   - Free-form error text is removed from queries. Errors are stored as `error_kind`, `http_status` and our own `error_code`. Runs keep a short `error_detail` written by our code only.
+1. **Confidence check.** `public.discovery_confidence_is_valid(jsonb)` is now inside the script. It is created before `discovery_candidates`, and the CHECK constraint calls it. The script no longer has a subquery inside a CHECK.
+2. **Helper EXECUTE rights.**
+   - Postgres checks EXECUTE rights for a function used in a CHECK against the role doing the INSERT or UPDATE, not the table owner. The earlier claim that it is "evaluated by the table owner's rules" was wrong.
+   - So the helper revokes EXECUTE only from `public` and `anon`, and explicitly grants it to `authenticated` and `service_role`.
+   - Trigger functions keep their revokes. EXECUTE is not checked when a trigger fires.
+3. **`key_provider` is now an ordinary nullable column, built by app code.**
+   - The database checks its exact value: if it is present, it must equal `'prov:' || provider || ':' || lower(provider_source) || ':' || provider_source_id`.
+   - In the conflict branch, all three keys stay null even when `provider_source` and `provider_source_id` are present.
 
-## Dedup key composition
+I re-read the whole script for syntax and ordering:
+- the helper is created before the table whose CHECK calls it;
+- the tables are created in FK order: runs → queries → candidates → sightings;
+- every constraint names existing columns;
+- the trigger functions are created before their triggers;
+- `set_updated_at` and `is_staff(uuid)` already exist;
+- grants, then RLS, then policies;
+- no CHECK contains a subquery.
 
-All keys are built only from data we hold. Nothing comes from provider body text.
+This is a manual review. The script has not been executed.
 
-**`key_provider`** is a GENERATED column, built by the database.
-- Format: `prov:` + provider + `:` + lower(provider_source) + `:` + provider_source_id.
-- It is null unless both provider_source and provider_source_id are present.
-- The provider is always part of the key, so the same `source_id` from two different providers cannot collide.
+## Dedup keys
 
-**`key_identifier`** is built by app code. The database checks its format.
-- Format: `id:` + COUNTRY + `:` + authority + `:` + normalized identifier.
-  - COUNTRY: two uppercase letters; must equal `country_code`.
-  - authority: a slug of the issuing authority or official source, such as `gazzetta_ufficiale`, `et_gr`, `eur_lex`. Pattern `[a-z0-9_.-]{2,60}`.
-  - normalized identifier: Unicode NFKC, lowercase, whitespace collapsed to a single space, and typographic dashes and slashes unified to `-` and `/`. The text is otherwise kept, including the year and the number.
-- It is built only when country, authority and identifier are all known with confidence (`confidence.identifier = 'confirmed'`, or the importer supplies all three explicitly).
-- **Ambiguous cases**, such as an identifier with no known country or authority, or an authority guessed from a secondary site:
-  - `key_identifier` stays NULL;
-  - `needs_review = true` and `review_note` gets our own wording, for example "identifier without issuing authority".
-  - The candidate is still inserted, matched only by provider or URL, and is never merged automatically.
+App code builds all three keys from data we hold. The database checks their shape and uniqueness.
 
-**`key_url`** is built by app code. The database checks its format.
-- Format: `url:` + the canonical URL.
-- `found_url` itself is always stored exactly as received.
-- Canonicalization:
-  1. Parse the URL. If it cannot be parsed, `key_url` stays null and `needs_review` is set.
-  2. Scheme `http` or `https` becomes `https`; any other scheme gives no key.
-  3. Host is lowercased and converted to punycode. A trailing dot is removed. A leading `www.` is kept, because some official sites serve different content there.
-  4. Default ports (`:80`, `:443`) are removed.
-  5. The fragment (`#…`) is removed.
-  6. Tracking parameters are removed: `utm_*`, `fbclid`, `gclid`, `mc_cid`, `mc_eid`.
-  7. Remaining query parameters keep their value, are sorted by name, and empty values are kept.
-  8. The path keeps its case. Repeated slashes are collapsed. A trailing slash is removed except on the root. Percent-encoding is normalized to uppercase hex.
+**`key_provider`**
+- Format: `prov:<provider>:<lower(provider_source)>:<provider_source_id>`.
+- It is only set when both source fields exist.
+- The DB CHECK requires exact equality with that expression, so the provider is always part of the key.
 
-**Applying the keys on insert.** App code handles each row like this. The database guarantees that no two candidates share a key.
+**`key_identifier`**
+- Format: `id:<COUNTRY>:<authority>:<normalized identifier>`.
+- The DB checks the format, that COUNTRY equals `country_code`, and that authority equals `issuing_authority`.
+- Normalization (app): Unicode NFKC, lowercase, whitespace collapsed, and dashes and slashes unified. The year and number are kept.
+- It is only built when country, authority and identifier are all known with confidence.
 
+**`key_url`**
+- Format: `url:` followed by the canonical URL. `found_url` itself is always stored exactly as received.
+- Canonical rules (app):
+  - `http` and `https` both become `https`; any other scheme gives no key.
+  - The host is lowercased and converted to punycode. A trailing dot is removed. `www.` is kept.
+  - Default ports are removed.
+  - The fragment is removed.
+  - `utm_*`, `fbclid`, `gclid`, `mc_cid` and `mc_eid` are removed.
+  - The remaining query parameters are sorted by name.
+  - The path keeps its case. Repeated slashes are collapsed. A trailing slash is removed except on the root. Percent-encoding uses uppercase hex.
+  - If the URL cannot be parsed, there is no key and `needs_review` is set.
+
+**Ambiguous identifiers** (missing country or authority, or an authority guessed from a secondary site):
+- `key_identifier` stays null;
+- `needs_review = true`, with a `review_note` in our own words.
+
+**Insert flow** (app code; every row gets an explicit result):
 1. Look up existing candidates by each non-null key.
-2. **One candidate matches:** no new candidate is created. A `discovery_sightings` row is inserted instead. Result: `sighting`, plus the existing candidate's id and the key that matched.
-3. **Different candidates match on different keys:** this is a possible conflict. A new candidate is inserted with all three keys null, `needs_review = true`, and a `review_note` listing the matched ids. Result: `needs_review`.
-4. **No match:** insert the new candidate.
-5. **Race:** if the insert hits a unique violation (23505), go back to step 1 once. If it fails again, the result is `error:key_conflict`. A conflict never silently drops a row and never silently merges two documents.
-6. **Every import row gets an explicit result:** `inserted`, `sighting`, `needs_review` or `invalid:<reason>`.
+2. **One candidate matches on all present keys:** no new candidate. A sighting is inserted instead. Result: `sighting`, with the existing candidate id and which key matched.
+3. **Different candidates match on different keys:** insert the new candidate with all three keys null, `needs_review = true`, and `review_note` listing the matched candidate ids. Result: `needs_review`.
+4. **No match:** insert. Result: `inserted`.
+5. **Unique violation (23505) on insert:** retry from step 1 once. If it still fails, the result is `error:key_conflict`. Rows are never dropped or merged silently.
+6. **Invalid input:** result `invalid:<reason>`.
+
+**Later human resolution** (staff, under the update policy):
+- The key columns and `same_as_candidate_id` are working fields, not origin fields, so the guard trigger allows them to change.
+- **Distinct document:** staff fill in the missing keys. If that collides, the database rejects it with 23505 and the UI shows the colliding candidate. Nothing is overwritten.
+- **Same document:** staff set `same_as_candidate_id = <kept id>`, `outcome = 'duplicate'` and an `outcome_reason`, and leave the keys null.
+  - The `found_*` fields, run, query and sightings stay intact.
+  - The change is appended to `outcome_history`.
+  - It can be reversed by setting `outcome` back to `open`.
 
 **Collision tests** (vitest on the key builders in Phase 2, plus SQL checks after the migration):
 
-| Case | Input | Expected |
-|---|---|---|
-| Same number and year, different countries | IT `gazzetta_ufficiale` "Legge 123/2020" vs GR `et_gr` "Legge 123/2020" | Two different `key_identifier` values; both inserted |
-| Same ID, different providers | provider `ldh` source `x` id `42` vs provider `manual` source `x` id `42` | Two different `key_provider` values; both inserted |
-| Same identifier, different authorities in the same country | IT `gazzetta_ufficiale` "123/2020" vs IT `normattiva` "123/2020" | Two different keys; both inserted. Linking them later via `same_as_candidate_id` is a human decision |
-| Identifier without authority | country IT, identifier "123/2020", no authority | `key_identifier` null, `needs_review` true; inserted, not merged |
-| Same URL, cosmetic differences | `HTTP://Example.it:80/a//b/?utm_source=x#top` vs `https://example.it/a/b` | Same `key_url`, so the second one becomes a sighting |
-| Same URL with a different meaningful query | `…/doc?id=1` vs `…/doc?id=2` | Different `key_url` |
-| Malformed `key_identifier` written directly | `key_identifier = '123/2020'` | Rejected by the CHECK constraint |
-| `key_identifier` country differs from `country_code` | key `id:GR:…` with `country_code = 'IT'` | Rejected by the CHECK constraint |
+| Case | Expected |
+|---|---|
+| IT `gazzetta_ufficiale` "Legge 123/2020" vs GR `et_gr` "Legge 123/2020" | Different `key_identifier`; both inserted |
+| Same source and source_id under providers `ldh` and `manual` | Different `key_provider`; both inserted |
+| IT "123/2020" under `gazzetta_ufficiale` vs under `normattiva` | Different keys; both inserted; linking them is a human decision |
+| Identifier with no authority | `key_identifier` null, `needs_review`; inserted, not merged |
+| `HTTP://Example.it:80/a//b/?utm_source=x#top` vs `https://example.it/a/b` | Same `key_url`; the second becomes a sighting |
+| `…/doc?id=1` vs `…/doc?id=2` | Different `key_url` |
+| Conflict branch: provider_source and provider_source_id present, all keys null, `needs_review` | Inserted; does not collide with the existing candidate |
+| `key_provider` that does not match the expression (wrong provider, wrong case) | Rejected by CHECK |
+| `key_identifier = 'id:GR:et_gr:…'` with `country_code = 'IT'` | Rejected by CHECK |
+| `key_identifier = '123/2020'` (no prefix) | Rejected by CHECK |
 
-## What the database guarantees vs what only app code guarantees
+## Guarantees: database vs app code
 
-**Guaranteed by the database** (constraints, triggers, grants, RLS):
-- No column can hold a provider's raw JSON response, raw request parameters or provider error body. No jsonb column accepts provider data.
-  - `provider_source`, `provider_source_id`, the `param_*` columns and `error_code` are short, pattern-checked strings.
-  - The only jsonb columns are `confidence`, where keys and values are restricted to a whitelist, and `outcome_history`, which only the trigger writes.
-- Length limits on every text column.
-- The original lead fields are immutable, and `outcome_history` is append-only and written by the trigger only.
-- Sightings are append-only.
-- `key_provider` always includes the provider.
-- `key_identifier` always includes country plus authority, and its country matches `country_code`. `key_url` always carries its prefix.
-- No two candidates share a key.
+**Database (constraints, triggers, grants, RLS):**
+- No jsonb column accepts provider data.
+  - `confidence` is limited to whitelisted keys, each with the value `hypothesis` or `confirmed`.
+  - `outcome_history` is written by the trigger only.
+- Provider reference, query parameters and error codes are short strings checked against patterns.
+- Every text column has a length limit.
+- The original lead fields can't be changed.
+- Sightings can only be added, never changed or deleted.
+- Key shapes are checked:
+  - `key_provider` must exactly equal its expression;
+  - `key_identifier` must include country and authority, and both must match their columns;
+  - `key_url` must carry its prefix.
+- Keys are unique.
 - Only one `running` run per provider at a time.
-- Every failed run or failed query carries a classified error.
-- Access is limited to staff (authenticated users who pass `is_staff(auth.uid())`) and service_role. No role can DELETE or TRUNCATE.
+- Failed runs and failed queries must carry a classified error.
+- Access is limited to staff and service_role; nobody can delete or empty the tables.
 
-**Guaranteed only by app code** (reviewed in Phases 2 and 3, with tests):
-- The values written into `found_title`, `found_identifier`, `found_url` and `doc_type_guess` really are metadata (a title, an identifier, a link) and not a pasted snippet. The database only limits their length: 500 characters for a title, 300 for an identifier.
-- `error_detail` on runs is our own wording, never a provider body. The database limits it to 300 characters.
-- `relevance_note` and `review_note` are written by staff or by our code in our own words.
-- Key building follows the canonicalization rules above, and the database checks the shape.
-- Provider responses are reduced in memory to the allowed fields before anything is written, and are never logged.
+**App code only:**
+- Building the keys follows the canonicalization rules above.
+- The title, identifier, URL and type-guess values really are metadata, not snippets. The database only limits their length.
+- `error_detail`, `relevance_note` and `review_note` use our own wording.
+- Provider responses are reduced in memory to the allowed fields and are never logged.
 
-## Phase 1A complete SQL (corrected, not applied)
+## Phase 1A complete SQL (copy-ready, not applied)
 
 ```sql
 -- =========================================================
 -- Phase 1A: provider-agnostic discovery queue (4 tables)
+-- Prerequisites (already exist): public.set_updated_at(), public.is_staff(uuid)
 -- =========================================================
+
+-- ---------- 0. helper used by a CHECK constraint ----------
+create or replace function public.discovery_confidence_is_valid(c jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select c is not null
+     and jsonb_typeof(c) = 'object'
+     and not exists (
+       select 1 from jsonb_each(c) e
+       where e.key not in ('title','identifier','url','country','authority','language','doc_type')
+          or jsonb_typeof(e.value) <> 'string'
+          or (e.value #>> '{}') not in ('hypothesis','confirmed')
+     );
+$$;
+-- EXECUTE is checked for the role doing the INSERT/UPDATE, so keep it for authenticated/service_role
+revoke all on function public.discovery_confidence_is_valid(jsonb) from public, anon;
+grant execute on function public.discovery_confidence_is_valid(jsonb) to authenticated, service_role;
 
 -- ---------- 1. discovery_runs ----------
 create table public.discovery_runs (
@@ -202,20 +237,10 @@ create table public.discovery_candidates (
   source_id uuid references public.sources(id),
   collection_job_id uuid references public.collection_jobs(id),
   raw_item_id uuid references public.raw_items(id),
-  -- dedup keys
-  key_provider text generated always as (
-    case when provider_source is not null and provider_source_id is not null
-         then 'prov:' || provider || ':' || lower(provider_source) || ':' || provider_source_id
-    end
-  ) stored,
-  key_identifier text check (key_identifier is null or (
-    length(key_identifier) <= 400
-    and key_identifier ~ '^id:[A-Z]{2}:[a-z0-9_.-]{2,60}:.+$'
-  )),
-  key_url text check (key_url is null or (
-    length(key_url) <= 4004
-    and key_url ~ '^url:https://[^/?#[:space:]]+'
-  )),
+  -- dedup keys (built by app code; shape checked here)
+  key_provider text,
+  key_identifier text,
+  key_url text,
   reviewed_by uuid,
   reviewed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -224,22 +249,27 @@ create table public.discovery_candidates (
     check (found_url is not null or found_title is not null or found_identifier is not null),
   constraint discovery_candidates_provider_ref_pair
     check ((provider_source is null) = (provider_source_id is null)),
-  constraint discovery_candidates_key_identifier_context
+  constraint discovery_candidates_key_provider_shape
+    check (key_provider is null or (
+      provider_source is not null
+      and key_provider = 'prov:' || provider || ':' || lower(provider_source) || ':' || provider_source_id
+    )),
+  constraint discovery_candidates_key_identifier_shape
     check (key_identifier is null or (
-      country_code is not null
+      length(key_identifier) <= 400
+      and key_identifier ~ '^id:[A-Z]{2}:[a-z0-9_.-]{2,60}:.+$'
+      and country_code is not null
       and issuing_authority is not null
       and split_part(key_identifier, ':', 2) = country_code
       and split_part(key_identifier, ':', 3) = issuing_authority
     )),
-  constraint discovery_candidates_confidence_shape check (
-    jsonb_typeof(confidence) = 'object'
-    and not exists (
-      select 1 from jsonb_each(confidence) e
-      where e.key not in ('title','identifier','url','country','authority','language','doc_type')
-         or jsonb_typeof(e.value) <> 'string'
-         or e.value #>> '{}' not in ('hypothesis','confirmed')
-    )
-  ),
+  constraint discovery_candidates_key_url_shape
+    check (key_url is null or (
+      length(key_url) <= 4004
+      and key_url ~ '^url:https://[^/?#[:space:]]+'
+    )),
+  constraint discovery_candidates_confidence_shape
+    check (public.discovery_confidence_is_valid(confidence)),
   constraint discovery_candidates_outcome_reason
     check (outcome in ('open','duplicate') or outcome_reason is not null),
   constraint discovery_candidates_duplicate_link
@@ -343,6 +373,7 @@ begin
 end;
 $$;
 
+-- trigger functions are not EXECUTE-checked when they fire
 revoke all on function public.discovery_candidates_guard() from public, anon, authenticated;
 revoke all on function public.discovery_sightings_append_only() from public, anon, authenticated;
 
@@ -407,40 +438,11 @@ create policy discovery_sightings_staff_insert on public.discovery_sightings
   for insert to authenticated with check (public.is_staff(auth.uid()));
 ```
 
-Note on `confidence`: a CHECK constraint cannot contain a subquery, so the `exists (select … jsonb_each …)` form above is not valid in Postgres. In the final artifact this is moved into an IMMUTABLE helper, `public.discovery_confidence_is_valid(jsonb)`: SQL language, `set search_path = ''`, not SECURITY DEFINER, with EXECUTE revoked from public, anon and authenticated. The constraint then becomes `check (public.discovery_confidence_is_valid(confidence))`. The full helper text:
-
-```sql
-create or replace function public.discovery_confidence_is_valid(c jsonb)
-returns boolean
-language sql
-immutable
-set search_path = ''
-as $$
-  select jsonb_typeof(c) = 'object'
-     and not exists (
-       select 1 from jsonb_each(c) e
-       where e.key not in ('title','identifier','url','country','authority','language','doc_type')
-          or jsonb_typeof(e.value) <> 'string'
-          or (e.value #>> '{}') not in ('hypothesis','confirmed')
-     );
-$$;
-revoke all on function public.discovery_confidence_is_valid(jsonb) from public, anon, authenticated;
-```
-
-In the migration, this function is created before `discovery_candidates`. The table's constraint reads:
-
-```sql
-  constraint discovery_candidates_confidence_shape
-    check (public.discovery_confidence_is_valid(confidence)),
-```
-
-The constraint is evaluated during table writes by the table owner's rules, so revoking EXECUTE from client roles does not block inserts.
-
 ## Verification after execution
 
-All checks run inside `begin; … rollback;`. A real TRUNCATE is never run. Existing tables are not touched; to confirm, re-run the Phase 0 privilege snapshot for the 13 existing tables and expect it to be identical.
+All checks run inside `begin; … rollback;`. A real TRUNCATE is never run. The Phase 0 privilege snapshot for the 13 existing tables must come out identical.
 
-**1. Effective privileges on the 4 new tables:**
+**1. Table privileges**
 
 ```sql
 select c.relname as table_name, r.rol as role,
@@ -459,44 +461,57 @@ order by 1, 2;
 ```
 
 Expected:
-- **anon:** everything false.
-- **authenticated and service_role:** sel, ins and upd true (sightings: sel and ins only); del, truncate, refs and trig false.
+- `anon`: everything false.
+- `authenticated` and `service_role`: sel, ins and upd true (sightings: sel and ins only); del, truncate, refs and trig false.
 
-**2. As anon** (`set local role anon`): any select fails with "permission denied".
+**2. Helper EXECUTE rights**
 
-**3. As a non-staff signed-in user** (`set local role authenticated`, with `request.jwt.claims` set to a real non-staff uuid):
-- select returns 0 rows;
-- insert is refused by RLS.
+```sql
+select r.rol,
+       has_function_privilege(r.rol, 'public.discovery_confidence_is_valid(jsonb)', 'EXECUTE') as exec
+from (values ('anon'), ('authenticated'), ('service_role')) as r(rol);
+```
 
-**4. As a real staff user** (same claims with a staff uuid):
-- **Leads without an official URL are accepted:** inserting a candidate with only `found_title` succeeds.
+Expected: anon false; authenticated and service_role true.
+
+**3. As anon:** any select fails with permission denied.
+
+**4. As a non-staff user** (`authenticated` with real non-staff claims): selects return 0 rows, and inserts are refused by row-level security.
+
+**5. As a real staff user** (`set local role authenticated` with staff claims):
+
+- **Confidence check, run as authenticated:**
+  - Inserting with `confidence = '{"title":"hypothesis","url":"confirmed"}'` succeeds, with no "permission denied for function".
+  - `confidence = '{"snippet":"x"}'` is rejected.
+  - `confidence = '{"title":"maybe"}'` is rejected.
+- **Leads without an official URL:** a row with only `found_title` succeeds.
 - **Collision rows:**
-  - IT and GR "123/2020" with authorities `gazzetta_ufficiale` and `et_gr`: both inserted.
-  - Same `provider_source` and `provider_source_id` under providers `ldh` and `manual`: both inserted.
-  - IT "123/2020" under `gazzetta_ufficiale` and under `normattiva`: both inserted.
-  - Inserting the same `key_url` twice: the second fails with 23505, which the app turns into a sighting.
-  - `key_identifier = 'id:GR:et_gr:123/2020'` with `country_code = 'IT'`: rejected.
-  - `key_identifier = '123/2020'`: rejected.
-  - `needs_review = true` without a `review_note`: rejected.
-- **Provider text cannot be stored:**
-  - `provider_source = 'a b {json}'`: rejected.
-  - `confidence = '{"snippet":"..."}'`: rejected.
-  - `param_namespace` containing spaces: rejected.
-  - A failed query without `error_code`: rejected.
-- **Original fields are immutable:** updating `found_url` raises the immutability error.
-- **Rejected items can be reopened:**
-  - Reject with a reason: succeeds.
-  - Reopen by setting `outcome = 'open'`: succeeds, because the guard trigger only freezes the lead fields and the staff update policy allows the change.
+  - These pairs are both inserted:
+    - IT `gazzetta_ufficiale` vs GR `et_gr` for the same number and year;
+    - providers `ldh` vs `manual` with the same source and id;
+    - IT `gazzetta_ufficiale` vs `normattiva` for the same identifier.
+  - Inserting the same `key_url` twice gives 23505 on the second insert.
+  - The conflict branch (provider_source and id present, all keys null, `needs_review`, `review_note` set) is inserted with no collision.
+- **Key shape is rejected when wrong:**
+  - `key_provider` that doesn't match the expression;
+  - `key_identifier` whose country differs from `country_code`;
+  - `key_identifier` without the prefix;
+  - `needs_review` without a `review_note`.
+- **Provider text:**
+  - `provider_source` containing spaces or braces is rejected.
+  - `param_namespace` containing spaces is rejected.
+  - A failed query without `error_code` is rejected.
+- **Original fields can't change:** updating `found_url` raises the immutability error.
+- **Reopening a rejection:**
+  - Rejecting with a reason, then setting `outcome = 'open'`, both succeed. The guard only freezes origin fields, and the staff update policy allows it.
   - `outcome_history` then has 2 entries.
-  - Writing `outcome_history` directly is overwritten by the trigger.
-- **Access failures are not rejections:** setting `retrieval_state = 'access_failed'` leaves `outcome = 'open'` and keeps the stage.
-- **Re-sightings:**
-  - Inserting a sighting succeeds.
-  - Updating or deleting it raises an error.
-  - Candidates are unchanged.
-- **One-running-run lock and stale-run recovery:**
+  - Writing `outcome_history` directly gets overwritten.
+- **Human merge:** setting `same_as_candidate_id`, `outcome = 'duplicate'` and a reason succeeds. The `found_*` fields and sightings are unchanged, and a history entry is added.
+- **Access failure:** setting `retrieval_state = 'access_failed'` leaves `outcome = 'open'` and keeps the stage.
+- **Sightings:** inserting succeeds; updating or deleting raises an error.
+- **Run lock and recovery:**
   - A second `running` run for the same provider is rejected.
-  - Set `heartbeat_at` 11 minutes into the past, then run the recovery update below. It is executed as staff by the "Run now" or "Mark interrupted" server function under the staff update policy, or by service_role for internal processes.
+  - Set `heartbeat_at` to 11 minutes ago, then run this update (as staff, through "Run now" or "Mark interrupted", or as service_role):
     ```sql
     update public.discovery_runs
        set status = 'interrupted', finished_at = now(),
@@ -505,18 +520,18 @@ Expected:
      where provider = $1 and status = 'running'
        and heartbeat_at < now() - interval '10 minutes';
     ```
-  - The update succeeds, and a new `running` run can then be inserted, so the lock is released.
-- **No deletes:** delete on any of the 4 tables is denied.
+  - It succeeds, and a new `running` run can then be inserted.
+- **Delete:** denied on all 4 tables.
 
-**5. Advisors:** run the Supabase advisors and linter. Report new findings separately from the 4 that already existed (1 × mutable search_path, 3 × SECURITY DEFINER executable by signed-in users).
+**6. Advisors:** report new findings separately from the 4 that already existed (1 × mutable search_path, 3 × SECURITY DEFINER executable by signed-in users).
 
 ## Exposed schemas
 
-Not verified by the owner, and not changed. This is not a blocker for Phase 1A, because the tables live in `public` and are protected by grants and RLS, which the checks above prove directly.
+Not verified, and not changed. This is not a blocker for Phase 1A, because the tables are in `public` and protected by grants and row-level security, which the checks above prove.
 
-Recommended owner check: Dashboard → Project Settings → Data API → "Exposed schemas". It should list `public` (and `graphql_public`) and nothing unexpected.
+Owner check: Dashboard → Project Settings → Data API → "Exposed schemas" should list `public` (and `graphql_public`) and nothing unexpected.
 
 ## Not authorized and unchanged
 
-- Phases 1B and 1C, the LDH integration, scheduling and default-privilege changes.
-- Existing tables, the /feed contract, the collection hierarchy and raw_items immutability.
+- Phases 1B and 1C, LDH, scheduling, and changes to default privileges.
+- Existing tables, the /feed contract, the collection hierarchy, and the rule that raw items are never changed.
