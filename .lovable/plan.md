@@ -237,7 +237,8 @@ create table public.document_extractions (
     text_storage_path is null
     or text_storage_path = 'text/' || substr(text_sha256_exact, 8, 2) || '/' || substr(text_sha256_exact, 8)
   ),
-  unique (copy_id, extractor_tool, extractor_version, text_sha256_exact)
+  unique (copy_id, extractor_tool, extractor_version, text_sha256_exact),
+  constraint document_extractions_id_copy_key unique (id, copy_id)
 );
 
 -- 6. document_assessments
@@ -285,13 +286,21 @@ create table public.legal_document_versions (
   version_label text not null,
   valid_from date,
   valid_to date,
-  supporting_copy_id uuid references public.document_copies(id),
-  supporting_extraction_id uuid references public.document_extractions(id),
+  supporting_copy_id uuid not null references public.document_copies(id),
+  supporting_extraction_id uuid,
   created_by uuid not null,
   note text,
   created_at timestamptz not null default now(),
   check (valid_to is null or valid_from is null or valid_to >= valid_from),
-  unique (document_id, version_label)
+  unique (document_id, version_label),
+  -- extraction, when given, must belong to the supporting copy
+  constraint versions_extraction_of_copy
+    foreign key (supporting_extraction_id, supporting_copy_id)
+    references public.document_extractions (id, copy_id),
+  -- supporting copy must be linked to the versioned document
+  constraint versions_copy_linked_to_document
+    foreign key (supporting_copy_id, document_id)
+    references public.document_copy_links (copy_id, document_id)
 );
 
 -- Trigger functions
@@ -330,9 +339,22 @@ begin
   return new;
 end; $$;
 
+create or replace function public.legal_documents_guard()
+returns trigger language plpgsql set search_path to '' as $$
+begin
+  if new.id is distinct from old.id
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at then
+    raise exception 'legal_documents: id, created_by and created_at are immutable';
+  end if;
+  return new;
+end; $$;
+
 -- Triggers
 create trigger set_legal_documents_updated_at before update on public.legal_documents
   for each row execute function public.set_updated_at();
+create trigger legal_documents_guard before update on public.legal_documents
+  for each row execute function public.legal_documents_guard();
 create trigger set_document_copies_updated_at before update on public.document_copies
   for each row execute function public.set_updated_at();
 create trigger document_copies_guard before update on public.document_copies
@@ -383,7 +405,8 @@ grant insert on public.document_copy_links, public.document_copy_sightings,
 -- service_role: no INSERT on legal_document_versions; no DELETE/TRUNCATE anywhere.
 
 revoke execute on function public.document_append_only(), public.document_copies_guard(),
-  public.document_assessments_supersede_guard() from public, anon, authenticated;
+  public.document_assessments_supersede_guard(), public.legal_documents_guard()
+  from public, anon, authenticated;
 
 -- RLS
 alter table public.legal_documents enable row level security;
@@ -426,10 +449,10 @@ with t as (
               when a.extraction_id is not null then 'extraction' else 'sighting' end as target_kind
   from public.document_assessments a
 ),
-h as (select distinct on (target_id, dimension) * from t where basis = 'human'
-      order by target_id, dimension, created_at desc, id desc),
-au as (select distinct on (target_id, dimension) * from t where basis = 'automatic'
-       order by target_id, dimension, created_at desc, id desc)
+h as (select distinct on (target_kind, target_id, dimension) * from t where basis = 'human'
+      order by target_kind, target_id, dimension, created_at desc, id desc),
+au as (select distinct on (target_kind, target_id, dimension) * from t where basis = 'automatic'
+       order by target_kind, target_id, dimension, created_at desc, id desc)
 select coalesce(h.target_kind, au.target_kind) as target_kind,
        coalesce(h.target_id, au.target_id) as target_id,
        coalesce(h.dimension, au.dimension) as dimension,
@@ -437,9 +460,10 @@ select coalesce(h.target_kind, au.target_kind) as target_kind,
        case when h.id is not null then 'human' else 'automatic' end as current_basis,
        coalesce(h.id, au.id) as current_assessment_id,
        au.value as latest_automatic_value,
-       (h.id is not null and au.id is not null and au.created_at > h.created_at
-        and au.value <> h.value) as needs_review
-from h full join au on h.target_id = au.target_id and h.dimension = au.dimension;
+       coalesce(h.id is not null and au.id is not null and au.created_at > h.created_at
+                and au.value <> h.value, false) as needs_review
+from h full join au
+  on h.target_kind = au.target_kind and h.target_id = au.target_id and h.dimension = au.dimension;
 
 revoke all on public.document_assessment_current from public, anon, authenticated, service_role;
 grant select on public.document_assessment_current to authenticated, service_role;
@@ -450,6 +474,29 @@ Self-review done: every referenced table/function exists or is created earlier; 
 ## 13. Verification per step
 
 Step 1 (rolled-back test battery, like 1A): grants per role; RLS with simulated staff/non-staff/anon; append-only rejections; copies identity guard; exactly-one-target and dimension/value CHECKs; approval by automatic rejected; supersede across targets rejected; same hash duplicate rejected; size-limit sighting without copy accepted; view precedence (human beats newer automatic, `needs_review` true); service_role cannot insert versions; 13 old + 4 Phase 1A tables privileges unchanged; advisors before/after, new vs the 4 old.
+
+Added for the three adjustments:
+- Version with no supporting copy and no extraction → rejected (NOT NULL on supporting_copy_id).
+- Version with extraction only (copy NULL) → rejected.
+- Version with an extraction that belongs to a different copy → rejected (composite FK).
+- Version whose copy is not linked to the document in `document_copy_links` → rejected (composite FK).
+- Version with linked copy, with and without a matching extraction → accepted (as staff).
+- `needs_review` is `false`, never NULL, for a human-only target and for an automatic-only target; `true` only for human + newer divergent automatic.
+- Same target_id value under two target kinds is not merged in the view (kind is part of the key).
+- `legal_documents`: update of `created_by` rejected; update of `created_at` rejected; update of `title` accepted — each tested as staff (authenticated) and as service_role.
+
+## 14. Differences from the previous step 1 SQL (only these)
+
+1. `document_extractions`: added `unique (id, copy_id)` as `document_extractions_id_copy_key` (target for a composite FK; `id` is already unique, so no behaviour change).
+2. `legal_document_versions`:
+   - `supporting_copy_id` is now NOT NULL (evidence required; an extraction alone is not enough because its copy must be validated).
+   - Composite FK `(supporting_extraction_id, supporting_copy_id)` → `document_extractions(id, copy_id)`: when an extraction is given it must belong to the supporting copy (MATCH SIMPLE: skipped when extraction is NULL).
+   - Composite FK `(supporting_copy_id, document_id)` → `document_copy_links(copy_id, document_id)`: the copy must be linked to the versioned document. Links are append-only, so the reference cannot later disappear.
+   - Implementation is FK-only (no trigger), so it applies to every role and cannot be bypassed by service_role either. The DB only blocks contradictory references; it never decides whether the norm changed. Table stays append-only; service_role still has no INSERT.
+3. New trigger function `public.legal_documents_guard()` + trigger `legal_documents_guard` (BEFORE UPDATE): rejects changes to `id`, `created_by`, `created_at`; title, identifier, country_code, issuing_authority, language, doc_type, discovery_candidate_id stay editable. Triggers fire for service_role too. EXECUTE revoked from public/anon/authenticated like the other trigger functions.
+4. View `document_assessment_current`: `target_kind` added to both DISTINCT ON keys, their ORDER BY, and the full-join condition; `needs_review` wrapped in `coalesce(..., false)`.
+
+No existing table is altered. Nothing else changed.
 Step 2: bucket private; anon and non-staff cannot read/list/upload; staff signed URL works.
 Step 3: vitest for hashing format, path from hash, verify-on-exists, size abort, dedup → sighting only, truncated extraction; real-environment memory/time measurement for 50 MB.
 
