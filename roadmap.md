@@ -108,6 +108,6 @@
 
 ## Discovery queue (2026-11-02)
 - [x] Fase 0: TRUNCATE revogado de anon/authenticated nas 13 tabelas
-- [ ] Fase 1A: fila de descoberta (4 tabelas) — aplicação + bateria de testes
+- [x] Fase 1A: fila de descoberta (4 tabelas) aplicada (20261102070833) — 46/46 testes ok, nada gravado
 - [ ] Fase 2 (pendente, antes do builder de chaves): canonicalização de URL conservadora — não assumir http=https, barras repetidas ou barra final sem confirmação; resolver compatibilidade com o CHECK de key_url (hoje exige 'url:https://')
 - [ ] Fases 1B/1C, integração LDH, agendamento: não autorizados
