@@ -273,7 +273,7 @@ describe("preserveOriginal", () => {
     expect([...db.rows.values()][0]?.storage_status).toBe("pending");
   });
 
-  it("size limit: known Content-Length over the limit, nothing touched", async () => {
+  it("storage limit (not download memory): known Content-Length over the limit, nothing touched", async () => {
     const db = fakeDb();
     const store = fakeStore();
     const out = await preserveOriginal({ bytes: pdf(), declaredSize: MAX_ORIGINAL_BYTES + 1 }, { db, store, timings: fast });
@@ -282,7 +282,7 @@ describe("preserveOriginal", () => {
     expect(store.log).toEqual([]);
   });
 
-  it("size limit: unknown Content-Length, actual size over the limit", async () => {
+  it("storage limit (not download memory): unknown Content-Length, actual size over the limit", async () => {
     const big = new Uint8Array(MAX_ORIGINAL_BYTES + 1);
     big.set([0x25, 0x50, 0x44, 0x46]);
     const db = fakeDb();
@@ -379,5 +379,131 @@ describe("linkAfterRaw", () => {
     expect(x["text_inline"]).toBeNull();
     expect(String(x["text_storage_path"])).toMatch(/^text\/[0-9a-f]{2}\/[0-9a-f]{64}$/);
     expect(store.objects.has(String(x["text_storage_path"]))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- capped read
+import { readBodyCapped } from "./document-storage.server";
+
+function scripted(chunks: Uint8Array[], opts: { headers?: Record<string, string>; hang?: boolean } = {}) {
+  const s = { pulled: 0, cancelled: false };
+  const body = new ReadableStream<Uint8Array>({
+    pull(c) {
+      if (s.pulled < chunks.length) {
+        c.enqueue(chunks[s.pulled++]!);
+      } else if (!opts.hang) {
+        c.close();
+      }
+      // hang: never enqueue/close → read stays pending until cancelled
+      return opts.hang && s.pulled >= chunks.length ? new Promise(() => undefined) : undefined;
+    },
+    cancel() { s.cancelled = true; },
+  }, { highWaterMark: 0 });
+  return { res: new Response(body, { headers: opts.headers ?? {} }), s };
+}
+const enc = (t: string) => new TextEncoder().encode(t);
+const cat = (...a: Uint8Array[]) => { const o = new Uint8Array(a.reduce((n, x) => n + x.length, 0)); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
+
+describe("readBodyCapped", () => {
+  const CAP = 100;
+  const t = { timeoutMs: 1000 };
+
+  it("R1 no Content-Length, PDF over the cap: cancelled, rest not consumed, nothing kept", async () => {
+    const chunks = [cat(enc("%PDF"), new Uint8Array(36)), ...Array.from({ length: 10 }, () => new Uint8Array(40))];
+    const { res, s } = scripted(chunks);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r.kind).toBe("over_limit");
+    expect(s.cancelled).toBe(true);
+    expect(s.pulled).toBe(3); // 40+40 fit, the 3rd crosses 100
+    expect("bytes" in r).toBe(false);
+  });
+
+  it("R2 understated Content-Length still below the limit: buffer grows, all bytes kept", async () => {
+    const full = cat(enc("%PDF-1.7 "), new Uint8Array(70).fill(7));
+    const { res } = scripted([full.subarray(0, 30), full.subarray(30, 60), full.subarray(60)]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: 10 });
+    expect(r).toMatchObject({ kind: "ok", isPdf: true });
+    if (r.kind === "ok") expect(Array.from(r.bytes)).toEqual(Array.from(full));
+  });
+
+  it("R2b understated Content-Length, real body over the cap: cancelled at the cap", async () => {
+    const { res, s } = scripted([cat(enc("%PDF"), new Uint8Array(56)), new Uint8Array(60), new Uint8Array(60)]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: 20 });
+    expect(r.kind).toBe("over_limit");
+    expect(s.cancelled).toBe(true);
+    expect(s.pulled).toBe(2);
+  });
+
+  it("R3 overstated Content-Length (even over the cap): only the filled range is returned", async () => {
+    const full = cat(enc("%PDF"), new Uint8Array(16).fill(1));
+    for (const declared of [90, 5000]) {
+      const { res, s } = scripted([full]);
+      const r = await readBodyCapped(res, CAP, { ...t, declared });
+      expect(r.kind).toBe("ok");
+      if (r.kind === "ok") expect(r.bytes.length).toBe(20);
+      expect(s.cancelled).toBe(false);
+    }
+  });
+
+  it("R4 body exactly at the cap is accepted", async () => {
+    const { res, s } = scripted([cat(enc("%PDF"), new Uint8Array(46)), new Uint8Array(50)]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r.kind === "ok" && r.bytes.length).toBe(100);
+    expect(s.cancelled).toBe(false);
+  });
+
+  it("R5 non-PDF is read fully with no cap, every byte preserved", async () => {
+    const html = enc("<html>" + "x".repeat(300) + "</html>");
+    const { res } = scripted([html.subarray(0, 2), html.subarray(2, 150), html.subarray(150)]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r).toMatchObject({ kind: "ok", isPdf: false });
+    if (r.kind === "ok") expect(new TextDecoder().decode(r.bytes)).toBe(new TextDecoder().decode(html));
+  });
+
+  it("split signature across chunks (%P | DF) is recognised and bytes are preserved", async () => {
+    const full = cat(enc("%PDF-1.4 body"));
+    const { res } = scripted([full.subarray(0, 1), full.subarray(1, 2), full.subarray(2, 3), full.subarray(3)]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r).toMatchObject({ kind: "ok", isPdf: true });
+    if (r.kind === "ok") expect(Array.from(r.bytes)).toEqual(Array.from(full));
+  });
+
+  it("split signature, then over the cap: still cancelled as a PDF", async () => {
+    const { res, s } = scripted([enc("%P"), cat(enc("DF"), new Uint8Array(200))]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r.kind).toBe("over_limit");
+    expect(s.cancelled).toBe(true);
+  });
+
+  it("a single chunk that crosses the cap is refused and not kept", async () => {
+    const { res, s } = scripted([cat(enc("%PDF"), new Uint8Array(500))]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r).toEqual({ kind: "over_limit", bytesRead: 504 });
+    expect(s.cancelled).toBe(true);
+  });
+
+  it("a large non-PDF single chunk is kept whole (no cap for non-PDF)", async () => {
+    const big = cat(enc("<htm"), new Uint8Array(500));
+    const { res } = scripted([big]);
+    const r = await readBodyCapped(res, CAP, { ...t, declared: null });
+    expect(r.kind === "ok" && r.bytes.length).toBe(504);
+  });
+
+  it("R7 read timeout cancels the reader and reports timeout", async () => {
+    const { res, s } = scripted([enc("%PDF-1.7")], { hang: true });
+    const r = await readBodyCapped(res, CAP, { timeoutMs: 20, declared: null });
+    expect(r.kind).toBe("timeout");
+    expect(s.cancelled).toBe(true);
+    const pulled = s.pulled;
+    await new Promise((x) => setTimeout(x, 40));
+    expect(s.pulled).toBe(pulled);
+  });
+
+  it("real boundary: 52428800 accepted, 52428801 refused", async () => {
+    const head = cat(enc("%PDF"), new Uint8Array(MAX_ORIGINAL_BYTES - 4));
+    const ok = await readBodyCapped(scripted([head]).res, MAX_ORIGINAL_BYTES, { ...t, declared: null });
+    expect(ok.kind).toBe("ok");
+    const over = await readBodyCapped(scripted([head, new Uint8Array(1)]).res, MAX_ORIGINAL_BYTES, { ...t, declared: MAX_ORIGINAL_BYTES });
+    expect(over.kind).toBe("over_limit");
   });
 });
