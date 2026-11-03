@@ -1,121 +1,178 @@
-# Phase 1B — Step 2: private bucket `document-originals` and its Storage policies
+# Phase 1B — Step 3: storing original files and integrating with the collector
 
-Status: PLAN ONLY. Nothing below is executed until step 2 is authorized separately.
-Out of scope: step 3 (collector/downloads), UI, LDH, scheduling, the 4 old advisor warnings, exposed-schema settings.
+Status: PLAN ONLY. Nothing here is executed until step 3 is authorized separately.
+Out of scope: UI, LDH, scheduling, automatic file deletion or destructive reconciliation, the 4 old advisor warnings, exposed-schema settings, any link to another product.
 
-## 0. Closing note for Phase 1B step 1 (to be written to roadmap.md when edits are allowed)
+## 0. Closing note for step 2 (goes into roadmap.md when edits are allowed)
 
-- Migration `20261102081642`; 74 checks passed; all 7 new tables empty after tests; privileges of the 17 previous tables preserved; no new advisor warnings (the 4 old ones unchanged).
-- Authorization was tested by simulating role/identity in the database, not by real browser login.
-- service_role can still insert an assessment falsely marked as human (it bypasses RLS and holds INSERT on `document_assessments`). We do NOT claim "human approval cannot be forged"; the protection on that path is server-code discipline plus keeping the service key secret.
-- Coverage: some specific tests ran as owner (e.g. append-only triggers), but a full evaluation of all administrative/owner powers was NOT done.
-- No bucket and no collection flow activated.
+- Migration `20261103132927`.
+- Private bucket `document-originals`, limit 52428800 bytes, MIME unrestricted.
+- One SELECT policy, limited to staff and to this bucket.
+- The two test objects were removed; the bucket is empty.
+- No new advisor warnings (the 4 old ones unchanged).
+- NOT executed: a real HTTP login as staff or non-staff, and a direct write attempt as staff. The database simulation and the service_role signed link do not replace those tests. "No write policies" is a configuration we observed, not a functional test we ran.
 
-## 1. Bucket configuration
+## 1. What the code does today (read from the source)
 
-| Setting | Value |
-|---|---|
-| name / id | `document-originals` |
-| public | `false` |
-| file_size_limit | `52428800` bytes (50 MB, written to the tool as `"50MB"`; post-check must read back exactly 52428800) |
-| allowed_mime_types | none (NULL) — see below |
+Every collector writes only `raw_items`. No code writes to the `document_*` tables or to Storage yet.
 
-Note: 50 MB is the intended limit; viability within the Workers 128 MB isolate (streaming, no full buffering) is validated in step 3, not here. If the project-wide limit is below 50 MB, the tool rejects it: STOP and report; do not lower silently.
+| Path (file → function) | Gets original bytes? | Today it stores |
+|---|---|---|
+| `pdf-collect.server.ts` → `runPdfCollection`, direct fetch that succeeds (PDF) | Yes: the full PDF in memory (`arrayBuffer()`) | Text from `unpdf` in `raw_payload.plain_text`, plus `byte_length` |
+| same, direct fetch that succeeds (HTML ≥ 1000 chars) | Yes: the HTML bytes | Reduced text |
+| same, direct fetch succeeds but the page is an empty app shell → Parallel | Yes, but only an empty shell | Parallel text |
+| same, direct fetch fails → Parallel Extract | **No**, text only | Parallel text, `extraction_method: parallel_extract` |
+| same, → Webshare (Apify single-page crawl) | **No**, markdown/text only from the dataset | Text, `extraction_method: webshare_proxy` |
+| same, everything fails → `recordBlockedItem` | No | Blocked row |
+| `gibraltar-collect.server.ts` (PDF of an act) | Yes, PDF | Text |
+| `gibraltar-collect.server.ts` (text inline on the act page) | HTML of the act page only | Text |
+| `fek-collect.server.ts` (ΦΕΚ PDF) | Yes, PDF | Text |
+| `malta-collect.server.ts` → `tryHttp` | Yes, PDF/HTML | Text |
+| API collectors (EUR-Lex, Normattiva, BOE, UK, OBK, DOU, PISTE…) | Structured API responses, not document files | Text/JSON |
 
-### Why no MIME restriction
-- Storage checks the Content-Type **informed** by the uploader, not the bytes. A restriction therefore does not prove what the file is; it only rejects uploads whose declared type is not on the list.
-- Official sources often send wrong or generic types (`application/octet-stream`, `text/plain` for PDFs, `application/x-download`). A whitelist would reject legitimate originals, contradicting "never lose a document".
-- Instead: the server always uploads with Content-Type `application/octet-stream` and signed URLs use the download option. These are delivery measures that reduce the chance of active content (HTML/SVG) rendering; they are NOT an absolute guarantee it is never opened. Metadata placement (existing tables, unchanged): the received filename and the MIME **informed** by the source go in `document_copy_sightings`; the MIME **detected** from magic bytes goes in `document_copies`. Type control lives in our metadata, not in the bucket.
-- Alternative if the owner prefers a restriction: whitelist `application/octet-stream` only, which enforces the server rule above. Costs nothing functionally; I list it as an owner choice.
+Callers of `runPdfCollection`: the manual run (`collection.functions.ts:174`) and the scheduler (`scheduler.server.ts:203`).
 
-## 2. Policies on storage.objects (separate versioned migration)
+## 2. What gets stored for each path
 
-Supabase already has RLS enabled on `storage.objects`. Policies are permissive and OR-combined, so any existing unscoped policy could still grant access to this bucket — the pre-flight (section 6) lists all existing `storage.objects` policies and STOPS if any of them is not bucket-scoped.
+Rule: an original is only ever **bytes received from the source**. Text rebuilt by Parallel, Apify or our own HTML reduction is **never** stored as an original.
 
-```sql
--- Phase 1B step 2: Storage policies for bucket document-originals only.
--- Prerequisite: bucket document-originals exists (created by the storage tool).
--- Reuses public.is_staff() (no-arg). Touches no other bucket and no existing policy.
+| Path | Original in Storage | `document_copies` | `document_copy_sightings` | `document_extractions` |
+|---|---|---|---|---|
+| Direct PDF | Yes | created or reused | `fetch_method=http`, `byte_outcome=stored` or `deduplicated` | `unpdf` text: tool `unpdf`, version from package |
+| Direct HTML (full page) | Yes, the HTML file as received | yes | `http` | text from `extractHtmlText`, tool `html-reduce@1` |
+| App shell, then Parallel | Store the shell HTML as received (it is what the source served) | yes | `http` | Parallel text recorded as an extraction of that copy, tool `parallel_extract`. It is flagged as not derived from the stored bytes; see Q3 |
+| Parallel only (direct fetch failed) | **None** | none | **none** (a sighting needs a copy or `not_stored_size_limit`) | none |
+| Webshare/Apify | **None** | none | none | none |
+| Over 50 MB | None | none | `byte_outcome=not_stored_size_limit`, `copy_id` NULL | none |
+| Blocked | None | none | none | none |
 
-begin;
+For every path, `raw_items.raw_payload` gets one honest field: `original_storage: { status: "stored" | "deduplicated" | "not_available_text_only" | "not_stored_size_limit" | "failed" | "disabled", copy_id?, error_class? }`. Text-only paths say `not_available_text_only` and are never described as having an original.
 
--- Staff may read and list objects of this bucket (also required to create signed URLs).
-create policy "document_originals_staff_select"
-  on storage.objects
-  for select
-  to authenticated
-  using (bucket_id = 'document-originals' and public.is_staff());
+A sighting records: `fetched_url` (final URL after redirects), `fetch_method`, `received_filename` (from Content-Disposition or the URL), `informed_mime_type` (the Content-Type header), `declared_size_bytes` (Content-Length), `raw_item_id`, `source_id`, `collection_job_id`. `detected_mime_type` (from the file's first bytes) goes on `document_copies`.
 
--- No INSERT / UPDATE / DELETE policies for anon or authenticated:
--- writes happen only on the server with the service role (bypasses RLS).
--- No object deletion path is granted to any browser role.
+`document_id` and `document_copy_links` stay empty in this step. The collector does not decide which legal document a file belongs to (see Q2).
 
-commit;
+## 3. The 50 MB limit: memory, streaming, time
+
+Real constraint: `unpdf` (pdf.js) needs the **whole PDF in memory** to parse it, so text extraction cannot stream. One PDF in flight costs the file itself plus pdf.js working memory (often 1–3× the file size), inside a 128 MB isolate shared with other requests.
+
+Strategy:
+1. **Before downloading:** if Content-Length is over 52428800, do not read the body. Record `not_stored_size_limit` and leave quality `unknown`. The collection then continues exactly as today, falling back to Parallel for text.
+2. **Capped read:** read the body chunk by chunk into a pre-allocated buffer and stop at 52428800 + 1 bytes. This covers a missing or false Content-Length. Over the cap → `not_stored_size_limit`.
+3. **Hash:** SHA-256 over the buffer with WebCrypto (`crypto.subtle.digest`), which needs no new dependency.
+4. **Verification download:** stream the stored object back and hash it incrementally, so a second 50 MB copy is never held in memory. WebCrypto has no incremental hashing and Workers block runtime-compiled WebAssembly (which rules out `hash-wasm`), so this uses `@noble/hashes` (pure JS).
+5. **Order inside one target:** fetch → hash → store original (section 4) → **release nothing yet** → extraction. To limit peak memory, files above a configurable threshold `ORIGINALS_INLINE_EXTRACT_MAX_BYTES` (initial value decided from the measurements) are stored but **not** parsed with `unpdf` in the same request. Their text comes from the existing Parallel fallback, and the extraction is recorded as `parallel_extract` (Q3).
+6. **Concurrency:** targets are already processed one at a time per job. No parallel uploads are added.
+
+Measurements, required before the flag can be turned on (dev server runs on Node, so they must happen on the published Worker, in test mode):
+- Controlled PDFs of about 1, 10, 25, 40 and 50 MB, plus 52428801 bytes.
+- For each: success or a "memory limit exceeded" / CPU error in server logs, wall time, CPU time, upload time, verification time.
+- Two jobs at once using the 25 MB file.
+- Result: the real maximum safe size for inline extraction, and confirmation that store + verify works at 50 MB.
+
+If 50 MB **storage** itself (without extraction) fails in the Worker, I stop and present the numbers and options (a lower store limit, or storing the largest files only through a manual path) **before** changing any limit. The database CHECK of 52428800 is not touched.
+
+## 4. Persistence sequence (unchanged contract)
+
+```text
+hash → create or reuse document_copies row (pending) → upload (upsert:false)
+     → verify (size + SHA-256 of the stored object) → stored
 ```
 
-Deliberately absent: any policy `to anon`; any insert/update/delete policy; any change to `storage.buckets` (bucket rows are managed only by the storage tool).
+- `insert ... on conflict (file_sha256) do nothing` creates the `pending` row, or returns the existing row.
+- If the existing row is `stored`: no upload. The sighting says `deduplicated`. This trusts the earlier verification and does not re-download (see Q4).
+- Upload returns "already exists": the object is accepted **only** if the size and hash of the stored object match. Then the row becomes `stored`.
+- Size/hash mismatch: the row becomes `conflict`. Nothing is overwritten or deleted. The collection continues with `original_storage.status = failed` and `error_class = storage_conflict`.
+- `stored` is set with `stored_at = now()`, and only after verification passes.
 
-## 3. Resulting permissions
+Writes run on the server with the service_role client, loaded inside the handler. The key never reaches the browser.
 
-| Caller | Read/download | List | Create signed URL | Upload / overwrite / delete |
-|---|---|---|---|---|
-| Visitor (anon) | no | no | no | no |
-| Authenticated non-staff | no | no | no | no |
-| Active staff | yes | yes | yes (needs SELECT) | no |
-| Server (service_role) | yes | yes | yes | yes — bypasses RLS; guarded only by code discipline |
+## 5. Concurrency and recovery for `pending` rows (no schema change)
 
-Signed URLs: issued only by a staff-authenticated server function, short expiry (proposed 300 s), with `download` set so the file is downloaded, not rendered. A signed URL is a bearer link: anyone holding it can read until expiry — stated, not hidden.
+`document_copies.updated_at` is refreshed by the existing `set_updated_at` trigger, so it can serve as the lease.
 
-## 4. Server-only write path (contract for step 3; no code now)
+- **Claim:** whoever creates the row owns it. Someone who finds a `pending` row can take it over only with
+  `update ... set storage_status='pending' where file_sha256=$1 and storage_status='pending' and updated_at < now() - interval '5 minutes' returning id`. Exactly one caller wins, and the update renews `updated_at`.
+- **Second run while the lease is fresh:** it waits a bounded time, polling the row every 2 s for at most 30 s. If the row becomes `stored` → `deduplicated`. Still `pending` → `original_storage.status = failed`, `error_class = pending_in_progress`. The raw item is written normally. There is no infinite wait.
+- **Abandoned run** (crash between upload and verify): the next run that sees a stale `pending` takes it over, runs the "already exists" branch, verifies and finishes. A manual reconcile action (server function, staff only, no deletion) does the same for a given copy id.
+- **Object missing for a `stored` row** (found when needed): the row is marked `missing`. Nothing is deleted. The next collection of the same bytes uploads it again, verifies, and sets `stored`.
 
-- Module `src/lib/document-storage.server.ts` (server-only file), loaded only inside handlers; uses the generated admin client via dynamic import of `@/integrations/supabase/client.server`. The service key is read from `process.env` on the server and never sent to the browser or logged.
-- Object path is content-addressed and extension-free: `sha256/<first 2 hex>/<full sha256>`.
-- Upload with `upsert: false` and Content-Type `application/octet-stream`. An object that already exists at the path is accepted only after the size + hash verification below; existence alone proves nothing.
-- Order: hash while streaming → `pending` `document_copies` row created or reused → upload → verification (size + hash of the stored object) → `stored`. Failures recorded explicitly (step 1B recovery rules: orphan object kept and reconciled, never auto-deleted).
-- Conventions, not enforced by policy: 300 s signed-URL validity with download option, and issuing signed URLs only via the server function, are application conventions. The staff SELECT policy does not enforce them — staff with SELECT can request signed URLs directly from the Storage API.
-- Browser never uploads directly. Staff downloads go through the signed-URL server function, which verifies `is_staff()` via the user's own session before signing.
+## 6. Partial failures
 
-## 5. Storage access tests and cleanup
+- Original stored, extraction fails (no text layer, parser error): the copy, the sighting and `original_storage: stored` are kept. The failure is recorded on its own: the raw item becomes the blocked record as today, and the sighting is linked to that blocked row. `recordBlockedItem` gains an optional return of the row id; its behavior and the alert stay the same. No `document_extractions` row is written for a failed extraction.
+- Extraction succeeds but looks truncated (fewer pages than the PDF reports, or a sudden cut): the extraction is recorded with `truncation_status = 'truncated'` or `'unknown'`, never `complete`.
+- Extracted text over 1 MB: stored as `text/<hash>` in the same bucket through the same verify flow, with `text_storage_path` set (the existing CHECK allows this).
+- Sighting/extraction insert fails after the copy was stored: the copy stays `stored`, `original_storage` records `status: stored` plus `error_class: sighting_failed`, and the job summary counts it.
 
-Test objects live only under the prefix `__verification__/<run-uuid>/` (run-uuid generated per run and reported), never under `sha256/`.
+## 7. Compatibility: storage fails, collection continues
 
-1. Read-back of bucket config: public=false, file_size_limit=52428800, allowed_mime_types as decided.
-2. Policy inventory: exactly one new policy, scoped to `bucket_id = 'document-originals'`; all pre-existing `storage.objects` policies identical to baseline.
-3. Server upload (service_role) of two small test files to the prefix: succeeds; second upload of same path with `upsert:false` fails as "exists".
-4. Over-limit upload (50 MB + 1 byte, test prefix): rejected.
-5. Anon (publishable key, no session): list, download, sign, upload → all denied/empty.
-6. Database simulation (rolled back): `set local role authenticated` + JWT claims for a non-staff uuid → 0 rows from `storage.objects` for this bucket; for a real active staff uuid → test rows visible; anon → 0 rows.
-7. Real-login HTTP test (staff session and non-staff session): list, download, create signed URL, attempt upload/delete. If a real session cannot be minted (previous status `external_unmanaged`), this test is reported as NOT run; only the simulation stands.
-8. Public URL of a test object returns not-found/denied (bucket private).
-9. Other buckets: inventory before/after identical (currently none expected).
+- All storage work is wrapped so that **no** storage or database error inside it can change what the collector returns today. `raw_items` content, content_hash, the fallback chain, `recordBlockedItem` and alerts stay identical.
+- On any failure, `original_storage.status = "failed"` with a short error class only (e.g. `upload_error`, `verify_mismatch`, `db_error`, `timeout`). No provider body and no secrets.
+- The job's `run_params` summary gains counts: `originals_stored`, `originals_deduplicated`, `originals_failed`, `originals_skipped`.
+- Flag off: no storage calls at all, and `original_storage.status = "disabled"`.
 
-Cleanup (only test objects):
-- List objects with prefix `__verification__/<run-uuid>/` via the Storage API as service_role; compare to the exact list of paths the test created; delete only those exact paths with `storage.remove([...])`. If the listing contains any path not created by this run, STOP and report — delete nothing.
-- No SQL `DELETE` on `storage.objects`; no wildcard deletes.
-- Post-check: prefix lists empty; total object count in the bucket = 0 (bucket is new).
+## 8. Activation and rollback
 
-## 6. Pre-flight, ordering and failure recovery
+Server variable `ORIGINALS_STORAGE_MODE`, read inside handlers:
+- unset or `off` (the default): nothing changes.
+- `test`: storage runs only for manual runs given an explicit `store_originals: true` input. The scheduler never stores in this mode.
+- `on`: manual runs and the scheduler.
 
-Pre-flight (read-only):
-- `select * from storage.buckets where id = 'document-originals'`.
-  - absent → proceed.
-  - present with identical config → report, skip creation, continue to policies.
-  - present with any difference (public, size limit, MIME list) → STOP and present the difference. Never overwrite.
-- List all policies on `storage.objects` (baseline); STOP if any is unscoped to a bucket or already named `document_originals_*`.
-- Confirm `public.is_staff()` exists; advisor baseline (4 old warnings).
+Roll-out:
+1. Deploy with the flag unset; confirm nothing changed.
+2. Set `test`; run controlled files (section 9) on the published app.
+3. Run 1–2 real sources manually.
+4. Set `on` only after the owner approves.
 
-Order (two separate operations):
-1. Create bucket with the storage tool → read back config.
-2. Apply the policies migration (one versioned, transactional migration).
-3. Tests, cleanup, advisors after.
+Rollback = set it back to `off`. Files, copies, sightings and extractions are kept, and nothing is deleted.
 
-Failure between 1 and 2:
-- Bucket exists, no policies → state is deny-all for anon/authenticated (only service_role can access). This is safe, not an exposure.
-- Recovery: fix the migration and re-run it; do not delete or recreate the bucket. Verify by re-reading bucket config and policy inventory.
-- If step 1 fails: do not run step 2; report the tool error (e.g. project size limit below 50 MB).
-- If step 2 fails mid-way: transaction rolls back; policy inventory must equal baseline.
+## 9. Tests
 
-## 7. Owner decisions for step 2
+Unit tests (Vitest, mocked storage/db):
+1. Pending → upload → verify → stored, in order. Verification failure → `conflict`, no overwrite.
+2. Object already exists with the same bytes → accepted after verify. With different bytes → `conflict`.
+3. A fresh pending row held by another run → bounded wait, then `pending_in_progress`. A stale lease → takeover.
+4. Size limit: Content-Length over the limit → body not read. No Content-Length but the stream exceeds the cap → aborted at 52428801 bytes, `not_stored_size_limit`.
+5. Parallel-only and Webshare paths → no copy, no sighting, `not_available_text_only`.
+6. Upload error / db error → the raw item is identical to a flag-off run except for `original_storage`.
+7. Extraction failure after store → copy kept, blocked record linked, alert behavior unchanged.
+8. Truncated text → `truncation_status` is never `complete`.
+9. Flag off → zero storage calls.
 
-1. MIME: no restriction (recommended) vs whitelist `application/octet-stream` only.
-2. Signed URL expiry: 300 s proposed.
+Controlled real-environment tests (published app, `test` mode, files under a fixed test source):
+10. The same PDF from two different URLs/sources → one copy, two sightings (`stored` + `deduplicated`).
+11. Size series (section 3) with measurements recorded.
+12. Interruption: a forced stop after upload, before verify (test-only switch) → stale `pending` → the next run recovers it to `stored`.
+13. A forced upload failure → collection still succeeds, `original_storage.failed`.
+14. Cleanup of test data uses only the exact-path procedure from step 2 for the test-prefixed objects, plus a listed-id removal of the matching test rows. This needs separate owner approval because the tables are append-only by design; see Q5.
+
+## 10. Files that change
+
+- New `src/lib/document-storage.server.ts`: capped read, hashing, pending/claim/upload/verify/stored, recovery, MIME sniffing.
+- New `src/lib/document-storage.server.test.ts`.
+- `src/lib/pdf-collect.server.ts`: call the storage step on the direct-fetch success path, record sighting/extraction, add `original_storage` to `raw_payload`.
+- `src/lib/blocked-items.server.ts`: optionally return the new row id (no behavior change).
+- `src/lib/collection.functions.ts`: accept `store_originals` (test mode only).
+- `src/lib/gibraltar-collect.server.ts`, `fek-collect.server.ts`, `malta-collect.server.ts`: the same call on their direct-PDF paths. Proposed as **step 3b**, after `pdf-collect` passes the real-environment tests.
+- `AGENTS.md`: one rule ("an original file is only bytes received from the source; text-only paths never create copies").
+- `scheduler.server.ts`: no code change (it calls `runPdfCollection`; the flag decides).
+
+New dependency: `@noble/hashes` (pure-JS incremental SHA-256 for streamed verification; works in Workers).
+
+**Schema changes: NONE.** Everything fits the existing `document_copies` / `document_copy_sightings` / `document_extractions` columns and CHECKs.
+
+## 11. Acceptance criteria
+
+- With the flag off, the output of an identical collection run is byte-for-byte the same as today, apart from `original_storage: disabled`.
+- With `test`, every direct-fetch PDF/HTML ends with a `stored` or `deduplicated` copy whose stored object matches size and hash. Text-only paths create no copy.
+- No storage failure changes ingested/duplicate/failed counts or the blocked/alert behavior.
+- The 50 MB store + verify works on the published Worker, or the measured numbers are presented before any limit change.
+- No automatic deletion anywhere in the code.
+
+## 12. Owner questions
+
+1. Step order: `pdf-collect` first (3a), then Gibraltar / ΦΕΚ / Malta (3b)?
+2. Leave `document_id` / `document_copy_links` empty in this step, linking copies to legal documents later by hand?
+3. App-shell case: record the Parallel text as an extraction attached to the stored shell copy (flagged "not derived from stored bytes"), or record no extraction there?
+4. Dedup against a `stored` copy: trust the earlier verification (proposed), or re-verify on every sighting (more traffic and time)?
+5. Clean-up of controlled test rows in the append-only tables: approve a one-off, listed-id removal, or keep the test rows marked under the test source?
