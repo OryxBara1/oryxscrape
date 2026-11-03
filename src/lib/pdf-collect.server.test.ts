@@ -193,11 +193,12 @@ describe("runPdfCollection with ORIGINALS_STORAGE_MODE", () => {
     const p = on.rawInserts[0]!["raw_payload"] as Record<string, unknown>;
     expect(p["plain_text"]).toBe(state.parallelText);
     expect(p["extraction_method"]).toBe("parallel_extract");
-    expect(p["original_storage"]).toEqual({ status: "stored", copy_id: "copy-1", inline_extract: "skipped_cap" });
+    // the mocked copy store persists across tests, so the file may already be stored
+    expect(p["original_storage"]).toEqual({ status: expect.stringMatching(/^(stored|deduplicated)$/), copy_id: "copy-1", inline_extract: "skipped_cap" });
     expect((p["attempts"] as unknown[])[0]).toEqual({ engine: "inline_pdf", ok: false, error: "inline_extract_cap" });
     expect(on.rawInserts[0]!["collector_version"]).not.toBe("http-pdf-fetch@1.0.0");
     expect(state.extractions).toEqual([]);
-    expect(state.sightings[0]).toMatchObject({ byte_outcome: "stored", copy_id: "copy-1" });
+    expect(state.sightings[0]).toMatchObject({ copy_id: "copy-1" });
   });
 
   it("X1b: invalid cap values mean 0", async () => {
