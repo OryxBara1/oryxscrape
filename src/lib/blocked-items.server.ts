@@ -87,6 +87,8 @@ export async function recordBlockedItemDetailed(input: {
   if (error) {
     // Duplicate = already blocked and already alerted once; never re-alert.
     if (error.code === "23505") {
+      // Only the originals path needs the id; legacy callers make no extra read.
+      if (!input.originalStorage) return { outcome: "duplicate", id: null };
       const { data: existing } = await supabase
         .from("raw_items")
         .select("id")

@@ -13,7 +13,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
 
-import { recordBlockedItem } from "./blocked-items.server";
+import { recordBlockedItem, recordBlockedItemDetailed } from "./blocked-items.server";
+import { readOriginalsMode, shouldStoreOriginals } from "./originals-mode";
+import type { OriginalOutcome } from "./document-storage.server";
 import { sha256Hex } from "./consumer-keys.server";
 import { extractWithWebshare, WEBSHARE_COLLECTOR_VERSION } from "./webshare-fallback.server";
 import { readProxyConfig } from "./webshare-proxy.server";
@@ -83,6 +85,31 @@ function extractHtmlText(html: string): string {
     .trim();
 }
 
+/**
+ * Same text as extractPdfText, plus page counts (originals mode only).
+ * Mirrors unpdf 1.8.1 normalizeMergedText so the text and content_hash are
+ * identical to the legacy path; covered by a unit test.
+ */
+export function mergePdfPages(pages: string[]): string {
+  return pages
+    .join("\n")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\u0000/g, "")
+    .trim();
+}
+
+async function extractPdfTextDetailed(bytes: Uint8Array): Promise<{ text: string; totalPages: number; processedPages: number }> {
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(bytes);
+  const { totalPages, text } = await extractText(pdf, { mergePages: false });
+  const pages = Array.isArray(text) ? text : [text];
+  return { text: mergePdfPages(pages), totalPages, processedPages: pages.length };
+}
+
+export const UNPDF_VERSION = "unpdf@1.8.1";
+
 function looksLikePdf(bytes: Uint8Array, contentType: string | null): boolean {
   if (contentType?.toLowerCase().includes("pdf")) return true;
   return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
@@ -95,8 +122,17 @@ export async function runPdfCollection(input: {
   profileId: string | null;
   targets: PdfTarget[];
   language?: string | null;
+  /** "manual" runs may request originals in test mode; scheduler omits it. */
+  trigger?: "manual" | "scheduled";
+  storeOriginals?: boolean;
 }) {
   const { supabase, source } = input;
+  const storeOriginals = shouldStoreOriginals(
+    readOriginalsMode(process.env.ORIGINALS_STORAGE_MODE),
+    input.trigger ?? "scheduled",
+    input.storeOriginals,
+  );
+  const originalsSummary: Record<string, unknown>[] = [];
   const targets = input.targets.filter((t) => t.url.trim() !== "");
   if (!targets.length) throw new Error("No document URLs provided.");
 
@@ -130,6 +166,10 @@ export async function runPdfCollection(input: {
     let attempts: { engine: string; ok: boolean; error?: string }[] = [];
     for (const target of targets) {
       const label = target.document_label ?? null;
+      // Originals mode only (always null when the flag is off).
+      let original: OriginalOutcome | null = null;
+      let originalMeta: { fetchedUrl: string; filename: string | null; mime: string | null; declared: number | null } | null = null;
+      let pdfDetail: { text: string; totalPages: number; processedPages: number } | null = null;
       try {
         let content: string;
         let usedParallel = false;
@@ -199,7 +239,22 @@ export async function runPdfCollection(input: {
           bytes = new Uint8Array(await okResponse.arrayBuffer());
           isPdf = looksLikePdf(bytes, contentType);
 
-          if (isPdf) {
+          if (isPdf && storeOriginals) {
+            const storage = await import("./document-storage.server");
+            const declared = storage.parseContentLength(okResponse.headers);
+            originalMeta = {
+              fetchedUrl: okResponse.url || target.url,
+              filename: storage.receivedFilename(okResponse.headers, okResponse.url || target.url),
+              mime: contentType,
+              declared,
+            };
+            if (storage.hasPdfMagic(bytes) || declared !== null) {
+              original = await storage.preserveOriginal({ bytes, declaredSize: declared }, await storage.createStorageDeps().catch(() => null) ?? FAILED_DEPS);
+            }
+            pdfDetail = await extractPdfTextDetailed(bytes);
+            content = pdfDetail.text;
+            if (!content) throw new Error("PDF has no extractable text layer.");
+          } else if (isPdf) {
             content = await extractPdfText(bytes);
             if (!content) throw new Error("PDF has no extractable text layer.");
           } else {
@@ -225,7 +280,7 @@ export async function runPdfCollection(input: {
 
 
 
-        const { error } = await supabase.from("raw_items").insert({
+        const rawInsert = supabase.from("raw_items").insert({
           job_id: job.id,
           source_id: source.id,
           source_url: target.url,
@@ -238,6 +293,7 @@ export async function runPdfCollection(input: {
               ? { parallel_title: parallelTitle, extraction_method: "parallel_extract", attempts }
               : {}),
           byte_length: bytes.byteLength,
+          ...(original ? { original_storage: await originalPayload(original) } : {}),
           ...(target.concept_label
             ? {
                 concept_label: target.concept_label,
@@ -261,6 +317,25 @@ export async function runPdfCollection(input: {
           apify_run_id: null,
           collector_version: isPdf ? PDF_COLLECTOR_VERSION : usedWebshare ? WEBSHARE_COLLECTOR_VERSION : usedParallel ? PARALLEL_COLLECTOR_VERSION : HTML_COLLECTOR_VERSION,
         });
+        const { data: insertedRaw, error } = original
+          ? await rawInsert.select("id").single()
+          : await rawInsert;
+
+        if (original && originalMeta) {
+          let rawItemId: string | null = (insertedRaw as { id: string } | null)?.id ?? null;
+          if (error?.code === "23505") {
+            const { data: existing } = await supabase
+              .from("raw_items")
+              .select("id")
+              .eq("source_id", source.id)
+              .eq("content_hash", await sha256Hex(content))
+              .maybeSingle();
+            rawItemId = (existing as { id: string } | null)?.id ?? null;
+          }
+          if (!error || error.code === "23505") {
+            originalsSummary.push(await linkOriginal(original, originalMeta, rawItemId, source.id, job.id, pdfDetail, target.url));
+          }
+        }
 
         if (error) {
           if (error.code === "23505") {
@@ -293,14 +368,28 @@ export async function runPdfCollection(input: {
           // URL is unreachable for every automated collector — send it to the
           // Manual Upload Queue instead of dropping it. Never fails the job.
           try {
-            await recordBlockedItem({
-              supabase,
-              source,
-              url: target.url,
-              error: message,
-              jobId: job.id,
-              attempts,
-            });
+            if (original && originalMeta) {
+              const blocked = await recordBlockedItemDetailed({
+                supabase,
+                source,
+                url: target.url,
+                error: message,
+                jobId: job.id,
+                attempts,
+                originalStorage: await originalPayload(original),
+              });
+              // Text did not come from these bytes: no extraction is linked.
+              originalsSummary.push(await linkOriginal(original, originalMeta, blocked.id, source.id, job.id, null, target.url));
+            } else {
+              await recordBlockedItem({
+                supabase,
+                source,
+                url: target.url,
+                error: message,
+                jobId: job.id,
+                attempts,
+              });
+            }
           } catch (blockError) {
             console.error("[pdf-collect] blocked-record failed", target.url, (blockError as Error).message);
           }
@@ -325,6 +414,7 @@ export async function runPdfCollection(input: {
         new_count: ingested,
         duplicate_count: duplicates,
         failed_count: failed,
+        ...(storeOriginals ? { run_params: { method: "http-pdf", targets, originals: originalsSummary } as unknown as never } : {}),
       })
       .eq("id", job.id);
     if (updateError) throw new Error(updateError.message);
@@ -338,4 +428,58 @@ export async function runPdfCollection(input: {
       .eq("id", job.id);
     throw new Error(message);
   }
+}
+
+// ------------------------------------------------ originals helpers (flag on only)
+
+const FAILED_DEPS = {
+  db: {
+    insertPending: () => Promise.reject(new Error("storage not configured")),
+    getByHash: () => Promise.reject(new Error("storage not configured")),
+    fencedUpdate: () => Promise.reject(new Error("storage not configured")),
+    insertSighting: () => Promise.reject(new Error("storage not configured")),
+    insertExtraction: () => Promise.reject(new Error("storage not configured")),
+  },
+  store: {
+    upload: () => Promise.reject(new Error("upload: storage not configured")),
+    download: () => Promise.reject(new Error("download: storage not configured")),
+  },
+};
+
+async function originalPayload(o: OriginalOutcome) {
+  const { originalStoragePayload } = await import("./document-storage.server");
+  return originalStoragePayload(o);
+}
+
+async function linkOriginal(
+  outcome: OriginalOutcome,
+  meta: { fetchedUrl: string; filename: string | null; mime: string | null; declared: number | null },
+  rawItemId: string | null,
+  sourceId: string,
+  jobId: string,
+  pdfDetail: { text: string; totalPages: number; processedPages: number } | null,
+  url: string,
+): Promise<Record<string, unknown>> {
+  const storage = await import("./document-storage.server");
+  let link: { sighting: string; extraction: string; error_class?: string } = { sighting: "failed", extraction: "not_applicable", error_class: "deps_unavailable" };
+  try {
+    const deps = await storage.createStorageDeps();
+    link = await storage.linkAfterRaw(
+      {
+        outcome,
+        rawItemId,
+        sourceId,
+        jobId,
+        fetchedUrl: /^https?:\/\//.test(meta.fetchedUrl) ? meta.fetchedUrl : url,
+        receivedFilename: meta.filename,
+        informedMimeType: meta.mime,
+        declaredSize: meta.declared,
+        extraction: pdfDetail ? { ...pdfDetail, tool: "unpdf", version: UNPDF_VERSION } : null,
+      },
+      deps,
+    );
+  } catch {
+    // keep the deps_unavailable result
+  }
+  return { url, raw_item_id: rawItemId, file: storage.originalStoragePayload(outcome), ...link };
 }
