@@ -248,7 +248,7 @@ export async function runPdfCollection(input: {
               mime: contentType,
               declared,
             };
-            if (storage.hasPdfMagic(bytes) || declared !== null) {
+            if (storage.hasPdfMagic(bytes)) {
               original = await storage.preserveOriginal({ bytes, declaredSize: declared }, await storage.createStorageDeps().catch(() => null) ?? FAILED_DEPS);
             }
             pdfDetail = await extractPdfTextDetailed(bytes);
