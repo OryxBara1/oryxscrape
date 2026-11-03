@@ -25,7 +25,7 @@ Note: 50 MB is the intended limit; viability within the Workers 128 MB isolate (
 ### Why no MIME restriction
 - Storage checks the Content-Type **informed** by the uploader, not the bytes. A restriction therefore does not prove what the file is; it only rejects uploads whose declared type is not on the list.
 - Official sources often send wrong or generic types (`application/octet-stream`, `text/plain` for PDFs, `application/x-download`). A whitelist would reject legitimate originals, contradicting "never lose a document".
-- Instead: the server always uploads with Content-Type `application/octet-stream` (so a signed URL never renders active content such as HTML/SVG in the browser), and records separately in `document_copies`: the MIME **informed** by the source, the MIME **detected** from magic bytes, and the original filename. Type control lives in our metadata, not in the bucket.
+- Instead: the server always uploads with Content-Type `application/octet-stream` and signed URLs use the download option. These are delivery measures that reduce the chance of active content (HTML/SVG) rendering; they are NOT an absolute guarantee it is never opened. Metadata placement (existing tables, unchanged): the received filename and the MIME **informed** by the source go in `document_copy_sightings`; the MIME **detected** from magic bytes goes in `document_copies`. Type control lives in our metadata, not in the bucket.
 - Alternative if the owner prefers a restriction: whitelist `application/octet-stream` only, which enforces the server rule above. Costs nothing functionally; I list it as an owner choice.
 
 ## 2. Policies on storage.objects (separate versioned migration)
@@ -70,8 +70,9 @@ Signed URLs: issued only by a staff-authenticated server function, short expiry 
 
 - Module `src/lib/document-storage.server.ts` (server-only file), loaded only inside handlers; uses the generated admin client via dynamic import of `@/integrations/supabase/client.server`. The service key is read from `process.env` on the server and never sent to the browser or logged.
 - Object path is content-addressed and extension-free: `sha256/<first 2 hex>/<full sha256>`.
-- Upload with `upsert: false` and Content-Type `application/octet-stream`. "Already exists" with the same hash = dedup success, not an error.
-- Order: hash while streaming → upload → insert `document_copies` row. Failures recorded explicitly (step 1B recovery rules: orphan object kept and reconciled, never auto-deleted).
+- Upload with `upsert: false` and Content-Type `application/octet-stream`. An object that already exists at the path is accepted only after the size + hash verification below; existence alone proves nothing.
+- Order: hash while streaming → `pending` `document_copies` row created or reused → upload → verification (size + hash of the stored object) → `stored`. Failures recorded explicitly (step 1B recovery rules: orphan object kept and reconciled, never auto-deleted).
+- Conventions, not enforced by policy: 300 s signed-URL validity with download option, and issuing signed URLs only via the server function, are application conventions. The staff SELECT policy does not enforce them — staff with SELECT can request signed URLs directly from the Storage API.
 - Browser never uploads directly. Staff downloads go through the signed-URL server function, which verifies `is_staff()` via the user's own session before signing.
 
 ## 5. Storage access tests and cleanup
