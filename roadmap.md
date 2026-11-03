@@ -138,3 +138,4 @@
 - [x] Bucket document-originals (private, 52428800, MIME NULL) + staff SELECT policy (migration 20261103132927); Storage tests passed; test objects removed, bucket 0 objects
 - Real staff/non-staff login HTTP test NOT RUN (no session mintable; external Supabase). Staff/non-staff checked by DB simulation only.
 - 300 s signed URL + server-only signing are app conventions, not enforced by policy; octet-stream + download are delivery measures, not guarantees.
+- [ ] Step 3a review fixes (capped read, inline cap D1=A/D2=0/D3, frozen pre-3a compat tests) — authorized 2026-11-03
