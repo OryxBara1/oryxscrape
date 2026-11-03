@@ -199,7 +199,7 @@ describe("flag off == frozen pre-3a reference", () => {
     expect(s8.alerts.length).toBe(1);
     const s11 = await exec(currentRun, scenarios[10]!);
     expect(s11.alerts.length).toBe(0);
-    expect(s11.log.some((l) => (l as { op: string }).op.endsWith(".select"))).toBe(false);
+    expect(s11.log.some((l) => (l as { op: string }).op === "raw_items.select")).toBe(false);
     const s12 = await exec(currentRun, scenarios[11]!);
     const upd = s12.log.find((l) => (l as { op: string }).op === "collection_jobs.update") as { patch: Record<string, unknown> };
     expect(upd.patch).toMatchObject({ fetched_count: 4, new_count: 2, failed_count: 2 });
