@@ -1,6 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ storageLoaded: 0, sightings: [] as unknown[], extractions: [] as unknown[] }));
+const state = vi.hoisted(() => ({
+  storageLoaded: 0,
+  sightings: [] as unknown[],
+  extractions: [] as unknown[],
+  writes: 0,
+  uploads: 0,
+  pendingInserts: 0,
+  unpdfCalls: 0,
+  parallelCalls: 0,
+  parallelText: "Parallel text of the act",
+}));
+
+vi.mock("./parallel-fetch.server", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./parallel-fetch.server")>();
+  return {
+    ...real,
+    extractWithParallel: async () => {
+      state.parallelCalls++;
+      return { text: state.parallelText, title: "T" };
+    },
+  };
+});
 
 vi.mock("unpdf", async (importOriginal) => {
   const real = await importOriginal<typeof import("unpdf")>();
@@ -13,7 +34,7 @@ vi.mock("unpdf", async (importOriginal) => {
       getTextContent: async () => ({ items: [{ str: pages[n - 1], hasEOL: false }] }),
     }),
   };
-  return { ...real, getDocumentProxy: async () => fakeProxy };
+  return { ...real, getDocumentProxy: async () => { state.unpdfCalls++; return fakeProxy; } };
 });
 
 vi.mock("./document-storage.server", async (importOriginal) => {
@@ -28,6 +49,7 @@ vi.mock("./document-storage.server", async (importOriginal) => {
     createStorageDeps: async () => ({
       db: {
         insertPending: async (row: { file_sha256: string; size_bytes: number }) => {
+          state.pendingInserts++; state.writes++;
           if (rows.has(row.file_sha256)) return null;
           const r = { id: "copy-1", storage_status: "pending", updated_at: token(), size_bytes: row.size_bytes, file_sha256: row.file_sha256 };
           rows.set(row.file_sha256, r);
@@ -35,17 +57,18 @@ vi.mock("./document-storage.server", async (importOriginal) => {
         },
         getByHash: async (h: string) => rows.get(h) ?? null,
         fencedUpdate: async (id: string, t: string, patch: { storage_status: string }) => {
+          state.writes++;
           const r = [...rows.values()].find((x) => x.id === id);
           if (!r || r.updated_at !== t || r.storage_status !== "pending") return null;
           r.storage_status = patch.storage_status;
           r.updated_at = token();
           return r.updated_at;
         },
-        insertSighting: async (row: unknown) => { state.sightings.push(row); return "s1"; },
-        insertExtraction: async (row: unknown) => { state.extractions.push(row); return "e1"; },
+        insertSighting: async (row: unknown) => { state.writes++; state.sightings.push(row); return "s1"; },
+        insertExtraction: async (row: unknown) => { state.writes++; state.extractions.push(row); return "e1"; },
       },
       store: {
-        upload: async (p: string, b: Uint8Array) => { if (objects.has(p)) return "exists"; objects.set(p, b.slice()); return "created"; },
+        upload: async (p: string, b: Uint8Array) => { state.uploads++; state.writes++; if (objects.has(p)) return "exists"; objects.set(p, b.slice()); return "created"; },
         download: async (p: string) => {
           const b = objects.get(p);
           return b ? new ReadableStream({ start(c) { c.enqueue(b); c.close(); } }) : null;
@@ -116,6 +139,11 @@ beforeEach(() => {
   state.storageLoaded = 0;
   state.sightings = [];
   state.extractions = [];
+  state.writes = 0;
+  state.uploads = 0;
+  state.pendingInserts = 0;
+  state.unpdfCalls = 0;
+  state.parallelCalls = 0;
   vi.stubGlobal("fetch", vi.fn(async () =>
     new Response(PDF_BYTES, { status: 200, headers: { "content-type": "application/pdf", "content-length": String(PDF_BYTES.length) } }),
   ));
@@ -123,44 +151,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env["ORIGINALS_STORAGE_MODE"];
+  delete process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"];
 });
 
-/** The raw_items row as the code wrote it before step 3a. */
-async function legacyExpectedRaw(text: string) {
-  const { sha256Hex } = await import("./consumer-keys.server");
-  return {
-    job_id: "job-1",
-    source_id: "src-1",
-    source_url: "https://example.gr/act.pdf",
-    raw_payload: { plain_text: text, document_label: null, byte_length: PDF_BYTES.length },
-    content_hash: await sha256Hex(text),
-    collection_method: "http",
-    is_official_domain: true,
-    is_primary_document: true,
-    traceability_level: "direct_url",
-    institution_class: "government",
-    canonical_url: "https://example.gr/act.pdf",
-    http_status: 200,
-    content_type: "application/pdf",
-    language: null,
-    apify_actor_id: null,
-    apify_run_id: null,
-    collector_version: "http-pdf-fetch@1.0.0",
-  };
-}
-
 describe("runPdfCollection with ORIGINALS_STORAGE_MODE", () => {
-  it("flag off (unset): identical legacy row, storage module never loaded, no new fields", async () => {
+  it("flag off (unset): storage module never loaded, no new fields (full comparison lives in pdf-collect.compat.test.ts)", async () => {
     const off = await run(undefined, true);
     expect(state.storageLoaded).toBe(0);
-    const row = off.rawInserts[0]!;
-    const { collected_at, ...rest } = row;
-    expect(typeof collected_at).toBe("string");
-    const { extractText } = await import("unpdf");
-    const legacy = await extractText((await (await import("unpdf")).getDocumentProxy(PDF_BYTES)) as never, { mergePages: true });
-    const legacyText = String(legacy.text).replace(/\u0000/g, "").trim();
-    expect(rest).toEqual(await legacyExpectedRaw(legacyText));
-    expect(JSON.stringify(row)).not.toContain("original_storage");
+    expect(JSON.stringify(off.rawInserts[0])).not.toContain("original_storage");
     expect(off.jobUpdates[0]).not.toHaveProperty("run_params");
   });
 
@@ -172,6 +170,7 @@ describe("runPdfCollection with ORIGINALS_STORAGE_MODE", () => {
 
   it("flag on: same text and content_hash as off, plus original_storage and linked sighting/extraction", async () => {
     const off = await run(undefined);
+    process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"] = "1000000";
     const on = await run("test", true);
     const a = off.rawInserts[0]!;
     const b = on.rawInserts[0]!;
@@ -185,5 +184,82 @@ describe("runPdfCollection with ORIGINALS_STORAGE_MODE", () => {
     expect(state.extractions[0]).toMatchObject({ copy_id: "copy-1", truncation_status: "complete", page_count_detected: 3 });
     const summary = (on.jobUpdates[0]!["run_params"] as { originals: Record<string, unknown>[] }).originals[0];
     expect(summary).toMatchObject({ raw_item_id: "raw-1", sighting: "ok", extraction: "ok" });
+  });
+
+  it("X1: enabled, inline cap unset: unpdf never called; Parallel used; stored copy has no extraction", async () => {
+    const on = await run("test", true);
+    expect(state.unpdfCalls).toBe(0);
+    expect(state.parallelCalls).toBe(1);
+    const p = on.rawInserts[0]!["raw_payload"] as Record<string, unknown>;
+    expect(p["plain_text"]).toBe(state.parallelText);
+    expect(p["extraction_method"]).toBe("parallel_extract");
+    expect(p["original_storage"]).toEqual({ status: "stored", copy_id: "copy-1", inline_extract: "skipped_cap" });
+    expect((p["attempts"] as unknown[])[0]).toEqual({ engine: "inline_pdf", ok: false, error: "inline_extract_cap" });
+    expect(on.rawInserts[0]!["collector_version"]).not.toBe("http-pdf-fetch@1.0.0");
+    expect(state.extractions).toEqual([]);
+    expect(state.sightings[0]).toMatchObject({ byte_outcome: "stored", copy_id: "copy-1" });
+  });
+
+  it("X1b: invalid cap values mean 0", async () => {
+    for (const v of ["-5", "1.5", "abc", "0", ""]) {
+      state.unpdfCalls = 0;
+      process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"] = v;
+      await run("test", true);
+      expect(state.unpdfCalls).toBe(0);
+    }
+  });
+
+  it("X2: file over the cap goes to Parallel, no extraction row", async () => {
+    process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"] = String(PDF_BYTES.length - 1);
+    await run("test", true);
+    expect(state.unpdfCalls).toBe(0);
+    expect(state.parallelCalls).toBe(1);
+    expect(state.extractions).toEqual([]);
+  });
+
+  it("X3: file at the cap is parsed inline and the extraction is recorded", async () => {
+    process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"] = String(PDF_BYTES.length);
+    await run("test", true);
+    expect(state.unpdfCalls).toBe(1);
+    expect(state.parallelCalls).toBe(0);
+    expect(state.extractions.length).toBe(1);
+  });
+
+  it("X4: flag off ignores the cap and parses as before", async () => {
+    process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"] = "1";
+    await run(undefined);
+    expect(state.unpdfCalls).toBe(1);
+    expect(state.parallelCalls).toBe(0);
+    expect(state.storageLoaded).toBe(0);
+  });
+
+  it("R6: PDF over 52428800 in the enabled path: read cancelled, no upload, no copy row, fallback used, no late writes", async () => {
+    let pulled = 0;
+    let cancelled = false;
+    const chunk = new Uint8Array(8 * 1024 * 1024);
+    chunk.set([0x25, 0x50, 0x44, 0x46]);
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) { pulled++; c.enqueue(chunk); },
+          cancel() { cancelled = true; },
+        }),
+        { status: 200, headers: { "content-type": "application/pdf" } },
+      ),
+    ));
+    const on = await run("test", true);
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThanOrEqual(9); // 7 chunks fit, the 8th crosses; at most one queued ahead
+    expect(state.uploads).toBe(0);
+    expect(state.pendingInserts).toBe(0);
+    const p = on.rawInserts[0]!["raw_payload"] as Record<string, unknown>;
+    expect(p["original_storage"]).toEqual({ status: "not_stored_size_limit", inline_extract: "skipped_cap" });
+    expect((p["attempts"] as unknown[])[0]).toEqual({ engine: "inline_pdf", ok: false, error: "original_size_limit" });
+    expect(state.sightings[0]).toMatchObject({ copy_id: null, byte_outcome: "not_stored_size_limit" });
+    const w = state.writes;
+    const pullsAfter = pulled;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(state.writes).toBe(w);
+    expect(pulled).toBe(pullsAfter);
   });
 });
