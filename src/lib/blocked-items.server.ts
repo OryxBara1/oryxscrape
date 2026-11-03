@@ -39,8 +39,29 @@ export async function recordBlockedItem(input: {
   collectorVersion?: string;
   sourceName?: string | null;
 }): Promise<"recorded" | "duplicate"> {
+  return (await recordBlockedItemDetailed(input)).outcome;
+}
+
+/**
+ * Same as recordBlockedItem, also returning the id of the blocked row (new or,
+ * on duplicate, the existing one). `originalStorage` is added to raw_payload
+ * only when given (originals preservation enabled).
+ */
+export async function recordBlockedItemDetailed(input: {
+  supabase: SupabaseClient<Database>;
+  source: SourceFacts;
+  url: string;
+  error: string;
+  jobId?: string | null;
+  jurisdictionHint?: string | null;
+  attempts?: { engine: string; ok: boolean; error?: string }[];
+  collectorVersion?: string;
+  sourceName?: string | null;
+  originalStorage?: Record<string, unknown>;
+}): Promise<{ outcome: "recorded" | "duplicate"; id: string | null }> {
   const { supabase, source } = input;
   const now = new Date().toISOString();
+  const blockedHash = await sha256Hex(`blocked|${source.id}|${input.url}`);
   const { data, error } = await supabase.from("raw_items").insert({
     job_id: input.jobId ?? null,
     source_id: source.id,
@@ -50,8 +71,9 @@ export async function recordBlockedItem(input: {
       attempted_at: now,
       ...(input.attempts?.length ? { attempts: input.attempts } : {}),
       ...(input.jurisdictionHint ? { jurisdiction_hint: input.jurisdictionHint } : {}),
+      ...(input.originalStorage ? { original_storage: input.originalStorage } : {}),
     } as unknown as never,
-    content_hash: await sha256Hex(`blocked|${source.id}|${input.url}`),
+    content_hash: blockedHash,
     collected_at: now,
     collection_method: "http",
     is_official_domain: source.is_official_domain,
@@ -64,7 +86,15 @@ export async function recordBlockedItem(input: {
   }).select("id").single();
   if (error) {
     // Duplicate = already blocked and already alerted once; never re-alert.
-    if (error.code === "23505") return "duplicate";
+    if (error.code === "23505") {
+      const { data: existing } = await supabase
+        .from("raw_items")
+        .select("id")
+        .eq("source_id", source.id)
+        .eq("content_hash", blockedHash)
+        .maybeSingle();
+      return { outcome: "duplicate", id: (existing as { id: string } | null)?.id ?? null };
+    }
     throw new Error(error.message);
   }
   await sendCollectionFailureAlert({
@@ -76,5 +106,5 @@ export async function recordBlockedItem(input: {
     finalError: input.error,
     attempts: input.attempts,
   });
-  return "recorded";
+  return { outcome: "recorded", id: (data as { id: string } | null)?.id ?? null };
 }

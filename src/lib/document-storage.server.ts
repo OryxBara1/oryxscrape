@@ -357,6 +357,7 @@ export async function preserveOriginal(
       }
     }
 
+    if (!lease) return { status: "failed", errorClass: "lease_missing" };
     copyId = lease.copyId;
     lease.startHeartbeat(t.heartbeatMs);
 
