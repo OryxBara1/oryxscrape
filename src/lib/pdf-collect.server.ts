@@ -128,7 +128,7 @@ export async function runPdfCollection(input: {
 }) {
   const { supabase, source } = input;
   const storeOriginals = shouldStoreOriginals(
-    readOriginalsMode(process.env.ORIGINALS_STORAGE_MODE),
+    readOriginalsMode(process.env["ORIGINALS_STORAGE_MODE"]),
     input.trigger ?? "scheduled",
     input.storeOriginals,
   );
