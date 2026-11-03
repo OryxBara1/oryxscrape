@@ -123,3 +123,13 @@
 - [x] Step 1 database structures (migration 20261102081642) — 74/74 rolled-back checks passed.
 - [ ] Step 2 private bucket document-originals + Storage policies — awaiting approval.
 - [ ] Step 3 storage code + collector integration (streaming, verify-on-exists, 50 MB real-environment test) — awaiting approval.
+
+### Phase 1B step 1 — closing note
+- Migration 20261102081642; 74 checks passed; 7 tables empty after tests; privileges of 17 previous tables preserved; no new advisor warnings (4 old unchanged).
+- Authorization tested by simulated DB role/identity, not real browser login.
+- service_role can still insert an assessment falsely marked human (bypasses RLS, holds INSERT on document_assessments). Protection = server-code discipline + secret service key; do not claim human approval cannot be forged.
+- Some tests ran as owner (e.g. append-only); full evaluation of administrative powers NOT done.
+- No bucket or collection flow activated in step 1.
+
+### Phase 1B step 2 (authorized 2026-11-03)
+- [ ] Pre-flight, bucket document-originals (private, 52428800, MIME NULL), staff SELECT policy migration, Storage tests, exact-path cleanup
