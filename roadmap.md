@@ -121,7 +121,7 @@
 
 ## Phase 1B
 - [x] Step 1 database structures (migration 20261102081642) — 74/74 rolled-back checks passed.
-- [ ] Step 2 private bucket document-originals + Storage policies — awaiting approval.
+- [x] Step 2 private bucket document-originals + Storage policies.
 - [ ] Step 3 storage code + collector integration (streaming, verify-on-exists, 50 MB real-environment test) — awaiting approval.
 
 ### Phase 1B step 1 — closing note
@@ -132,4 +132,6 @@
 - No bucket or collection flow activated in step 1.
 
 ### Phase 1B step 2 (authorized 2026-11-03)
-- [ ] Pre-flight, bucket document-originals (private, 52428800, MIME NULL), staff SELECT policy migration, Storage tests, exact-path cleanup
+- [x] Bucket document-originals (private, 52428800, MIME NULL) + staff SELECT policy (migration 20261103132927); Storage tests passed; test objects removed, bucket 0 objects
+- Real staff/non-staff login HTTP test NOT RUN (no session mintable; external Supabase). Staff/non-staff checked by DB simulation only.
+- 300 s signed URL + server-only signing are app conventions, not enforced by policy; octet-stream + download are delivery measures, not guarantees.
