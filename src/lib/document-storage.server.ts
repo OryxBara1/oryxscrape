@@ -87,13 +87,16 @@ export type StorageDeps = {
 export type OriginalOutcome =
   | { status: "stored" | "deduplicated"; copyId: string; fileSha256: string; sizeBytes: number }
   | { status: "not_stored_size_limit"; sizeBytes: number | null }
-  | { status: "failed" | "pending_in_progress"; errorClass: string; copyId?: string };
+  | { status: "failed" | "pending_in_progress"; errorClass: string; copyId?: string | undefined };
 
 /** Payload written into raw_items.raw_payload.original_storage (file outcome only). */
 export function originalStoragePayload(o: OriginalOutcome): Record<string, unknown> {
   if (o.status === "stored" || o.status === "deduplicated") return { status: o.status, copy_id: o.copyId };
   if (o.status === "not_stored_size_limit") return { status: o.status };
-  return { status: o.status, error_class: o.errorClass, ...(o.copyId ? { copy_id: o.copyId } : {}) };
+  if (o.status === "failed" || o.status === "pending_in_progress") {
+    return { status: o.status, error_class: o.errorClass, ...(o.copyId ? { copy_id: o.copyId } : {}) };
+  }
+  return { status: "failed", error_class: "unknown" };
 }
 
 // ---------------------------------------------------------------- helpers
@@ -105,12 +108,12 @@ export function hasPdfMagic(bytes: Uint8Array): boolean {
 function toHex(buf: ArrayBuffer | Uint8Array): string {
   const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let s = "";
-  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, "0");
+  for (let i = 0; i < b.length; i++) s += (b[i] ?? 0).toString(16).padStart(2, "0");
   return s;
 }
 
 export async function sha256Prefixed(bytes: Uint8Array): Promise<string> {
-  return `sha256:${toHex(await crypto.subtle.digest("SHA-256", bytes))}`;
+  return `sha256:${toHex(await crypto.subtle.digest("SHA-256", bytes as unknown as BufferSource))}`;
 }
 
 export function originalPath(fileSha256: string): string {
@@ -136,9 +139,9 @@ export function receivedFilename(headers: Headers, url: string): string | null {
   const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
   let name: string | null = null;
   try {
-    name = star ? decodeURIComponent(star[1]) : plain ? plain[1] : null;
+    name = star?.[1] ? decodeURIComponent(star[1]) : (plain?.[1] ?? null);
   } catch {
-    name = plain ? plain[1] : null;
+    name = plain?.[1] ?? null;
   }
   if (!name) {
     try {
@@ -499,8 +502,8 @@ export async function linkAfterRaw(
 /** Real database + Storage dependencies (service role, server only). */
 export async function createStorageDeps(): Promise<StorageDeps> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env["SUPABASE_URL"];
+  const key = process.env["SUPABASE_SERVICE_ROLE_KEY"];
   if (!url || !key) throw new Error("storage not configured");
   // The document_* tables may be absent from generated types; use an untyped handle.
   const sb = supabaseAdmin as unknown as {
