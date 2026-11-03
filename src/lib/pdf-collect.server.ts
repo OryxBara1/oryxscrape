@@ -236,25 +236,66 @@ export async function runPdfCollection(input: {
         } else {
           const okResponse = response as Response;
           contentType = okResponse.headers.get("content-type");
-          bytes = new Uint8Array(await okResponse.arrayBuffer());
-          isPdf = looksLikePdf(bytes, contentType);
-
-          if (isPdf && storeOriginals) {
+          if (storeOriginals) {
+            // Originals mode: count bytes while reading; cancel PDFs over the cap.
             const storage = await import("./document-storage.server");
             const declared = storage.parseContentLength(okResponse.headers);
-            originalMeta = {
-              fetchedUrl: okResponse.url || target.url,
-              filename: storage.receivedFilename(okResponse.headers, okResponse.url || target.url),
+            const fetchedUrl = okResponse.url || target.url;
+            const meta = {
+              fetchedUrl,
+              filename: storage.receivedFilename(okResponse.headers, fetchedUrl),
               mime: contentType,
               declared,
             };
-            if (storage.hasPdfMagic(bytes)) {
-              original = await storage.preserveOriginal({ bytes, declaredSize: declared }, await storage.createStorageDeps().catch(() => null) ?? FAILED_DEPS);
+            const read = await storage.readBodyCapped(okResponse, storage.MAX_ORIGINAL_BYTES, { timeoutMs: 60_000, declared });
+            let skipReason: string | null = null;
+            if (read.kind === "over_limit") {
+              originalMeta = meta;
+              original = { status: "not_stored_size_limit", sizeBytes: null };
+              skipReason = "original_size_limit";
+            } else if (read.kind !== "ok") {
+              skipReason = read.kind === "timeout" ? "read_timeout" : "read_error";
+            } else {
+              bytes = read.bytes;
+              isPdf = looksLikePdf(bytes, contentType);
+              if (isPdf) {
+                if (read.isPdf) {
+                  originalMeta = meta;
+                  original = await storage.preserveOriginal(
+                    { bytes, declaredSize: declared },
+                    (await storage.createStorageDeps().catch(() => null)) ?? FAILED_DEPS,
+                  );
+                }
+                const inlineCap = readInlineExtractCap(process.env["ORIGINALS_INLINE_EXTRACT_MAX_BYTES"]);
+                if (bytes.byteLength > inlineCap) skipReason = "inline_extract_cap";
+              }
             }
-            pdfDetail = await extractPdfTextDetailed(bytes);
-            content = pdfDetail.text;
-            if (!content) throw new Error("PDF has no extractable text layer.");
-          } else if (isPdf) {
+            if (skipReason) {
+              // D1 option A: not parsed in the Worker → existing fallback chain.
+              if (original) inlineSkipped = true;
+              attempts.push({ engine: "inline_pdf", ok: false, error: skipReason });
+              const fb = await parallelThenWebshare(target.url, proxy, attempts, skipReason);
+              content = fb.text;
+              parallelTitle = fb.title;
+              usedParallel = true;
+              usedWebshare = fb.usedWebshare;
+              isPdf = false;
+            } else if (isPdf) {
+              if (read.kind === "ok" && read.isPdf && original) {
+                pdfDetail = await extractPdfTextDetailed(bytes);
+                content = pdfDetail.text;
+              } else {
+                content = await extractPdfText(bytes);
+              }
+              if (!content) throw new Error("PDF has no extractable text layer.");
+            } else {
+              content = htmlOrShell(bytes);
+            }
+          } else {
+          bytes = new Uint8Array(await okResponse.arrayBuffer());
+          isPdf = looksLikePdf(bytes, contentType);
+
+          if (isPdf) {
             content = await extractPdfText(bytes);
             if (!content) throw new Error("PDF has no extractable text layer.");
           } else {

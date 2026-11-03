@@ -657,6 +657,6 @@ export async function readBodyCapped(
     return { kind: "error", message: (e as Error).message.slice(0, 200) };
   } finally {
     clearTimeout(timer);
-    reader.releaseLock?.();
+    try { reader.releaseLock(); } catch { /* already released */ }
   }
 }
