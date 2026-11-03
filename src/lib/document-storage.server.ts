@@ -551,7 +551,7 @@ export async function createStorageDeps(): Promise<StorageDeps> {
       const res = await fetch(`${url}/storage/v1/object/${ORIGINALS_BUCKET}/${path}`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/octet-stream", "x-upsert": "false" },
-        body: bytes,
+        body: bytes as unknown as BodyInit,
         signal,
       });
       if (res.ok) return "created";
