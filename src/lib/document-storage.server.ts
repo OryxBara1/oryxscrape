@@ -571,3 +571,92 @@ export async function createStorageDeps(): Promise<StorageDeps> {
   };
   return { db, store };
 }
+
+// ---------------------------------------------------------------- capped read
+
+export type CappedRead =
+  | { kind: "ok"; bytes: Uint8Array; isPdf: boolean }
+  | { kind: "over_limit"; bytesRead: number }
+  | { kind: "timeout" }
+  | { kind: "error"; message: string };
+
+const PDF_SIG = [0x25, 0x50, 0x44, 0x46];
+
+/**
+ * Reads a response body counting bytes as they arrive (originals mode only).
+ * - Decides "PDF or not" only after at least 4 bytes (signature may be split).
+ * - PDF: cancels the read as soon as the total would exceed `cap`, keeping
+ *   none of the content. Not a promise that the network delivers no byte past
+ *   the cap; only that we stop consuming and do not keep the excess.
+ * - Non-PDF: read fully, as before (no cap).
+ * - Content-Length is only a sizing hint: the buffer grows when more arrives,
+ *   and only the filled range is returned when less arrives.
+ * This does not prove that 50 MB fits in Worker memory; that needs measurement.
+ */
+export async function readBodyCapped(
+  res: Response,
+  cap: number,
+  opts: { timeoutMs: number; declared: number | null; initialCapacity?: number },
+): Promise<CappedRead> {
+  if (!res.body) return { kind: "ok", bytes: new Uint8Array(0), isPdf: false };
+  const reader = res.body.getReader();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    void reader.cancel().catch(() => undefined);
+  }, opts.timeoutMs);
+
+  const startCap =
+    opts.declared !== null && opts.declared > 0 && opts.declared <= cap
+      ? opts.declared
+      : Math.min(opts.initialCapacity ?? 65_536, cap);
+  let buf = new Uint8Array(Math.max(startCap, 4));
+  let filled = 0;
+  let isPdf: boolean | null = null;
+
+  const ensure = (needed: number, limit: number) => {
+    if (needed <= buf.length) return;
+    const next = new Uint8Array(Math.min(Math.max(buf.length * 2, needed), limit));
+    next.set(buf.subarray(0, filled));
+    buf = next;
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (timedOut) return { kind: "timeout" };
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      const total = filled + value.byteLength;
+      if (isPdf === true && total > cap) {
+        await reader.cancel().catch(() => undefined);
+        buf = new Uint8Array(0);
+        return { kind: "over_limit", bytesRead: total };
+      }
+      if (isPdf === null && total > cap) {
+        // Undecided yet: decide on what we have plus this chunk's head.
+        const head = new Uint8Array(4);
+        head.set(buf.subarray(0, Math.min(filled, 4)));
+        if (filled < 4) head.set(value.subarray(0, 4 - filled), filled);
+        if (PDF_SIG.every((b, i) => head[i] === b)) {
+          await reader.cancel().catch(() => undefined);
+          buf = new Uint8Array(0);
+          return { kind: "over_limit", bytesRead: total };
+        }
+        isPdf = false;
+      }
+      ensure(total, isPdf === false ? Number.MAX_SAFE_INTEGER : cap);
+      buf.set(value, filled);
+      filled = total;
+      if (isPdf === null && filled >= 4) isPdf = PDF_SIG.every((b, i) => buf[i] === b);
+    }
+    if (timedOut) return { kind: "timeout" };
+    return { kind: "ok", bytes: buf.subarray(0, filled), isPdf: isPdf === true };
+  } catch (e) {
+    if (timedOut) return { kind: "timeout" };
+    return { kind: "error", message: (e as Error).message.slice(0, 200) };
+  } finally {
+    clearTimeout(timer);
+    reader.releaseLock?.();
+  }
+}

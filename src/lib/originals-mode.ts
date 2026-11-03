@@ -23,3 +23,15 @@ export function shouldStoreOriginals(
   if (mode === "test") return trigger === "manual" && requested === true;
   return false;
 }
+
+/**
+ * ORIGINALS_INLINE_EXTRACT_MAX_BYTES: largest PDF parsed in the Worker when
+ * originals mode is enabled. Anything not a positive whole number = 0 (no
+ * inline parsing). Ignored when the mode is off.
+ */
+export function readInlineExtractCap(value: string | undefined): number {
+  const v = (value ?? "").trim();
+  if (!/^\d+$/.test(v)) return 0;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n > 0 ? n : 0;
+}
