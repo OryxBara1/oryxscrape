@@ -56,6 +56,8 @@ export const startCollectionJob = createServerFn({ method: "POST" })
        */
       concept?: { concept_code?: string; concept_label: string; concept_query?: string };
       language?: string | null;
+      /** Honoured only when ORIGINALS_STORAGE_MODE=test (manual runs). */
+      storeOriginals?: boolean;
     }) => input,
   )
 
@@ -177,6 +179,8 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         profileId: data.profileId ?? null,
         targets,
         language: data.language ?? null,
+        trigger: "manual",
+        storeOriginals: data.storeOriginals === true,
       });
     }
 
