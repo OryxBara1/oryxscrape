@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 import { recordBlockedItem, recordBlockedItemDetailed } from "./blocked-items.server";
-import { readOriginalsMode, shouldStoreOriginals } from "./originals-mode";
+import { readInlineExtractCap, readOriginalsMode, shouldStoreOriginals } from "./originals-mode";
 import type { OriginalOutcome } from "./document-storage.server";
 import { sha256Hex } from "./consumer-keys.server";
 import { extractWithWebshare, WEBSHARE_COLLECTOR_VERSION } from "./webshare-fallback.server";
@@ -170,6 +170,7 @@ export async function runPdfCollection(input: {
       let original: OriginalOutcome | null = null;
       let originalMeta: { fetchedUrl: string; filename: string | null; mime: string | null; declared: number | null } | null = null;
       let pdfDetail: { text: string; totalPages: number; processedPages: number } | null = null;
+      let inlineSkipped = false;
       try {
         let content: string;
         let usedParallel = false;
@@ -289,7 +290,23 @@ export async function runPdfCollection(input: {
               }
               if (!content) throw new Error("PDF has no extractable text layer.");
             } else {
-              content = htmlOrShell(bytes);
+              // Same HTML / app-shell handling as the legacy path.
+              const rawHtml = new TextDecoder("utf-8").decode(bytes);
+              const htmlText = extractHtmlText(rawHtml);
+              if (htmlText.length >= 1000) {
+                content = htmlText;
+              } else {
+                // Short HTML means likely an SPA shell; Parallel.ai renders the page fully.
+                console.log(`[pdf-collect] SPA shell detected (${htmlText.length} chars), retrying with Parallel.ai: ${target.url}`);
+                const parallelResult = await extractWithParallel(
+                  target.url,
+                  `Extract the full text of this regulatory document from ${target.url}.`,
+                );
+                content = parallelResult.text;
+                usedParallel = true;
+                parallelTitle = parallelResult.title;
+                if (!content) throw new Error("Document has no extractable text (SPA shell, Parallel.ai returned empty).");
+              }
             }
           } else {
           bytes = new Uint8Array(await okResponse.arrayBuffer());
@@ -316,6 +333,7 @@ export async function runPdfCollection(input: {
               if (!content) throw new Error("Document has no extractable text (SPA shell, Parallel.ai returned empty).");
             }
           }
+          }
         }
 
 
@@ -334,7 +352,7 @@ export async function runPdfCollection(input: {
               ? { parallel_title: parallelTitle, extraction_method: "parallel_extract", attempts }
               : {}),
           byte_length: bytes.byteLength,
-          ...(original ? { original_storage: await originalPayload(original) } : {}),
+          ...(original ? { original_storage: { ...(await originalPayload(original)), ...(inlineSkipped ? { inline_extract: "skipped_cap" } : {}) } } : {}),
           ...(target.concept_label
             ? {
                 concept_label: target.concept_label,
@@ -417,7 +435,7 @@ export async function runPdfCollection(input: {
                 error: message,
                 jobId: job.id,
                 attempts,
-                originalStorage: await originalPayload(original),
+                originalStorage: { ...(await originalPayload(original)), ...(inlineSkipped ? { inline_extract: "skipped_cap" } : {}) },
               });
               // Text did not come from these bytes: no extraction is linked.
               originalsSummary.push(await linkOriginal(original, originalMeta, blocked.id, source.id, job.id, null, target.url));
@@ -523,4 +541,38 @@ async function linkOriginal(
     // keep the deps_unavailable result
   }
   return { url, raw_item_id: rawItemId, file: storage.originalStoragePayload(outcome), ...link };
+}
+
+/**
+ * Originals mode only: the existing Parallel → Webshare chain for a PDF that
+ * is not parsed in the Worker (D1 option A). Throws the same error shape as
+ * the direct-failure path so the blocked record and alert behave as usual.
+ */
+async function parallelThenWebshare(
+  url: string,
+  proxy: ReturnType<typeof readProxyConfig>,
+  attempts: { engine: string; ok: boolean; error?: string }[],
+  reason: string,
+): Promise<{ text: string; title: string | null; usedWebshare: boolean }> {
+  let parallelError = "";
+  try {
+    const r = await extractWithParallel(url, `Extract the full text of this regulatory document from ${url}.`);
+    if (r.text) {
+      attempts.push({ engine: "parallel", ok: true });
+      return { text: r.text, title: r.title, usedWebshare: false };
+    }
+  } catch (e) {
+    parallelError = (e as Error).message;
+  }
+  attempts.push({ engine: "parallel", ok: false, error: (parallelError || "no extractable text").slice(0, 300) });
+  if (!proxy) throw new Error(`Inline PDF skipped (${reason}); Parallel: ${parallelError || "no extractable text"}`);
+  try {
+    const ws = await extractWithWebshare(url, proxy);
+    attempts.push({ engine: `webshare:${proxy.country_code}`, ok: true });
+    return { text: ws.text, title: ws.title, usedWebshare: true };
+  } catch (e) {
+    const wsError = (e as Error).message;
+    attempts.push({ engine: `webshare:${proxy.country_code}`, ok: false, error: wsError.slice(0, 300) });
+    throw new Error(`Inline PDF skipped (${reason}); Parallel: ${parallelError || "no extractable text"}; Webshare: ${wsError}`);
+  }
 }
