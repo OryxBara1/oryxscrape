@@ -122,7 +122,10 @@
 ## Phase 1B
 - [x] Step 1 database structures (migration 20261102081642) — 74/74 rolled-back checks passed.
 - [x] Step 2 private bucket document-originals + Storage policies.
-- [ ] Step 3 storage code + collector integration (streaming, verify-on-exists, 50 MB real-environment test) — awaiting approval.
+- [x] Step 2 closing note: migration 20261103132927; private bucket document-originals, limit 52428800, MIME unrestricted; one staff-only SELECT policy for this bucket; 2 test objects removed, bucket empty; no new advisor warnings. NOT executed: real HTTP login staff/non-staff, direct staff write attempt (DB simulation + service_role signed link do not replace them; absence of write policies is observed config, not a functional test).
+- [ ] Step 3a (authorized 2026-11-03): direct-PDF originals in pdf-collect, ORIGINALS_STORAGE_MODE off by default, @noble/hashes, mock-only tests
+- [ ] Step 3a real-environment tests + activation (test/on) — needs separate authorization
+- [ ] Step 3b Gibraltar / FEK / Malta — not authorized
 
 ### Phase 1B step 1 — closing note
 - Migration 20261102081642; 74 checks passed; 7 tables empty after tests; privileges of 17 previous tables preserved; no new advisor warnings (4 old unchanged).
