@@ -257,7 +257,7 @@ export async function runPdfCollection(input: {
             } else if (read.kind !== "ok") {
               skipReason = read.kind === "timeout" ? "read_timeout" : "read_error";
             } else {
-              bytes = read.bytes;
+              bytes = read.bytes as typeof bytes;
               isPdf = looksLikePdf(bytes, contentType);
               if (isPdf) {
                 if (read.isPdf) {
@@ -565,7 +565,7 @@ async function parallelThenWebshare(
     parallelError = (e as Error).message;
   }
   attempts.push({ engine: "parallel", ok: false, error: (parallelError || "no extractable text").slice(0, 300) });
-  if (!proxy) throw new Error(`Inline PDF skipped (${reason}); Parallel: ${parallelError || "no extractable text"}`);
+  if (!proxy) throw new Error(`Inline PDF skipped (${reason}), no extractable text inline; Parallel: ${parallelError || "no extractable text"}`);
   try {
     const ws = await extractWithWebshare(url, proxy);
     attempts.push({ engine: `webshare:${proxy.country_code}`, ok: true });
@@ -573,6 +573,6 @@ async function parallelThenWebshare(
   } catch (e) {
     const wsError = (e as Error).message;
     attempts.push({ engine: `webshare:${proxy.country_code}`, ok: false, error: wsError.slice(0, 300) });
-    throw new Error(`Inline PDF skipped (${reason}); Parallel: ${parallelError || "no extractable text"}; Webshare: ${wsError}`);
+    throw new Error(`Inline PDF skipped (${reason}), no extractable text inline; Parallel: ${parallelError || "no extractable text"}; Webshare: ${wsError}`);
   }
 }
