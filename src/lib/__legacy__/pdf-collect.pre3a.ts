@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
 
-import { recordBlockedItem } from "../blocked-items.pre3a";
+import { recordBlockedItem } from "./blocked-items.pre3a";
 import { sha256Hex } from "../consumer-keys.server";
 import { extractWithWebshare, WEBSHARE_COLLECTOR_VERSION } from "../webshare-fallback.server";
 import { readProxyConfig } from "../webshare-proxy.server";
