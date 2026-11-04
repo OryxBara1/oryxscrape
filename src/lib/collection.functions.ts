@@ -33,6 +33,22 @@ function deterministicCanonicalUrl(value?: string | null): string | null {
 }
 
 
+/** Boolean only: true when ORIGINALS_STORAGE_MODE=test and the caller is staff. */
+export const getOriginalsTestMode = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { readOriginalsMode, originalsTestModeVisible } = await import("./originals-mode");
+    const active = await originalsTestModeVisible({
+      mode: readOriginalsMode(process.env["ORIGINALS_STORAGE_MODE"]),
+      isStaff: async () => {
+        const { data, error } = await context.supabase.rpc("is_staff");
+        if (error) return false;
+        return data === true;
+      },
+    });
+    return { active };
+  });
+
 export const startCollectionJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -169,6 +185,16 @@ export const startCollectionJob = createServerFn({ method: "POST" })
     // extracted server-side, because no crawler can parse application/pdf.
     if (source.collection_method === "http") {
       const { runPdfCollection } = await import("./pdf-collect.server");
+      const { readOriginalsMode, resolveManualStoreOriginals } = await import("./originals-mode");
+      const storeOriginals = await resolveManualStoreOriginals({
+        mode: readOriginalsMode(process.env["ORIGINALS_STORAGE_MODE"]),
+        requested: data.storeOriginals,
+        isStaff: async () => {
+          const { data: staff, error } = await supabase.rpc("is_staff");
+          if (error) throw new Error(error.message);
+          return staff === true;
+        },
+      });
       // Per-document concept wins; otherwise the run-level concept applies.
       const targets = (data.documents?.length ? data.documents : [{ url: source.start_url }]).map(
         (target) => ({ ...runConcept, ...target }),
@@ -180,7 +206,7 @@ export const startCollectionJob = createServerFn({ method: "POST" })
         targets,
         language: data.language ?? null,
         trigger: "manual",
-        storeOriginals: data.storeOriginals === true,
+        storeOriginals,
       });
     }
 
