@@ -17,7 +17,9 @@ import { listSources } from "@/lib/sources.functions";
 import { startMaltaCollection } from "@/lib/malta.functions";
 import { sortSourcesForPicker, sourceLabel } from "@/lib/source-label";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import {
+  getOriginalsTestMode,
   normalizeCollectionJob,
   startCollectionJob,
   syncCollectionJob,
@@ -64,6 +66,13 @@ function JobsScreen() {
 
   const [sourceId, setSourceId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [preserveOriginal, setPreserveOriginal] = useState(false);
+  const fetchOriginalsMode = useServerFn(getOriginalsTestMode);
+  const { data: originalsMode } = useQuery({
+    queryKey: ["originals-test-mode"],
+    queryFn: () => fetchOriginalsMode(),
+  });
+  const showPreserve = originalsMode?.active === true;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["collection-jobs"],
@@ -129,11 +138,23 @@ function JobsScreen() {
               void run("Malta collection finished", () => startMalta({ data: {} }), "start");
               return;
             }
-            void run("Collection started", () => startJob({ data: { sourceId } }), "start");
+            const payload =
+              showPreserve && preserveOriginal ? { sourceId, storeOriginals: true } : { sourceId };
+            void run("Collection started", () => startJob({ data: payload }), "start");
           }}
         >
           {busy === "start" ? "Starting…" : "Run collection"}
         </GlowButton>
+        {showPreserve ? (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              checked={preserveOriginal}
+              onCheckedChange={(v) => setPreserveOriginal(v === true)}
+              aria-label="Preserve original PDF — test"
+            />
+            Preserve original PDF — test
+          </label>
+        ) : null}
       </div>
 
 

@@ -139,3 +139,8 @@
 - Real staff/non-staff login HTTP test NOT RUN (no session mintable; external Supabase). Staff/non-staff checked by DB simulation only.
 - 300 s signed URL + server-only signing are app conventions, not enforced by policy; octet-stream + download are delivery measures, not guarantees.
 - [x] Step 3a review fixes (capped read, inline cap D1=A/D2=0/D3, frozen pre-3a compat tests) — 81/81 mock tests pass; not deployed/activated
+
+## Teste real 3a (2026-11-04)
+- [x] Caixa "Preserve original PDF — test" (staff + modo test), testes mock.
+- [ ] Publicar com storage off — aguarda autorização do dono.
+- [ ] Teste real único — aguarda autorização (orçamento Parallel indefinido).
