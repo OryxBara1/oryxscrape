@@ -1,48 +1,101 @@
-# Runbook — one real test of original-file storage (3a)
+# Runbook — one real test of original-file storage (3a), revised
 
-Runbook only. Nothing here has been run. Labels: [V] = verified directly in this session, [E] = reported from earlier work, [N] = not tested yet.
+Planning only. Nothing has been run. Labels: [V] = verified in this session, [E] = reported from earlier work, [N] = not tested yet.
 
-## 1. Source and file
-- File: `https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf`. It's a public W3C test PDF with no sensitive content and a text layer, about 13 KB. [N] I haven't checked the size, hash or how it is served.
-- Size and hash: before R4 the owner downloads the file once on their own machine (`curl -sSL -o d.pdf <URL>; wc -c d.pdf; shasum -a 256 d.pdf`) and records both values. If the size is outside 5–100 KB, stop.
-- New test source, fixed id `3a0e5ca1-0000-4000-8000-0000000003a1`, name `TEST 3a originals — do not schedule`, domain `www.w3.org`, start_url = the file, method `http`, `is_active=true`, `schedule_enabled=false`, `proxy_config=NULL`, notes `TEST:phase1b-3a`.
+## STOP: no signed-in way to run the test exists today
 
-## 2. Configuration (owner sets these in Secrets)
-- `ORIGINALS_STORAGE_MODE=test` and `ORIGINALS_INLINE_EXTRACT_MAX_BYTES=1048576` (local extraction). Both are absent today. [V] I read this in the code, which treats an absent value as off and a cap of 0.
-- Why this source won't run on a schedule:
-  - In `test` mode files are stored only for manual runs that ask for it. [V] I read this in the code.
-  - The scheduled caller never asks for it. [V] I read this in the code.
-  - The generic scheduler only picks sources with `schedule_enabled=true`. [V] I read this in the code.
-  - The 9 active cron jobs call only fixed country routes, and none calls the generic route. [V] I queried this.
-- Manual call: run `startCollectionJob` once with `{sourceId, documents:[{url}], storeOriginals:true}`. The screens never send `storeOriginals` [V], so the agent makes this call directly with the owner's staff session after the owner authorizes it. [N] I haven't checked that this call reaches the environment where the secret is set. The job's `run_params.originals` will show whether it did.
+- **(a) How the call would be made:** `startCollectionJob` requires a staff session. The screens never send `storeOriginals` [V]. The agent has no staff session, and this project's backend is user-managed, so I cannot create one [V]. That leaves no authenticated way to send `storeOriginals:true`. I will not ask for passwords or tokens, improvise endpoints, or bypass sign-in.
+- **(b) Which environment:** the only one that makes sense is the published app, https://oryxscrape.lovable.app [E].
+- **(c) Whether that environment receives the secrets:** secrets are set per project. [N] I haven't checked whether a newly set secret reaches the published app without a new publish.
 
-## 3. Maximum expected cost
-- Normal path: one free download from w3.org, one upload plus one check (about 26 KB) to the private storage folder, and about 10 database writes. That's practically no cost. [N]
-- Worst case: 1 paid Parallel call if the direct download fails or doesn't return a PDF, plus 1 alert email if that also fails. No Webshare, because the source has no proxy. [V] I read this in the code. [N] I haven't checked Parallel's price per call.
-- Alternative with the cap set to 0: Parallel is always called once. The text then comes from Parallel, with no local extraction record. [V] I read this in the code.
+Smallest options, none implemented (each needs its own authorization):
+1. **Staff-only checkbox.** "Store original (test)" on the existing manual run form, shown only in `test` mode. It needs a code change, tests and a publish.
+2. **Hidden staff-only button.** It runs the fixed test source with `storeOriginals:true`. It also needs a code change, tests and a publish.
+3. **Owner runs it from their own browser.** The owner calls `startCollectionJob` while signed in to the published app (for example a one-off console snippet I provide). No code changes are needed. The session never leaves the owner's browser, but it's more error-prone.
 
-## 4. Expected records
-- Always created: 1 source, 1 job (`succeeded`), 1 raw_item, 1 `document_copies` (`verified`), 1 Storage object at `sha256/<hh>/<hash>`, 1 sighting and 1 extraction (`unpdf@1.8.1`, text stored inline). [N]
-- Only on the fallback path: a blocked record and an alert email.
+The rest of this runbook applies once one option is chosen and in place.
+
+## Configuration found
+- `ORIGINALS_STORAGE_MODE` is absent [V], from the secret names list.
+- `ORIGINALS_INLINE_EXTRACT_MAX_BYTES` is absent [V], from the secret names list.
+- In the code, absent means off and a cap of 0 [V].
+- `PARALLEL_API_KEY` is present, so a Parallel fallback is possible [V].
+- I can't see the secret values or what the running published app reads [N].
+
+## Test file and source
+- File: `https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf`, about 13 KB [N].
+- Size and hash: the owner downloads the file once on their own machine and records the size and SHA-256 before the run (`curl -sSL -o d.pdf <URL>; wc -c d.pdf; shasum -a 256 d.pdf`).
+- `sources` row, with every required column [V] (columns and defaults read from the table):
+
+| column | value |
+|---|---|
+| id | `3a0e5ca1-0000-4000-8000-0000000003a1` |
+| name | `TEST 3a originals — do not schedule` |
+| domain | `www.w3.org` |
+| start_url | the file URL |
+| collection_method | `http` |
+| is_active | `true` |
+| schedule_enabled | `false` |
+| tos_status | `unknown` |
+| robots_status | `unknown` |
+| is_official_domain | `false` |
+| is_primary_document | `false` |
+| traceability_level | `direct_url` |
+| institution_class | `unknown` |
+| crawler_type | `cheerio` (not used by `http` sources) |
+| proxy_config / apify_actor_id / include_url_globs | `NULL` |
+| notes | `TEST:phase1b-3a` |
+| created_at / updated_at | `now()` |
+
+- Why the scheduler won't pick it up [V] (code and cron list):
+  - In `test` mode, files are stored only on manual runs that ask for it.
+  - The scheduled caller never asks.
+  - The generic scheduler needs `schedule_enabled=true`.
+  - The 9 active cron jobs call only fixed country routes.
+
+## Settings for the single attempt
+- `ORIGINALS_STORAGE_MODE=test`
+- `ORIGINALS_INLINE_EXTRACT_MAX_BYTES=1048576`
+
+## Cost
+- Normal path: one free download, about 26 KB of storage traffic and about 10 database writes [N].
+- Parallel: at most 1 call, with no automatic retry. I couldn't determine the price per call, so nothing runs until the owner authorizes that cost.
+- If the fallback happens, the run must record that "original PDF + local extraction" was NOT demonstrated, even if text was collected.
+- If Parallel also fails: 1 blocked record and 1 alert email to ops@auramaris.app. No Webshare, because the source has no proxy [V].
+
+## Expected on the success path [N]
+- 1 job, `succeeded`, with `run_params.originals`.
+- 1 raw_item for the test source.
+- 1 `document_copies` row:
+  - `storage_status='stored'` with `stored_at` set [V] (allowed states are pending/stored/missing/conflict);
+  - `storage_bucket='document-originals'`;
+  - `storage_path = sha256/<2 hex>/<hex>` [V] (enforced by a CHECK).
+- 1 Storage object at that path.
+- 1 `document_copy_sightings` row: `copy_id`, `raw_item_id`, `source_id`, `collection_job_id`, `fetch_method='http'`, `byte_outcome='stored'`.
+- 1 `document_extractions` row: `copy_id`, `extractor_version='unpdf@1.8.1'`, `text_sha256_exact`, `char_count`, `truncation_status`, and `text_inline` set with `text_storage_path` null.
 - Never created: legal documents, versions, approvals or normalized items.
-- Starting point: copies, sightings, extractions and stored files are all 0. raw_items is 1210 and jobs is 282. Two old jobs are still running and won't be touched. [V] I queried this.
+- Starting point [V]: copies, sightings, extractions and stored files are all 0. raw_items is 1210 and jobs is 282. Two old jobs are still running and won't be touched.
 
-## 5. Checking the file and hash
-- Before the run: count rows in every affected table, and record the state of the two old jobs.
+## Checks
+- Before the run: row counts for the affected tables and the state of the two old jobs.
 - After the run:
-  - The job status and `run_params.originals`.
-  - The copy's `file_sha256` must equal `sha256:<owner hash>` and its size must match.
-  - The file path must match the hash, and there must be exactly 1 stored file.
-  - The sighting and extraction must point to the same copy, raw_item and job.
-  - All new rows must belong to the test source, and earlier rows must be unchanged.
-- Independent check: the owner downloads the stored file through a 300-second signed link and compares its SHA-256.
-- Stop with no retry if any of these happens: a memory error or timeout, a hash or size mismatch, an unexpected write, an unplanned Parallel call, or originals data appearing on any other job.
+  - The copy's hash and size must equal the owner's values.
+  - The links must hold as described above.
+  - All new rows must belong to the test source or job.
+  - Earlier rows must be unchanged.
+- Independent check: the owner downloads the stored file through a 300-second signed link and compares its size and SHA-256. This is a check, not a second collection.
 
-## 6. Back to off
-- The owner deletes both secrets, which turns storage off. [V] I read this in the code.
-- The next job of any other source must have no `run_params.originals`. This is a passive check, so no run is started for it.
-- Keep the source, job, raw_item, copy, sighting and extraction ids, the file path and the hash. Nothing gets deleted.
-- After this, the 3a pilot closes with its documented limitations, and work moves to the discovery queue.
+## Back to off, after the single attempt (success or failure)
+- The owner deletes both secrets.
+- Keep every id, path and file. Nothing gets deleted or repeated.
+- The 3a pilot then closes with its documented limitations, and work moves to the discovery queue.
 
-## Steps (owner approves each one)
-R1 owner gets the hash → R2 counts before the run and create the source → R3 owner sets the secrets → R4 one manual call → R5 checks → R6 back to off.
+## Single authorization request (once the STOP above is resolved)
+The owner approves, in one go:
+1. Create the test source as listed above.
+2. Set the two secrets.
+3. Make one manual call, with one URL, through the chosen option.
+4. Allow at most 1 Parallel call, at its price.
+5. Allow only the writes listed above.
+6. Run the checks, including the signed-link download.
+7. Delete the secrets afterwards.
