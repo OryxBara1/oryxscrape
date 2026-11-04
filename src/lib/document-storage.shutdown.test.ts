@@ -31,7 +31,10 @@ function trackedStream(chunks: Uint8Array[], opts: { hang?: boolean } = {}) {
   s.stream = new ReadableStream<Uint8Array>({
     pull(c): Promise<void> | undefined {
       s.pulled++;
-      if (i < chunks.length) return void c.enqueue(chunks[i++]!);
+      if (i < chunks.length) {
+        c.enqueue(chunks[i++]!);
+        return undefined;
+      }
       if (opts.hang) return new Promise<void>(() => undefined);
       c.close();
       return undefined;
