@@ -283,6 +283,10 @@ async function hashStream(stream: ReadableStream<Uint8Array>, signal: AbortSigna
   let size = 0;
   const reader = stream.getReader();
   const onAbort = () => void reader.cancel().catch(() => undefined);
+  if (signal.aborted) {
+    await reader.cancel().catch(() => undefined);
+    throw new TimeoutError("aborted");
+  }
   signal.addEventListener("abort", onAbort, { once: true });
   try {
     for (;;) {
