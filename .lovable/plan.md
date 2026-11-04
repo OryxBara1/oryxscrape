@@ -1,138 +1,146 @@
-# Phase 1B step 3a — review fixes (proposal only)
+# Runbook — First controlled real test, Phase 1B step 3a (originals storage)
 
-Status: PROPOSAL. No code changes until this review is approved. No publishing, flags, test source, real downloads, service writes, schema or Storage changes.
-3a remains: implemented and validated with mocks only; NOT approved for publishing, real tests or activation.
+Status: RUNBOOK ONLY. Nothing in this document has been executed. `ORIGINALS_STORAGE_MODE` stays absent/off until the owner starts step R3.
 
-## 1. Enforce the byte limit while reading the body (enabled path only)
+## 0. State verified for this runbook (read-only, 2026-11-04)
 
-### Problem
-In the enabled path the body is still read with `arrayBuffer()`, and the size is checked afterwards. That limits what is stored, not how much is downloaded into memory.
+- `document_copies` = 0, `document_copy_sightings` = 0, `document_extractions` = 0, bucket `document-originals` = 0 objects.
+- `raw_items` = 1210, `normalized_items` = 928, `collection_jobs` = 282 (re-read immediately before the run; these numbers will drift with the weekly crons).
+- Two old jobs still `running`, not to be touched: `ba25b0f9-3c8e-4991-b7a8-6ff82f40d8ab` (source `366f2ade-…`, 2026-10-24) and `976ff78f-f8c2-44a1-87bd-4d0961df1ec7` (source `cfd71afa-…`, 2026-09-29).
+- No triggers on `raw_items`, `collection_jobs`, `sources`, `document_*`, `normalized_items`.
+- `sources` unique key: `(domain, start_url)`. No `is_test` column exists; test identity is carried by a fixed id + name + notes.
 
-### Proposed change
-New function `readBodyCapped(response, cap, signal)` in `document-storage.server.ts`. It reads the body through `response.body.getReader()`, counting bytes as they arrive:
-- It looks at the first chunk.
-  - If the chunk does not start with `%PDF`, it hands back control and the rest of the body is read the old way (concatenating chunks with no cap). HTML handling stays exactly as today.
-  - If it is a PDF, counting starts.
-- When the running total would pass `cap` (52428800): `reader.cancel()` stops the rest of the response from being consumed. The function returns `{ kind: "over_limit", bytesRead }` and keeps no data.
-- Content-Length is used only for sizing:
-  - Known and ≤ cap: one buffer of exactly that size is allocated and chunks are copied into it as they arrive (no second copy). If more bytes arrive than declared, the read is still counted and cancelled at the cap.
-  - Missing, or over the cap: no up-front buffer. Chunks are collected and joined once at the end. Peak memory is about twice the file size for that one moment, still bounded by the cap.
-  - A Content-Length over the cap does not stop the read before it starts. It is only a hint, so the actual count decides.
-- Read timeout: 60 s, through the same abort signal. On timeout the reader is cancelled.
+## 1. Test document
 
-### Integration in `pdf-collect.server.ts`, direct-fetch success branch only
-```text
-flag off:  bytes = new Uint8Array(await okResponse.arrayBuffer())        (unchanged)
-flag on:   r = await readBodyCapped(okResponse, MAX_ORIGINAL_BYTES, signal)
-           r.kind = "ok"         -> bytes = r.bytes; continue as today
-           r.kind = "non_pdf"    -> bytes = r.bytes; continue as today (HTML unchanged)
-           r.kind = "over_limit" -> no bytes; no upload, no copy row;
-                                    original = not_stored_size_limit;
-                                    text path = owner decision D1 (section 2)
+- URL: `https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf`
+- Why: published by W3C as a public accessibility test fixture, unchanged for many years, no personal or regulatory content, served directly as `application/pdf` (no app shell, no login, no redirect chain expected), has a real text layer ("Dummy PDF file"), about 13 KB — far below every cap.
+- Expected size and hash: NOT known to me and NOT asserted here. They must be obtained in one of two ways (owner chooses):
+  - R1-a (preferred, separate authorization): owner, from their own machine, runs one download and records `Content-Length`, actual byte count and SHA-256 (`curl -sSL -o dummy.pdf <URL>; wc -c dummy.pdf; shasum -a 256 dummy.pdf`). These values become the "known hash" checked after the run.
+  - R1-b: no prior download; the run itself records the hash, and the owner verifies it afterwards by an independent local download. Weaker: the reference is taken after the fact.
+- Acceptance band for size: 5 000 – 100 000 bytes; outside it, stop before R4.
+
+## 2. Test source (created by the owner/agent only at R2, after authorization)
+
+| field | value |
+|---|---|
+| id | `3a0e5ca1-0000-4000-8000-0000000003a1` (fixed, pre-chosen) |
+| name | `TEST 3a originals — do not schedule` |
+| domain | `www.w3.org` |
+| start_url | the URL in section 1 |
+| collection_method | `http` |
+| is_active | `true` (required: the manual run refuses inactive sources) |
+| schedule_enabled | `false` |
+| proxy_config | `NULL` (no Webshare possible) |
+| apify_actor_id | `NULL` |
+| notes | `TEST:phase1b-3a-originals:2026-11` |
+| is_official_domain / is_primary_document | `false` / `false` |
+| traceability_level / institution_class | defaults (`untraceable` / `unknown`) |
+
+Insert is one SQL statement executed after authorization; verified afterwards with section 8 query Q1.
+
+## 3. Settings (owner sets them in Lovable → Project Settings → Secrets)
+
+Current state: both absent.
+
+Preferred variant (local extraction):
+- `ORIGINALS_STORAGE_MODE=test`
+- `ORIGINALS_INLINE_EXTRACT_MAX_BYTES=1048576` (1 MiB; covers a ~13 KB file with margin and still keeps large PDFs out of the Worker parser).
+
+Alternative variant (no local extraction):
+- `ORIGINALS_STORAGE_MODE=test`
+- `ORIGINALS_INLINE_EXTRACT_MAX_BYTES` absent (= 0).
+
+Return to previous state (R7): delete both secrets (absent = `off` and cap 0). Never type `on`. A value with a typo (e.g. `tset`) reads as `off`, which is safe but means the test silently does nothing — check run_params afterwards.
+
+Open point: whether a changed secret takes effect in the published app without a new publish is not verified. R3 includes checking it (section 8 Q0 cannot read secrets; the proof is the job's `run_params.originals` field, present only when storage was active).
+
+## 4. Proof the scheduler will not pick the test source (checked against code and the live configuration)
+
+1. Mode logic (`src/lib/originals-mode.ts`, `shouldStoreOriginals`): with `test`, storage is enabled only when trigger is `manual` AND `storeOriginals === true`.
+2. The only scheduled caller of the PDF collector (`src/lib/scheduler.server.ts`, `collectOne`, http branch) calls `runPdfCollection` without `trigger` or `storeOriginals`; the collector defaults trigger to `scheduled`. So even if the scheduler ran this source, nothing would be stored.
+3. The generic scheduler selects only `sources` with `schedule_enabled = true AND is_active = true`; the test source has `schedule_enabled = false`.
+4. Live cron jobs (9, all active) target only fixed routes: `collect-fr-legifrance`, `collect-eu-eurlex`, `collect-it-normattiva`, `collect-es-boe`, `collect-hr-nn`, `collect-uk-legislation`, `collect-nl-obk`, `collect-gr-fek`, `collect-gi-laws`. None targets the generic `/api/public/cron/collect` or `finalize`. The GR and GI routes load fixed source ids; the others call country collectors that do not read the `sources` table by method.
+5. Remaining exposure: a person calling `/api/public/cron/collect` with the cron secret would run the generic scheduler — which still excludes this source (point 3) and could not store originals (point 2).
+
+## 5. The manual operation
+
+Call `startCollectionJob` (staff session) with:
+
+```json
+{ "sourceId": "3a0e5ca1-0000-4000-8000-0000000003a1",
+  "documents": [{ "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", "document_label": "TEST 3a dummy.pdf" }],
+  "storeOriginals": true }
 ```
-`preserveOriginal` is never called for `over_limit`, so no upload is ever started for that file.
 
-### Read tests (mock streams, not a finished ArrayBuffer)
-A test `ReadableStream` gives out chunks one at a time on `pull`, counting how many it gave and recording `cancel()`:
-- R1 no Content-Length, body larger than the cap: the result is `over_limit`; `cancel()` was called; chunks given ≤ the number needed to pass the cap plus one; later chunks are never read.
-- R2 Content-Length smaller than the real body (a lie): cancelled at the cap, same assertions.
-- R3 Content-Length larger than the cap but a small real body: read normally. The header doesn't decide.
-- R4 body exactly at the cap: `ok`, no cancel.
-- R5 non-PDF first chunk: no cap applied; bytes match the full body.
-- R6 over limit inside `runPdfCollection` with the switch on: no `upload`, no `insertPending`, no sighting with a copy. After waiting past every timer, the write counters have not changed (no late writes).
-- R7 read timeout: the reader is cancelled and no writes follow.
+Gap found: the current screens never send `storeOriginals`. Two ways to issue the call, owner decides (each needs its own authorization):
+- M-A: the agent invokes the server function directly with the owner's staff session. Requires confirming that call reaches the environment where the secret is set.
+- M-B: a small staff-only "store original (test)" checkbox on the manual run form, shown only when the mode is `test`; requires a code change, tests and a publish.
 
-For memory, tests use chunk counts and sizes no larger than needed (e.g. a 1 KB cap through an injectable `cap` argument, plus one real 52428800 boundary test).
+Exactly one call, one URL. No retry without a new decision.
 
-## 2. Inline extraction cap `ORIGINALS_INLINE_EXTRACT_MAX_BYTES`
+## 6. External calls and cost
 
-### Rule
-- Switch off: unchanged. Every PDF is parsed with `unpdf`, as today.
-- Switch on: `unpdf` runs only if `size ≤ inlineCap`.
-  - **Default when the variable is unset: 0, so no inline parsing in the enabled path.** The owner must set the variable explicitly, from measurements, before any PDF is parsed in the enabled path. This is the "explicit decision".
-  - The value is read inside the handler. Anything that is not a positive whole number is treated as 0.
-- PDFs over the inline cap (and `over_limit` PDFs) are still stored when ≤ 52428800, but they are not parsed.
+Preferred variant (cap 1 MiB), success path — bounded:
+- 1 GET to w3.org (free).
+- Storage: 1 upload + 1 verification download of ~13 KB to the private bucket; text is under 1 MiB so it goes inline in the extraction row (no text object).
+- Database: about 8–10 small statements.
+- Parallel / Webshare / Apify: 0 calls. Resend: 0.
+- Cost: negligible (Supabase storage/egress for ~26 KB).
 
-### Effect on collection results: owner decision D1
-For a PDF that is not parsed inline, the text must come from somewhere else. Each option visibly changes the result compared with the switch off:
+Conditional paid fallback (both variants): if the direct GET fails (non-404), the response is not a PDF/is short HTML, the read times out (60 s), or (alternative variant) the inline cap is 0 → exactly 1 Parallel Extract call. No Webshare (no proxy_config). If Parallel also fails → 1 blocked record + 1 Resend alert to ops@auramaris.app from OryxScrape's own account. Upper bound: 1 Parallel call + 1 email. Parallel per-request price is not verified here; it is a single request at their extract rate.
 
-| Option | Text / content_hash | Other differences |
-|---|---|---|
-| A. Fall back to Parallel Extract on the same URL | Different text, so a **different content_hash**: a separate raw item from the one the switch-off path would create | `extraction_method: parallel_extract`, `collector_version` Parallel, `attempts` records `{engine:"inline_pdf", ok:false, error:"inline_extract_cap"}` |
-| B. Blocked record (manual queue) with reason `inline_extract_cap` | No text; blocked hash | The alert email goes out, as for any new block |
-| C. Parse anyway (as today) | Same as switch off | No memory protection, contradicts this item |
+Alternative variant (inline = 0): Parallel is called by design (1 call, paid). Stored copy is still the direct bytes; Parallel text goes only to the raw_item, never to an extraction row; `original_storage.inline_extract = skipped_cap`, attempts `inline_pdf:inline_extract_cap` then `parallel`. Raw text and content_hash may differ from what local extraction would give. No `document_extractions` row.
 
-Proposal: **A**. The difference is explicit in the payload (`attempts`, `original_storage.status` + `inline_extract: "skipped_cap"`) and is never described as "same behavior". If Parallel also fails, the existing chain continues (Webshare if `proxy_config` is set, otherwise blocked). Under rule 3, the Parallel text is never attached to the stored copy.
+## 7. Expected records and objects
 
-Tests:
-- X1 switch on, variable unset: `unpdf` is not called for any PDF.
-- X2 cap set, file over the cap: `unpdf` not called; Parallel called; the raw row is marked as above; no extraction row.
-- X3 file at or under the cap: parsed; extraction recorded.
-- X4 switch off with the variable set: the variable is ignored and `unpdf` is called as today.
+Mandatory (preferred variant):
+- 1 `sources` row (section 2), created at R2.
+- 1 `collection_jobs` row, `status=succeeded`, `run_params.method=http-pdf`, `run_params.originals` present.
+- 1 `raw_items` row for the test source (or 0 + duplicate count if identical text already exists — not expected).
+- 1 `document_copies` row: `storage_status=verified`, `size_bytes` = known size, `file_sha256 = sha256:<known hash>`, `storage_path = sha256/<hh>/<hash>`, bucket `document-originals`.
+- 1 Storage object at that exact path.
+- 1 `document_copy_sightings` row linking copy, raw_item, source, job; `byte_outcome=stored`, `fetch_method=http`.
+- 1 `document_extractions` row: `extractor_version=unpdf@1.8.1`, `text_inline` set, `text_storage_path` null, `truncation_status` complete.
 
-## 3. Independent reference for the switch-off compatibility test
+Conditional:
+- Alternative variant: no extraction row; Parallel attempt recorded.
+- Fallback/blocked path: blocked raw_item + email as in section 6.
 
-### Reference
-A **frozen copy** of the code before 3a, taken from version control and used only in tests:
-- `src/lib/__legacy__/pdf-collect.pre3a.ts` = `pdf-collect.server.ts` at commit `d378197` (2026-10-24, last version before 3a).
-- `src/lib/__legacy__/blocked-items.pre3a.ts` = `blocked-items.server.ts` at its last commit before 2026-11-03 13:49. It is needed because 3a changed that file.
-- The only edit to the copies is that their imports point to each other. A header comment records the source commit. No production code imports them.
+Never created: legal documents, document versions, approvals, normalized_items (normalization is a separate manual step, not part of this run), text objects in Storage.
 
-### Harness
-Both versions (frozen and current, the current one with the switch off) run against the **same** mocks:
-- `fetch` (scripted by URL)
-- `unpdf` (a fake document whose text runs through the real `extractText`)
-- `parallel-fetch` and `webshare-fallback` (scripted)
-- `ops-alerts` (records each `sendCollectionFailureAlert` call)
-- a recording Supabase fake (every table, operation and row)
+## 8. Verification queries (read-only)
 
-What is compared, with ids and timestamps removed:
-- every `raw_items` insert: full row, including `raw_payload`, text, `content_hash`, `collector_version`, `item_status`
-- `collection_jobs` insert and update: status and counters `fetched/new/duplicate/failed`, plus the presence or absence of `run_params`
-- the order of engine calls: direct → Parallel → Webshare
-- `attempts` content
-- alert calls and their arguments
-- the return value of `runPdfCollection`, including `perTarget`
+- Q0 (before, R2-pre): counts of `raw_items`, `normalized_items`, `collection_jobs`, `document_copies`, `document_copy_sightings`, `document_extractions`, objects in `document-originals`; `max(created_at)` per table; status of the two old running jobs; list of cron jobs/paths.
+- Q1: test source row by id — `schedule_enabled=false`, `is_active=true`, `proxy_config IS NULL`.
+- Q2 (after): the new job by `source_id` — status, `error_text`, `run_params->'originals'`, `finished_at`.
+- Q3: copy by `file_sha256 = 'sha256:<known>'` — size, status, path; path equals `sha256/`+first 2 hex+`/`+hex.
+- Q4: Storage object at that path exists, size matches; object count = 1.
+- Q5: sighting and extraction join back to the same copy id, the new raw_item and the new job.
+- Q6: every row created since Q0 belongs to the test source/job (diff counts must equal section 7); rows existing at Q0 unchanged (same counts, no `updated_at` after run start outside the test ids); two old jobs unchanged.
+- Q7: independent hash check — owner downloads the object via a 300 s signed link (or compares with R1-a) and computes SHA-256.
 
-Scenarios:
-- S1 PDF ok
-- S2 PDF with no text layer → blocked + alert
-- S3 HTML ≥ 1000 chars
-- S4 app-shell HTML → Parallel
-- S5 403 → Parallel ok
-- S6 403 → Parallel empty, no proxy → blocked + alert
-- S7 403 → Parallel fails → Webshare ok
-- S8 403 → Parallel fails → Webshare fails → blocked
-- S9 404 (no retry, not blocked)
-- S10 raw insert duplicate (23505)
-- S11 blocked duplicate (no re-alert, **and no extra read**)
-- S12 several targets mixed (counters)
+## 9. Stop criteria (stop, set mode back, report; no retry)
 
-`mergePdfPages`: the reference is the frozen code's `extractPdfText` (real `unpdf` merge) under the same fake document. A guard test reads `node_modules/unpdf/package.json` and fails when the version is not `1.8.1`, with a message to re-check `mergePdfPages`. No new abstraction layer.
+- Worker memory error or crash; read/upload/verify/150 s timeout.
+- `storage_status` not `verified`, hash or size differs from known values, existing copy with the same hash but different size.
+- Any write outside section 7 (Q6 mismatch), any change to earlier records or the two old jobs.
+- A Parallel/Webshare/Apify call in the preferred variant (unplanned fallback), or more than 1 Parallel call in the alternative.
+- Any `run_params.originals` on a job not created by the R4 call, or any new `document_copies` row while the mode is meant to be off.
 
-## 4. Changes to the existing 49 tests
+## 10. Shutdown
 
-- All 49 stay.
-- `pdf-collect.server.test.ts`, test "flag off: identical legacy row": its hand-written expected object is **replaced** by the frozen-reference harness S1. The hand-written shape was written by me alongside the new code, so it is not independent.
-- `pdf-collect.server.test.ts`, test "flag on: same text and content_hash": the scenario now sets `ORIGINALS_INLINE_EXTRACT_MAX_BYTES` explicitly (otherwise X1 applies and no parsing happens).
-- `document-storage.server.test.ts`, size-limit tests: kept, renamed "storage limit" (they protect storage, not download memory). R1–R7 cover the download.
-- New tests: R1–R7, X1–X4, S1–S12, and the `unpdf` version guard (about 24).
+1. Owner deletes `ORIGINALS_STORAGE_MODE` and `ORIGINALS_INLINE_EXTRACT_MAX_BYTES`.
+2. Confirm: next job of any source has no `run_params.originals` (passive check; no run started for it).
+3. Optionally set the test source `is_active=false` (owner decision; it is a state change, not a deletion).
+4. Record and keep: source id, job id, raw_item id, copy id, sighting id, extraction id, Storage path, hash, size. Nothing deleted; append-only untouched.
 
-## 5. Files that would change (after approval)
+## Execution order (each step needs the owner's go)
 
-- `src/lib/document-storage.server.ts`: add `readBodyCapped` and `readInlineExtractCap`.
-- `src/lib/pdf-collect.server.ts`: in the enabled branch, capped read, inline cap, Parallel fallback per D1. The switch-off lines stay untouched.
-- New `src/lib/__legacy__/pdf-collect.pre3a.ts` and `src/lib/__legacy__/blocked-items.pre3a.ts` (test-only frozen copies).
-- New `src/lib/pdf-collect.compat.test.ts` (S1–S12, version guard).
-- `src/lib/document-storage.server.test.ts` and `src/lib/pdf-collect.server.test.ts`: as in section 4.
-- No new dependency. No schema, Storage or setting change.
+```text
+R1 obtain size/hash (R1-a or R1-b)  ->  R2 Q0 + create source + Q1
+R3 owner sets secrets               ->  R4 single manual call (M-A or M-B)
+R5 Q2-Q7                            ->  R6 stop-criteria review
+R7 shutdown (section 10)
+```
 
-## 6. Owner decisions in this review
-
-- D1: text path for PDFs not parsed inline — A (Parallel, recommended), B (blocked) or C (parse anyway).
-- D2: default inline cap when unset = 0 (no inline parsing in the enabled path) — confirm.
-- D3: a PDF over 52428800 with the switch on: the body is cancelled, so the switch-off result (parsing it) is impossible. It follows D1. Confirm that this visible difference is acceptable.
-
-## 7. Next, after approval of these fixes
-
-Targeted implementation and mock tests only. Then a separate decision on: confirming the deploy environment, a switched-off deploy, and controlled tests.
+Decisions needed: R1-a vs R1-b; preferred vs alternative variant; M-A vs M-B for the call.
