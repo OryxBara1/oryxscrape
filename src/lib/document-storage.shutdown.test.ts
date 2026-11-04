@@ -29,11 +29,12 @@ function trackedStream(chunks: Uint8Array[], opts: { hang?: boolean } = {}) {
   const s = { cancelled: false, pulled: 0, stream: null as unknown as ReadableStream<Uint8Array> };
   let i = 0;
   s.stream = new ReadableStream<Uint8Array>({
-    pull(c) {
+    pull(c): Promise<void> | undefined {
       s.pulled++;
       if (i < chunks.length) return void c.enqueue(chunks[i++]!);
       if (opts.hang) return new Promise<void>(() => undefined);
       c.close();
+      return undefined;
     },
     cancel() { s.cancelled = true; },
   }, { highWaterMark: 0 });
