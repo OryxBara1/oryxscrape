@@ -1,84 +1,54 @@
-# LDH discovery — fix provider references, initial sightings, neutral counts
+# Plan: minimal human triage for discovery candidates
 
-Status: PLAN ONLY. Nothing applied, published or called. Labels: [V] verified this session, [E] reported earlier, [N] not tested.
+Status: PLAN ONLY. Nothing runs until a separate written build order. [V] verified now, [E] reported earlier, [N] not tested.
 
-## 1. What blocks provider references today
-- [V] Code: `RE.providerSource = /^[A-Za-z0-9_.:-]{1,100}$/` (no `/`); `mapHit` nulls source and source_id together if either fails.
-- [V] DB CHECK `discovery_candidates_provider_source_check`: same regex, no `/`.
-- [V] DB CHECK `provider_source_id_check` already allows `/`.
-- [V] `key_provider_shape`: `key_provider = 'prov:'||provider||':'||lower(provider_source)||':'||provider_source_id`; does not restrict characters, so `/` passes once the source CHECK allows it.
-- [V] Unique partial index `discovery_candidates_key_provider_uq` (also on key_identifier, key_url). No change needed.
-- [V] Guard `discovery_candidates_guard`: provider_source/provider_source_id immutable after insert; no character rule. No change needed; the 7 existing rows stay NULL (cannot be filled, as decided).
-- [E] Real values in the 2026-11-06 response are unknown; "COUNTRY/name" is the documented OpenAPI form only.
+## 1. Current state (read from the real database)
+- 14 candidates, all `stage=lead`, `outcome=open`, `country_code=MT`, `needs_review=false` [V].
+- `outcome` allowed values: `open`, `out_of_scope`, `rejected`, `duplicate` [V].
+- A reason (`outcome_reason`, max 500 chars) is required by the database for `out_of_scope` and `rejected` [V]. `duplicate` requires `same_as_candidate_id`, which can't point to the candidate itself [V].
+- `needs_review=true` requires `review_note` (max 500 chars) [V]. `reviewed_by` and `reviewed_at` columns exist [V].
+- `stage` allowed values go from `lead` to `reviewed_copy`. No database rule limits stage moves [V].
+- Guard trigger `discovery_candidates_guard` [V]:
+  - Fixed after creation: provider, provider_source, provider_source_id, found_url/title/identifier, found_at, run_id, query_id, created_at.
+  - `outcome_history` can only be added to. Each outcome or reason change adds an entry with from/to/reason/user/time.
+  - Changes to `needs_review` / `review_note` are **not** recorded in history.
+- Access: staff can read, insert and update; nobody can delete [V]. Sightings: staff can read and insert, and existing rows can't be changed [V].
 
-Collision risks (noted, not fixed):
-- [V] `lower(provider_source)`: `FR/CNIL` and `fr/CNIL` with the same source_id give the same key_provider. Second insert hits the unique index, code re-looks up and records a sighting on the first candidate (provider stored as first received). Acceptable for one provider.
-- [V] `:` is allowed in both parts and is also the separator, so `a:b`+`c` and `a`+`b:c` collide. Pre-existing; smallest alternative if it ever matters: drop `:` from the source regex. Not done now.
+## 2. Transitions (as the database allows today)
+- open -> out_of_scope / rejected (reason required) [V].
+- out_of_scope / rejected -> open (reopen). The database allows this with no extra rule [V].
+- Any outcome -> any other outcome is also allowed by the database. Only the app would restrict it.
 
-## 2. Proposed migration (not applied)
-```sql
-ALTER TABLE public.discovery_candidates
-  DROP CONSTRAINT discovery_candidates_provider_source_check,
-  ADD CONSTRAINT discovery_candidates_provider_source_check
-    CHECK (provider_source ~ '^[A-Za-z0-9_.:/-]{1,100}$');
+## 3. Gaps (no migration proposed)
+- G1: there are no database transition rules. The slice enforces them in the server function: only open -> out_of_scope/rejected, and those two -> open with a mandatory reopen reason. Duplicate is not part of this slice.
+- G2: `needs_review` / `review_note` changes leave no history; only the last note is kept. This is acceptable for the first slice. Recording them would need a migration (not proposed now).
+- G3: when a candidate is reopened, `outcome_reason` is reused to hold the reopen reason. That reason is kept in history, but "open" then carries text, which is allowed. Stated as a limitation.
+- No schema change is needed for this scope.
 
-ALTER TABLE public.discovery_sightings
-  DROP CONSTRAINT discovery_sightings_matched_key_check,
-  ADD CONSTRAINT discovery_sightings_matched_key_check
-    CHECK (matched_key = ANY (ARRAY['initial','provider','identifier','url']));
-```
-- Impact: widens two CHECKs only; existing rows all still valid; no grants, RLS, indexes, triggers or data touched. [V for current definitions; N for apply]
-- `initial` is needed because the current CHECK [V] only allows provider/identifier/url, and an initial sighting is not a match.
-- Rollback (restore old CHECKs): only valid while no row has `/` in provider_source and no sighting has `matched_key='initial'`; since rows are never deleted, rollback after first use is not possible — instead revert code and leave the wider CHECK. [N]
-```sql
--- rollback, only if no dependent rows exist
-ALTER TABLE public.discovery_candidates DROP CONSTRAINT discovery_candidates_provider_source_check,
-  ADD CONSTRAINT discovery_candidates_provider_source_check CHECK (provider_source ~ '^[A-Za-z0-9_.:-]{1,100}$');
-ALTER TABLE public.discovery_sightings DROP CONSTRAINT discovery_sightings_matched_key_check,
-  ADD CONSTRAINT discovery_sightings_matched_key_check CHECK (matched_key = ANY (ARRAY['provider','identifier','url']));
-```
+## 4. Proposed files and changes
+- `src/lib/discovery-triage.ts` (new, pure): `validateTriage(current, action)` with the transition rules, a reason of 3–500 characters after trimming, and a note for needs-review.
+- `src/lib/discovery.functions.ts`:
+  - Extend `listDiscoveryCandidates` with stage, outcome and country filters.
+  - Add `getDiscoveryCandidate(id)`, which returns the candidate, its `outcome_history` and its sightings in time order.
+  - Add `triageDiscoveryCandidate({id, action, reason|note})`. It requires a signed-in user and an `is_staff()` check through the user's own database access. It reads the current row, runs `validateTriage`, and updates only `outcome`, `outcome_reason`, `needs_review`, `review_note`, `reviewed_by` and `reviewed_at`, with a guard on the expected current outcome to avoid races.
+- `src/routes/_authenticated/discovery.tsx`: filter selects and a clickable row that opens a detail panel. Reuses `DataTable`, `StatusBadge` and `GlowButton`.
+- The panel shows the found fields, the sightings, the history, and the actions: Reject, Out of scope, Needs review, Clear review, Reopen. The reason or note box is mandatory.
+- Untouched: the LDH client, the search, stage, collection, sources, schema and alerts.
 
-## 3. Code changes
-- `src/lib/ldh-discovery.server.ts`
-  - Source regex gains `/`, matching the DB. Values kept exactly as received (no trim/case change); key_provider keeps `lower()` to match the DB CHECK.
-  - After a successful insert of a new candidate, insert one sighting `matched_key:'initial'`, same run/query, `seen_url = found_url`. Counted separately from matches.
-  - Result gains `matched` (sightings on existing candidates) instead of `sighted`.
-- `src/routes/_authenticated/discovery.tsx`: banner text exactly "X results · Y new candidates · Z matches with existing candidates · U unusable · C conflicts".
-- `src/lib/ldh-discovery.server.test.ts`: new tests (section 5).
-- Not touched: schema beyond the 2 CHECKs, collection, storage, scheduler, existing rows.
+## 5. Risks
+- Two staff acting on the same candidate at once: handled by the expected-outcome guard. The second person sees a "changed, reload" message.
+- The reopen rule lives only in the app, so a direct database edit by staff could skip it (G1).
+- The 4 candidates with empty provider references are shown as they are and not fixed.
+- None of this has been tested in a real browser session [N].
 
-## 4. How dedup stays document-level (current `decideDedup`, unchanged) [V]
-- Each hit is compared on all keys it has; every candidate matched by any key is collected.
-- One candidate matched → sighting on it; key reported in order provider > identifier > url.
-- Two or more different candidates matched → conflict, nothing written for that hit.
-- Same URL, different source_id (two articles of one law): hit 2 has a new key_provider (matches nothing) and the same key_url (matches candidate A) → sighting on A via `url`. No new candidate. No key is added to A (keys are set at insert only).
-- key_provider matches nobody, key_url matches A → sighting on A (url decides).
-- key_provider matches A, key_url matches nobody → sighting on A (provider).
-- key_provider matches A, key_url matches B → conflict (existing rule).
-- Within one response: hit 1 inserted, hit 2 with same URL then finds it → match. Banner does not say whether a match was same-response or earlier.
-- Limit [N]: an article hit with a provider reference and no usable URL, for a law already stored by URL only, becomes a new candidate. Without granularity fields (not added now) this cannot be resolved; smallest alternative later: staff marks it `duplicate` with `same_as_candidate_id` (already in schema).
-
-## 5. Tests to add (mocks)
-1. Source `FR/CNIL` + id `X/1` is kept exactly; key_provider = `prov:ldh:fr/cnil:X/1`.
-2. Invalid source still nulls the pair (no half reference).
-3. New candidate → exactly one sighting `initial`, created=1, matched=0.
-4. Existing candidate matched by URL → one sighting `url`, no insert.
-5. Two article hits, same URL, different source_id, same response → 1 candidate, 1 `initial` + 1 `url` sighting.
-6. Provider matches A, URL matches B → conflict, no writes.
-7. Case-only source difference → unique violation path resolves to sighting on first candidate.
-8. Banner counts map to the new fields.
-- Existing 122 tests stay green; type check clean.
-
-## 6. Why the initial sighting disappeared [V partly]
-- None of the last 8 revisions of the plan file mention an initial sighting; it existed only in the first chat plan and was dropped when the plan was rewritten (revision before 2ac8e48). Implementation followed the revised plan. Not blocking.
-
-## 7. Order (published revision a3d0d73 must keep working)
-1. Apply migration first. Widened CHECKs accept everything a3d0d73 writes; a3d0d73 never writes `/` or `initial`. [V by reading constraints; N for apply]
-2. Merge code + run tests.
-3. Publish only on separate owner authorization.
-4. One real LDH search only on separate authorization.
-
-## Limits
-- Provider values of the 7 existing candidates stay unknown/NULL.
-- issuing_authority/found_identifier mapping not changed in this plan.
-- No granularity fields; article-level identity is not stored.
+## 6. Mock tests (`src/lib/discovery-triage.test.ts`)
+1. open -> rejected with a reason passes; an empty or whitespace reason fails.
+2. open -> out_of_scope with no reason fails.
+3. rejected -> open needs a reason; open -> open fails.
+4. Any change to `duplicate` or `stage` is refused.
+5. needs_review=true without a note fails; clearing it keeps the outcome.
+6. A reason over 500 characters is refused.
+7. The update only contains the allowed columns (no lead fields, no history).
+8. A non-staff caller is refused before any write.
+9. A mismatch on the expected outcome produces a conflict and no write.
+- The existing 128 tests stay green, and the type check stays clean.
