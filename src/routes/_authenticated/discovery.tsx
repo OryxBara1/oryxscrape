@@ -77,8 +77,8 @@ function DiscoveryScreen() {
             {last.httpStatus ? ` · HTTP ${last.httpStatus}` : ""}
           </p>
           <p>
-            {last.hitsReturned} returned · {last.created} new · {last.sighted} seen again · {last.unusable.length} unusable ·{" "}
-            {last.conflicts.length} conflicts
+            {last.hitsReturned} results · {last.created} new candidates · {last.matched} matches with existing candidates ·{" "}
+            {last.unusable.length} unusable · {last.conflicts.length} conflicts
           </p>
           <p>
             Local count: {last.quota.used24h}/{last.quota.limit24h} (24h) · {last.quota.used30d}/{last.quota.limit30d} (30 days).{" "}

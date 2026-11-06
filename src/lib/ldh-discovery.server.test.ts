@@ -218,3 +218,82 @@ describe("reservation and quota", () => {
     expect(r.errorCode).toBe(code);
   });
 });
+
+// Stateful mock: findByKeys sees candidates inserted earlier in the same run.
+function statefulStore(seed: ExistingCandidate[] = []) {
+  const { store, calls } = makeStore();
+  const db: ExistingCandidate[] = [...seed];
+  let n = 0;
+  store.findByKeys = vi.fn(async (k) =>
+    db.filter((c) => (k.provider && c.key_provider === k.provider) || (k.identifier && c.key_identifier === k.identifier) || (k.url && c.key_url === k.url)),
+  );
+  store.insertCandidate = vi.fn(async (row) => {
+    calls.push({ op: "insertCandidate", arg: row });
+    const id = `c${++n}`;
+    db.push({ id, key_provider: row.key_provider, key_identifier: row.key_identifier, key_url: row.key_url });
+    return { id };
+  });
+  return { store, calls, db };
+}
+const sightings = (calls: { op: string; arg: unknown }[]) =>
+  calls.filter((c) => c.op === "insertSighting").map((c) => c.arg as { candidate_id: string; matched_key: string; seen_url: string | null; run_id: string; query_id: string });
+
+describe("provider reference with '/'", () => {
+  it("keeps source and source_id exactly; key_provider lowercases source only", () => {
+    const m = mapHit(hit({ source: "FR/CNIL", source_id: "X/Art-1" }));
+    expect(m.ok).toBe(true);
+    if (m.ok) {
+      expect(m.row.provider_source).toBe("FR/CNIL");
+      expect(m.row.provider_source_id).toBe("X/Art-1");
+      expect(m.row.key_provider).toBe("prov:ldh:fr/cnil:X/Art-1");
+    }
+  });
+  it("invalid source still drops both halves", () => {
+    const m = mapHit(hit({ source: "FR/CNIL bad", source_id: "1" }));
+    expect(m.ok && [m.row.provider_source, m.row.provider_source_id, m.row.key_provider]).toEqual([null, null, null]);
+  });
+});
+
+describe("sightings and matches", () => {
+  const URL_A = "https://lex.gov/law/1";
+  it("new candidate gets exactly one 'initial' sighting with same run/query and found_url", async () => {
+    const { store, calls } = statefulStore();
+    const r = await runLdhSearchCore(input, { store, userId: "u", apiKey: SECRET, fetchImpl: okFetch([hit({ url: URL_A })]), now: NOW });
+    expect([r.created, r.matched]).toEqual([1, 0]);
+    expect(sightings(calls)).toEqual([
+      { candidate_id: "c1", run_id: "run1", query_id: "q1", provider: "ldh", matched_key: "initial", seen_url: URL_A },
+    ]);
+  });
+  it("two article hits, different source_id, same URL -> 1 candidate, 1 initial + 1 url sighting", async () => {
+    const { store, calls } = statefulStore();
+    const hits = [
+      hit({ source: "FR/CNIL", source_id: "law1/art1", url: URL_A, identifier: null }),
+      hit({ source: "FR/CNIL", source_id: "law1/art2", url: URL_A, identifier: null }),
+    ];
+    const r = await runLdhSearchCore(input, { store, userId: "u", apiKey: SECRET, fetchImpl: okFetch(hits), now: NOW });
+    expect(calls.filter((c) => c.op === "insertCandidate")).toHaveLength(1);
+    expect(sightings(calls).map((s) => [s.candidate_id, s.matched_key])).toEqual([["c1", "initial"], ["c1", "url"]]);
+    expect([r.created, r.matched, r.conflicts.length]).toEqual([1, 1, 0]);
+  });
+  it("match against a candidate from a previous run (no provider key stored) -> url sighting, no insert", async () => {
+    const { store, calls } = statefulStore([{ id: "old", key_provider: null, key_identifier: null, key_url: `url:${URL_A}` }]);
+    const r = await runLdhSearchCore(input, {
+      store, userId: "u", apiKey: SECRET, fetchImpl: okFetch([hit({ source: "FR/CNIL", source_id: "n/1", url: URL_A, identifier: null })]), now: NOW,
+    });
+    expect(calls.filter((c) => c.op === "insertCandidate")).toHaveLength(0);
+    expect(sightings(calls).map((s) => [s.candidate_id, s.matched_key])).toEqual([["old", "url"]]);
+    expect([r.created, r.matched]).toEqual([0, 1]);
+  });
+  it("provider key -> A and URL key -> B: conflict, no association, no writes", async () => {
+    const { store, calls } = statefulStore([
+      { id: "A", key_provider: "prov:ldh:fr/cnil:n/1", key_identifier: null, key_url: null },
+      { id: "B", key_provider: null, key_identifier: null, key_url: `url:${URL_A}` },
+    ]);
+    const r = await runLdhSearchCore(input, {
+      store, userId: "u", apiKey: SECRET, fetchImpl: okFetch([hit({ source: "FR/CNIL", source_id: "n/1", url: URL_A, identifier: null })]), now: NOW,
+    });
+    expect(r.conflicts).toEqual([{ index: 0, candidateIds: ["A", "B"] }]);
+    expect(calls.filter((c) => c.op === "insertCandidate" || c.op === "insertSighting")).toHaveLength(0);
+    expect([r.created, r.matched]).toEqual([0, 0]);
+  });
+});

@@ -26,7 +26,7 @@ const RE = {
   country: /^[A-Z]{2}$/,
   language: /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/,
   date: /^\d{4}-\d{2}-\d{2}$/,
-  providerSource: /^[A-Za-z0-9_.:-]{1,100}$/,
+  providerSource: /^[A-Za-z0-9_.:/-]{1,100}$/,
   providerSourceId: /^[A-Za-z0-9_.:/-]{1,200}$/,
   authority: /^[a-z0-9_.-]{2,60}$/,
 };
@@ -195,7 +195,7 @@ export type RunResult = {
   httpStatus?: number;
   hitsReturned: number;
   created: number;
-  sighted: number;
+  matched: number;
   unusable: { index: number; reason: string }[];
   conflicts: { index: number; candidateIds: string[] }[];
   quota: { used24h: number; used30d: number; limit24h: number; limit30d: number; localOnly: true };
@@ -226,7 +226,7 @@ export async function runLdhSearchCore(input: SearchInput, deps: Deps): Promise<
   const fetchImpl = deps.fetchImpl ?? fetch;
   const quota = { used24h: 0, used30d: 0, limit24h: QUOTA_24H, limit30d: QUOTA_30D, localOnly: true as const };
   const base = (runId: string | null, status: string, errorCode?: string): RunResult => ({
-    runId, status, errorCode, hitsReturned: 0, created: 0, sighted: 0, unusable: [], conflicts: [], quota, quotaNote: QUOTA_NOTE,
+    runId, status, errorCode, hitsReturned: 0, created: 0, matched: 0, unusable: [], conflicts: [], quota, quotaNote: QUOTA_NOTE,
   });
 
   if (!deps.apiKey) {
@@ -325,6 +325,14 @@ export async function runLdhSearchCore(input: SearchInput, deps: Deps): Promise<
     if (decision.kind === "new") {
       const ins = await store.insertCandidate({ ...row, run_id: runId, query_id: queryId });
       if ("id" in ins) {
+        await store.insertSighting({
+          candidate_id: ins.id,
+          run_id: runId,
+          query_id: queryId,
+          provider: LDH_PROVIDER,
+          matched_key: "initial",
+          seen_url: row.found_url,
+        });
         result.created++;
         continue;
       }
@@ -347,13 +355,13 @@ export async function runLdhSearchCore(input: SearchInput, deps: Deps): Promise<
       matched_key: decision.matchedKey,
       seen_url: row.found_url,
     });
-    result.sighted++;
+    result.matched++;
   }
 
   await store.finishQuery(queryId, { status: "succeeded", http_status: res.status, result_count: hits.length });
   const skipped = result.unusable.length + result.conflicts.length > 0;
   result.status = skipped ? "partial" : "succeeded";
   await finish(skipped ? { status: "partial", error_code: "hits_skipped" } : { status: "succeeded" });
-  log("ldh_search_done", { hits: hits.length, created: result.created, sighted: result.sighted });
+  log("ldh_search_done", { hits: hits.length, created: result.created, matched: result.matched });
   return result;
 }

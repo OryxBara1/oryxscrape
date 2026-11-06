@@ -148,3 +148,4 @@
 ## LDH discovery slice (2026-11-06)
 - [x] Manual staff-only LDH search → discovery tables → /discovery list (mock tests).
 - [ ] One real acceptance search — waits on owner adding LDH_API_KEY and separate authorization.
+- [x] LDH fix: provider_source '/', initial sightings, neutral banner (migration + code + mock tests, no publish)
