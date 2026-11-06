@@ -119,3 +119,6 @@ Full suite (104 existing) must stay green; typecheck clean.
 3. Expected writes: 1 discovery_runs, 1 discovery_queries (counted), ≤10 candidates and/or sightings.
 4. Verify via read queries: run status, query counted_against_budget=true, candidates contain no snippet/text, URLs as returned.
 5. Stop: any non-2xx, any stored provider text, any second call. No repeat automatically. Nothing deleted.
+
+## Implemented (2026-11-06)
+Built per this plan with mocked tests only (122/122 passing, 18 new). Local-only quota note shown in banner and run result. No publish, no real LDH call.

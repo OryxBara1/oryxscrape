@@ -8,6 +8,7 @@ import {
   Globe2,
   KeyRound,
   ScrollText,
+  Search,
   Share2,
   Upload,
   BookMarked,
@@ -32,6 +33,7 @@ const NAV: { to: string; label: string; icon: NavItemData["icon"] }[] = [
   { to: "/admin/legacy-audit", label: "Legacy audit", icon: ArchiveRestore },
   { to: "/exchange", label: "Exchange handoff", icon: Share2 },
   { to: "/lexicon", label: "Search lexicon", icon: BookMarked },
+  { to: "/discovery", label: "Discovery", icon: Search },
   { to: "/profiles", label: "Perfis (filhotes)", icon: Users },
   { to: "/keys", label: "Consumer keys", icon: KeyRound },
 ];

@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDiscoveryRouteImport } from './routes/_authenticated/discovery'
 import { Route as AuthenticatedExchangeRouteImport } from './routes/_authenticated/exchange'
 import { Route as AuthenticatedItemsRouteImport } from './routes/_authenticated/items'
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
@@ -63,6 +64,11 @@ const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDiscoveryRoute = AuthenticatedDiscoveryRouteImport.update({
+  id: '/discovery',
+  path: '/discovery',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedExchangeRoute = AuthenticatedExchangeRouteImport.update({
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/discovery': typeof AuthenticatedDiscoveryRoute
   '/exchange': typeof AuthenticatedExchangeRoute
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
@@ -245,6 +252,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/discovery': typeof AuthenticatedDiscoveryRoute
   '/exchange': typeof AuthenticatedExchangeRoute
   '/items': typeof AuthenticatedItemsRoute
   '/jobs': typeof AuthenticatedJobsRoute
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/discovery': typeof AuthenticatedDiscoveryRoute
   '/_authenticated/exchange': typeof AuthenticatedExchangeRoute
   '/_authenticated/items': typeof AuthenticatedItemsRoute
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/audit'
     | '/dashboard'
+    | '/discovery'
     | '/exchange'
     | '/items'
     | '/jobs'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/audit'
     | '/dashboard'
+    | '/discovery'
     | '/exchange'
     | '/items'
     | '/jobs'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/audit'
     | '/_authenticated/dashboard'
+    | '/_authenticated/discovery'
     | '/_authenticated/exchange'
     | '/_authenticated/items'
     | '/_authenticated/jobs'
@@ -462,6 +474,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/discovery': {
+      id: '/_authenticated/discovery'
+      path: '/discovery'
+      fullPath: '/discovery'
+      preLoaderRoute: typeof AuthenticatedDiscoveryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/exchange': {
@@ -652,6 +671,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDiscoveryRoute: typeof AuthenticatedDiscoveryRoute
   AuthenticatedExchangeRoute: typeof AuthenticatedExchangeRoute
   AuthenticatedItemsRoute: typeof AuthenticatedItemsRoute
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
@@ -667,6 +687,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDiscoveryRoute: AuthenticatedDiscoveryRoute,
   AuthenticatedExchangeRoute: AuthenticatedExchangeRoute,
   AuthenticatedItemsRoute: AuthenticatedItemsRoute,
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,

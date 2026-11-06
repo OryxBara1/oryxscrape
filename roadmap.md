@@ -144,3 +144,7 @@
 - [x] Caixa "Preserve original PDF — test" (staff + modo test), testes mock.
 - [ ] Publicar com storage off — aguarda autorização do dono.
 - [ ] Teste real único — aguarda autorização (orçamento Parallel indefinido).
+
+## LDH discovery slice (2026-11-06)
+- [x] Manual staff-only LDH search → discovery tables → /discovery list (mock tests).
+- [ ] One real acceptance search — waits on owner adding LDH_API_KEY and separate authorization.
