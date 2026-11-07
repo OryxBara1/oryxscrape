@@ -17,6 +17,15 @@ import {
   type TriageStore,
   type TriageResult,
 } from "./discovery-triage";
+import {
+  approveCore,
+  validateApproveInput,
+  validateWithdrawInput,
+  withdrawCore,
+  type ApprovalResult,
+  type ApprovalState,
+  type ApprovalStore,
+} from "./discovery-approval";
 
 // Untyped handle: only the columns used here; RLS applies as the signed-in user.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,7 +198,7 @@ export const listDiscoveryCandidates = createServerFn({ method: "GET" })
   });
 
 const CANDIDATE_DETAIL_COLS =
-  "id, provider, provider_source, provider_source_id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, stage, outcome, outcome_reason, outcome_history, needs_review, review_note, reviewed_by, reviewed_at, updated_at";
+  "id, provider, provider_source, provider_source_id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, stage, outcome, outcome_reason, outcome_history, needs_review, review_note, reviewed_by, reviewed_at, updated_at, confirmed_title, confirmed_identifier, confirmed_source_url, confidence";
 
 export const getDiscoveryCandidate = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -222,6 +231,7 @@ export type CandidateDetail = {
   language: S; doc_type_guess: S; stage: string; outcome: string; outcome_reason: S;
   outcome_history: { from: S; to: S; from_reason: S; to_reason: S; by: S; at: S }[];
   needs_review: boolean; review_note: S; reviewed_by: S; reviewed_at: S; updated_at: string;
+  confirmed_title: S; confirmed_identifier: S; confirmed_source_url: S; confidence: Record<string, string> | null;
 };
 type Sighting = { id: string; matched_key: string; seen_url: string | null; seen_at: string };
 
@@ -253,6 +263,50 @@ export function supabaseTriageStore(db: Db, supabase: SupabaseClient<Database>):
     },
   };
 }
+
+export function supabaseApprovalStore(db: Db, supabase: SupabaseClient<Database>): ApprovalStore {
+  return {
+    async isStaff() {
+      const { data, error } = await supabase.rpc("is_staff");
+      return !error && data === true;
+    },
+    async read(id) {
+      const { data, error } = await db
+        .from("discovery_candidates")
+        .select("id, outcome, stage, needs_review, updated_at, confidence")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) fail("approval_read", error);
+      return (data as ApprovalState | null) ?? null;
+    },
+    async update(id, guard, patch) {
+      const { data, error } = await db
+        .from("discovery_candidates")
+        .update(patch)
+        .eq("id", id)
+        .eq("outcome", guard.outcome)
+        .eq("stage", guard.stage)
+        .eq("updated_at", guard.updated_at)
+        .select("id");
+      if (error) fail("approval_update", error);
+      return (data ?? []).length;
+    },
+  };
+}
+
+export const approveDiscoveryCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => validateApproveInput(input))
+  .handler(async ({ data, context }): Promise<ApprovalResult> =>
+    approveCore(data, { store: supabaseApprovalStore(context.supabase as Db, context.supabase), userId: context.userId, now: () => new Date() }),
+  );
+
+export const withdrawDiscoveryApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => validateWithdrawInput(input))
+  .handler(async ({ data, context }): Promise<ApprovalResult> =>
+    withdrawCore(data, { store: supabaseApprovalStore(context.supabase as Db, context.supabase), userId: context.userId, now: () => new Date() }),
+  );
 
 export const triageDiscoveryCandidate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

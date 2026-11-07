@@ -154,3 +154,8 @@
 - [x] Minimal human triage on /discovery: filters, detail (sightings + outcome history), reject / out of scope / reopen with reason, needs-review flag with note (mock tests, no migration, no publish).
 - Limitation: needs_review/review_note keep only current state (no history). reviewed_by/reviewed_at set by app server, not protected by DB trigger. Reopen rules enforced in app only.
 - [ ] Browser acceptance as staff — waits on owner (agent has no staff session).
+
+## Approve for collection (2026-11-07)
+- [x] Single human approval (lead/identified/source_located -> approved_for_collection) with per-field verification; withdraw -> source_located (mock tests, no migration, no publish).
+- Limitation: no approval note or stage history; reviewed_by/at = last review action only; stage rules enforced in app only. Approval never creates a source or job.
+- [ ] Browser acceptance as staff + real DB check (RLS, trigger, confidence CHECK, concurrency) — waits on owner.

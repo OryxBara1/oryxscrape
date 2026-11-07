@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { GlowButton, StatusBadge, formatDate, inputClass } from "@/components/data-ui";
 import { getDiscoveryCandidate, triageDiscoveryCandidate } from "@/lib/discovery.functions";
 import type { TriageAction } from "@/lib/discovery-triage";
+import { ApprovalForm } from "@/components/discovery-approval-form";
 
 
 export function CandidatePanel({ id, onClose }: { id: string; onClose: () => void }) {
@@ -71,6 +72,8 @@ export function CandidatePanel({ id, onClose }: { id: string; onClose: () => voi
               <p key={i}>{formatDate(h.at ?? undefined)} · {h.from} → {h.to}{h.to_reason ? ` — ${h.to_reason}` : ""}</p>
             ))}
           </div>
+
+          <ApprovalForm key={c.updated_at} c={c} />
 
           <div className="space-y-2">
             <textarea className={inputClass} rows={2} maxLength={500} placeholder="Reason or note (required)" value={text} onChange={(e) => setText(e.target.value)} />
