@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { DataTable, GlowButton, ScreenHeader, StatusBadge, formatDate, inputClass } from "@/components/data-ui";
 import { listDiscoveryCandidates, runLdhSearch } from "@/lib/discovery.functions";
+import { CandidatePanel } from "@/components/discovery-candidate-panel";
 
 export const Route = createFileRoute("/_authenticated/discovery")({
   head: () => ({
@@ -28,7 +29,12 @@ function DiscoveryScreen() {
   const qc = useQueryClient();
   const list = useServerFn(listDiscoveryCandidates);
   const search = useServerFn(runLdhSearch);
-  const rows = useQuery({ queryKey: ["discovery-candidates"], queryFn: () => list() });
+  const [filters, setFilters] = useState({ stage: "", outcome: "", country: "" });
+  const [openId, setOpenId] = useState<string | null>(null);
+  const rows = useQuery({
+    queryKey: ["discovery-candidates", filters],
+    queryFn: () => list({ data: { stage: filters.stage || undefined, outcome: filters.outcome || undefined, country: filters.country || undefined } }),
+  });
   const [form, setForm] = useState({ q: "", namespace: "legislation", country: "", language: "", date_start: "", date_end: "" });
   const [last, setLast] = useState<RunResult | null>(null);
 
@@ -92,8 +98,23 @@ function DiscoveryScreen() {
         </div>
       )}
 
+      <div className="glass-panel grid gap-3 rounded-xl p-4 md:grid-cols-4">
+        <select aria-label="Stage filter" className={inputClass} value={filters.stage} onChange={(e) => setFilters({ ...filters, stage: e.target.value })}>
+          <option value="">All stages</option>
+          {["lead", "identified", "source_located", "approved_for_collection", "collected", "reviewed_copy"].map((v) => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <select aria-label="Outcome filter" className={inputClass} value={filters.outcome} onChange={(e) => setFilters({ ...filters, outcome: e.target.value })}>
+          <option value="">All outcomes</option>
+          {["open", "out_of_scope", "rejected", "duplicate"].map((v) => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <input aria-label="Country filter" className={inputClass} placeholder="Country (MT)" maxLength={2} value={filters.country}
+          onChange={(e) => setFilters({ ...filters, country: e.target.value.toUpperCase() })} />
+      </div>
+
+      {openId && <CandidatePanel id={openId} onClose={() => setOpenId(null)} />}
+
       <DataTable
-        headers={["Found", "Title", "Identifier", "Country / authority", "Lang / type", "Returned URL", "Confidence", "Seen", "Stage"]}
+        headers={["Found", "Title", "Identifier", "Country / authority", "Lang / type", "Returned URL", "Confidence", "Seen", "Stage", ""]}
         empty={!rows.isLoading && (rows.data?.rows ?? []).length === 0}
       >
         {(rows.data?.rows ?? []).map((r) => (
@@ -112,7 +133,8 @@ function DiscoveryScreen() {
             </td>
             <td className="px-4 py-3"><StatusBadge label={r.confidence} tone="warn" /></td>
             <td className="px-4 py-3">{r.sightings}</td>
-            <td className="px-4 py-3">{r.stage} · {r.outcome}</td>
+            <td className="px-4 py-3">{r.stage} · {r.outcome}{r.needs_review ? " · needs review" : ""}</td>
+            <td className="px-4 py-3"><button className="text-primary underline" onClick={() => setOpenId(r.id)}>Open</button></td>
           </tr>
         ))}
       </DataTable>

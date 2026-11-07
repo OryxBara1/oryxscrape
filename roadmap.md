@@ -149,3 +149,8 @@
 - [x] Manual staff-only LDH search → discovery tables → /discovery list (mock tests).
 - [ ] One real acceptance search — waits on owner adding LDH_API_KEY and separate authorization.
 - [x] LDH fix: provider_source '/', initial sightings, neutral banner (migration + code + mock tests, no publish)
+
+## Discovery triage (2026-11-07)
+- [x] Minimal human triage on /discovery: filters, detail (sightings + outcome history), reject / out of scope / reopen with reason, needs-review flag with note (mock tests, no migration, no publish).
+- Limitation: needs_review/review_note keep only current state (no history). reviewed_by/reviewed_at set by app server, not protected by DB trigger. Reopen rules enforced in app only.
+- [ ] Browser acceptance as staff — waits on owner (agent has no staff session).

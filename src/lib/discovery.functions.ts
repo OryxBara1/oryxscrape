@@ -10,6 +10,13 @@ import {
   validateSearchInput,
   type DiscoveryStore,
 } from "./ldh-discovery.server";
+import {
+  triageCore,
+  validateTriageInput,
+  type CandidateState,
+  type TriageStore,
+  type TriageResult,
+} from "./discovery-triage";
 
 // Untyped handle: only the columns used here; RLS applies as the signed-in user.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,19 +138,34 @@ export const runLdhSearch = createServerFn({ method: "POST" })
     });
   });
 
+type ListFilters = { stage?: string | undefined; outcome?: string | undefined; country?: string | undefined };
+const STAGES = ["lead", "identified", "source_located", "approved_for_collection", "collected", "reviewed_copy"];
+const OUTCOMES = ["open", "out_of_scope", "rejected", "duplicate"];
+
 export const listDiscoveryCandidates = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((input: unknown): ListFilters => {
+    const r = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+    const pick = (v: unknown, ok: (s: string) => boolean) => (typeof v === "string" && ok(v) ? v : undefined);
+    return {
+      stage: pick(r["stage"], (s) => STAGES.includes(s)),
+      outcome: pick(r["outcome"], (s) => OUTCOMES.includes(s)),
+      country: pick(r["country"], (s) => /^[A-Z]{2}$/.test(s)),
+    };
+  })
+  .handler(async ({ data: f, context }) => {
     await assertStaff(context.supabase);
     const db = context.supabase as Db;
-    const { data, error } = await db
+    let q = db
       .from("discovery_candidates")
       .select(
-        "id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, confidence, stage, outcome, provider, discovery_sightings(count)",
+        "id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, confidence, stage, outcome, needs_review, provider, discovery_sightings(count)",
       )
-      .eq("provider", LDH_PROVIDER)
-      .order("found_at", { ascending: false })
-      .limit(200);
+      .eq("provider", LDH_PROVIDER);
+    if (f.stage) q = q.eq("stage", f.stage);
+    if (f.outcome) q = q.eq("outcome", f.outcome);
+    if (f.country) q = q.eq("country_code", f.country);
+    const { data, error } = await q.order("found_at", { ascending: false }).limit(200);
     if (error) throw new Error("Could not load discovery candidates.");
     return {
       quotaNote: QUOTA_NOTE,
@@ -159,8 +181,86 @@ export const listDiscoveryCandidates = createServerFn({ method: "GET" })
         doc_type_guess: (r["doc_type_guess"] as string | null) ?? null,
         stage: r["stage"] as string,
         outcome: r["outcome"] as string,
+        needs_review: r["needs_review"] === true,
         confidence: Object.keys((r["confidence"] as Record<string, string>) ?? {}).length ? "hypothesis" : "—",
         sightings: ((r["discovery_sightings"] as { count: number }[] | null)?.[0]?.count ?? 0) as number,
       })),
     };
   });
+
+const CANDIDATE_DETAIL_COLS =
+  "id, provider, provider_source, provider_source_id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, stage, outcome, outcome_reason, outcome_history, needs_review, review_note, reviewed_by, reviewed_at, updated_at";
+
+export const getDiscoveryCandidate = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => {
+    const id = (input as { id?: unknown } | null)?.id;
+    if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Invalid candidate id.");
+    return { id };
+  })
+  .handler(async ({ data, context }) => {
+    await assertStaff(context.supabase);
+    const db = context.supabase as Db;
+    const { data: c, error } = await db.from("discovery_candidates").select(CANDIDATE_DETAIL_COLS).eq("id", data.id).maybeSingle();
+    if (error) throw new Error("Could not load candidate.");
+    // updated_at is returned exactly as the DB sent it; the browser passes it back unchanged as the compare token.
+    const candidate = (c ?? null) as CandidateDetail | null;
+    if (!candidate) return { candidate: null, sightings: [] as Sighting[] };
+    const { data: s, error: se } = await db
+      .from("discovery_sightings")
+      .select("id, matched_key, seen_url, seen_at")
+      .eq("candidate_id", data.id)
+      .order("seen_at", { ascending: true });
+    if (se) throw new Error("Could not load sightings.");
+    return { candidate, sightings: (s ?? []) as Sighting[] };
+  });
+
+type S = string | null;
+export type CandidateDetail = {
+  id: string; provider: string; provider_source: S; provider_source_id: S; found_at: string;
+  found_title: S; found_identifier: S; found_url: S; country_code: S; issuing_authority: S;
+  language: S; doc_type_guess: S; stage: string; outcome: string; outcome_reason: S;
+  outcome_history: { from: S; to: S; from_reason: S; to_reason: S; by: S; at: S }[];
+  needs_review: boolean; review_note: S; reviewed_by: S; reviewed_at: S; updated_at: string;
+};
+type Sighting = { id: string; matched_key: string; seen_url: string | null; seen_at: string };
+
+export function supabaseTriageStore(db: Db, supabase: SupabaseClient<Database>): TriageStore {
+  return {
+    async isStaff() {
+      const { data, error } = await supabase.rpc("is_staff");
+      return !error && data === true;
+    },
+    async read(id) {
+      const { data, error } = await db
+        .from("discovery_candidates")
+        .select("id, outcome, needs_review, updated_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) fail("triage_read", error);
+      return (data as CandidateState | null) ?? null;
+    },
+    async update(id, guard, patch) {
+      const { data, error } = await db
+        .from("discovery_candidates")
+        .update(patch)
+        .eq("id", id)
+        .eq("outcome", guard.outcome)
+        .eq("updated_at", guard.updated_at)
+        .select("id");
+      if (error) fail("triage_update", error);
+      return (data ?? []).length;
+    },
+  };
+}
+
+export const triageDiscoveryCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => validateTriageInput(input))
+  .handler(async ({ data, context }): Promise<TriageResult> =>
+    triageCore(data, {
+      store: supabaseTriageStore(context.supabase as Db, context.supabase),
+      userId: context.userId,
+      now: () => new Date(),
+    }),
+  );
