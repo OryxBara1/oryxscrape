@@ -168,3 +168,18 @@ describe("approval module isolation", () => {
     expect(src).not.toMatch(/createSource|startCollectionJob|fetch\(|ldh/i);
   });
 });
+
+describe("withdraw while a source is linked", () => {
+  it("refused at read time, no write", async () => {
+    const m = mockStore({ stage: "approved_for_collection", source_id: "22222222-2222-4222-8222-222222222222" });
+    expect(await withdrawCore(wdIn(), deps(m.store))).toMatchObject({ code: "invalid_transition" });
+    expect(m.store.update).not.toHaveBeenCalled();
+  });
+  it("UPDATE guard includes source_id IS NULL; zero rows = conflict, single attempt", async () => {
+    const m = mockStore({ stage: "approved_for_collection", source_id: null });
+    (m.store.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
+    expect(await withdrawCore(wdIn(), deps(m.store))).toMatchObject({ code: "conflict" });
+    expect(m.store.update).toHaveBeenCalledTimes(1);
+    expect((m.store.update as ReturnType<typeof vi.fn>).mock.calls[0]![1]).toMatchObject({ sourceIdNull: true });
+  });
+});

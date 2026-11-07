@@ -159,3 +159,9 @@
 - [x] Single human approval (lead/identified/source_located -> approved_for_collection) with per-field verification; withdraw -> source_located (mock tests, no migration, no publish).
 - Limitation: no approval note or stage history; reviewed_by/at = last review action only; stage rules enforced in app only. Approval never creates a source or job.
 - [ ] Browser acceptance as staff + real DB check (RLS, trigger, confidence CHECK, concurrency) — waits on owner.
+
+## Candidate -> source link, slice (a) (2026-11-07)
+- [x] Link existing compatible http source / create new http source (manual only) / unlink; withdraw blocked while linked (mock tests, no migration, no publish).
+- Limitation: create + link are two writes; an unlinked created source can remain (recovery by linking). Routing rule mirrors startCollectionJob (includes "transport.gov.mt"), not a hostname check.
+- [ ] Slices (b) start collection and (c) record result — not started.
+- [ ] Real DB check (sources insert RLS, 23505, FK, concurrency) + browser acceptance on Cap. 283 — waits on owner.

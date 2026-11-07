@@ -62,7 +62,7 @@ export function ApprovalForm({ c }: { c: CandidateDetail }) {
       </p>
       {c.stage === "approved_for_collection" ? (
         <GlowButton
-          disabled={wd.isPending}
+          disabled={wd.isPending || !!c.source_id}
           onClick={() => { if (window.confirm("Withdraw approval? The candidate goes back to 'source located'.")) wd.mutate(); }}
         >
           Withdraw approval

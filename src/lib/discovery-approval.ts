@@ -11,9 +11,12 @@ export const APPROVABLE_FROM = ["lead", "identified", "source_located"] as const
 export type ApprovalState = {
   id: string; outcome: string; stage: string; needs_review: boolean; updated_at: string;
   confidence: Record<string, unknown> | null;
+  /** Read for the withdraw rule (approval cannot be withdrawn while a source is linked). */
+  source_id?: string | null;
 };
 
-type Guard = { outcome: string; stage: string; updated_at: string };
+/** sourceIdNull: also require source_id IS NULL in the UPDATE (withdraw). */
+export type Guard = { outcome: string; stage: string; updated_at: string; sourceIdNull?: true };
 
 export type ApprovePatch = {
   stage: "approved_for_collection";
@@ -132,8 +135,9 @@ export async function withdrawCore(i: WithdrawInput, deps: Deps<ApprovalStore>):
   const cur = await load(deps.store, i);
   if ("ok" in cur) return cur;
   if (cur.stage !== "approved_for_collection") return { ok: false, code: "invalid_transition", message: "Only an approved candidate can be withdrawn." };
+  if (cur.source_id) return { ok: false, code: "invalid_transition", message: "Unlink the source before withdrawing approval." };
   const patch: WithdrawPatch = { stage: "source_located", reviewed_by: deps.userId, reviewed_at: deps.now().toISOString() };
-  const n = await deps.store.update(i.id, guardOf(i), patch);
+  const n = await deps.store.update(i.id, { ...guardOf(i), sourceIdNull: true }, patch);
   return n === 1 ? { ok: true } : CONFLICT;
 }
 

@@ -7,6 +7,7 @@ import { GlowButton, StatusBadge, formatDate, inputClass } from "@/components/da
 import { getDiscoveryCandidate, triageDiscoveryCandidate } from "@/lib/discovery.functions";
 import type { TriageAction } from "@/lib/discovery-triage";
 import { ApprovalForm } from "@/components/discovery-approval-form";
+import { SourceLinkPanel } from "@/components/discovery-source-link";
 
 
 export function CandidatePanel({ id, onClose }: { id: string; onClose: () => void }) {
@@ -74,6 +75,7 @@ export function CandidatePanel({ id, onClose }: { id: string; onClose: () => voi
           </div>
 
           <ApprovalForm key={c.updated_at} c={c} />
+          <SourceLinkPanel key={`src-${c.updated_at}`} c={c} />
 
           <div className="space-y-2">
             <textarea className={inputClass} rows={2} maxLength={500} placeholder="Reason or note (required)" value={text} onChange={(e) => setText(e.target.value)} />

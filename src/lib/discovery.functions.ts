@@ -26,6 +26,19 @@ import {
   type ApprovalState,
   type ApprovalStore,
 } from "./discovery-approval";
+import {
+  createAndLinkCore,
+  linkCore,
+  listCompatibleCore,
+  unlinkCore,
+  validateCreateInput,
+  validateLinkInput,
+  validateUnlinkInput,
+  type LinkCandidate,
+  type LinkResult,
+  type LinkStore,
+  type SourceRow,
+} from "./discovery-source-link";
 
 // Untyped handle: only the columns used here; RLS applies as the signed-in user.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -198,7 +211,7 @@ export const listDiscoveryCandidates = createServerFn({ method: "GET" })
   });
 
 const CANDIDATE_DETAIL_COLS =
-  "id, provider, provider_source, provider_source_id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, stage, outcome, outcome_reason, outcome_history, needs_review, review_note, reviewed_by, reviewed_at, updated_at, confirmed_title, confirmed_identifier, confirmed_source_url, confidence";
+  "id, provider, provider_source, provider_source_id, found_at, found_title, found_identifier, found_url, country_code, issuing_authority, language, doc_type_guess, stage, outcome, outcome_reason, outcome_history, needs_review, review_note, reviewed_by, reviewed_at, updated_at, confirmed_title, confirmed_identifier, confirmed_source_url, confidence, source_id, collection_job_id, raw_item_id, retrieval_state";
 
 export const getDiscoveryCandidate = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -232,6 +245,7 @@ export type CandidateDetail = {
   outcome_history: { from: S; to: S; from_reason: S; to_reason: S; by: S; at: S }[];
   needs_review: boolean; review_note: S; reviewed_by: S; reviewed_at: S; updated_at: string;
   confirmed_title: S; confirmed_identifier: S; confirmed_source_url: S; confidence: Record<string, string> | null;
+  source_id: S; collection_job_id: S; raw_item_id: S; retrieval_state: string;
 };
 type Sighting = { id: string; matched_key: string; seen_url: string | null; seen_at: string };
 
@@ -273,21 +287,22 @@ export function supabaseApprovalStore(db: Db, supabase: SupabaseClient<Database>
     async read(id) {
       const { data, error } = await db
         .from("discovery_candidates")
-        .select("id, outcome, stage, needs_review, updated_at, confidence")
+        .select("id, outcome, stage, needs_review, updated_at, confidence, source_id")
         .eq("id", id)
         .maybeSingle();
       if (error) fail("approval_read", error);
       return (data as ApprovalState | null) ?? null;
     },
     async update(id, guard, patch) {
-      const { data, error } = await db
+      let q = db
         .from("discovery_candidates")
         .update(patch)
         .eq("id", id)
         .eq("outcome", guard.outcome)
         .eq("stage", guard.stage)
-        .eq("updated_at", guard.updated_at)
-        .select("id");
+        .eq("updated_at", guard.updated_at);
+      if (guard.sourceIdNull) q = q.is("source_id", null);
+      const { data, error } = await q.select("id");
       if (error) fail("approval_update", error);
       return (data ?? []).length;
     },
@@ -318,3 +333,86 @@ export const triageDiscoveryCandidate = createServerFn({ method: "POST" })
       now: () => new Date(),
     }),
   );
+
+// ---------- Slice (a): source link (no collection) ----------
+const SOURCE_COLS =
+  "id, name, domain, start_url, collection_method, is_active, schedule_enabled, is_official_domain, is_primary_document, traceability_level, institution_class, tos_status, robots_status";
+
+export function supabaseLinkStore(db: Db, supabase: SupabaseClient<Database>): LinkStore {
+  return {
+    async isStaff() {
+      const { data, error } = await supabase.rpc("is_staff");
+      return !error && data === true;
+    },
+    async readCandidate(id) {
+      const { data, error } = await db
+        .from("discovery_candidates")
+        .select("id, stage, outcome, needs_review, updated_at, source_id, collection_job_id, raw_item_id, retrieval_state, confirmed_source_url")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) fail("link_read", error);
+      return (data as LinkCandidate | null) ?? null;
+    },
+    async readSource(id) {
+      const { data, error } = await db.from("sources").select(SOURCE_COLS).eq("id", id).maybeSingle();
+      if (error) fail("link_source_read", error);
+      return (data as SourceRow | null) ?? null;
+    },
+    async listSources() {
+      const { data, error } = await db.from("sources").select(SOURCE_COLS).order("name");
+      if (error) fail("link_source_list", error);
+      return (data ?? []) as SourceRow[];
+    },
+    async findSource(domain, startUrl) {
+      const { data, error } = await db.from("sources").select(SOURCE_COLS).eq("domain", domain).eq("start_url", startUrl).maybeSingle();
+      if (error) fail("link_source_find", error);
+      return (data as SourceRow | null) ?? null;
+    },
+    async insertSource(p) {
+      const { data, error } = await db.from("sources").insert(p).select("id").single();
+      if (error?.code === "23505") return "duplicate";
+      if (error || !data) fail("link_source_insert", error);
+      return { id: data.id as string };
+    },
+    async updateCandidate(id, g, patch) {
+      let q = db
+        .from("discovery_candidates")
+        .update(patch)
+        .eq("id", id)
+        .eq("updated_at", g.updated_at)
+        .eq("stage", g.stage)
+        .eq("outcome", g.outcome)
+        .eq("needs_review", g.needs_review);
+      q = g.source_id === null ? q.is("source_id", null) : q.eq("source_id", g.source_id);
+      if (g.noJobNoRawNone) q = q.is("collection_job_id", null).is("raw_item_id", null).eq("retrieval_state", "none");
+      const { data, error } = await q.select("id");
+      if (error) fail("link_update", error);
+      return (data ?? []).length;
+    },
+  };
+}
+
+const linkDeps = (context: { supabase: SupabaseClient<Database>; userId: string }) => ({
+  store: supabaseLinkStore(context.supabase as Db, context.supabase),
+  userId: context.userId,
+  now: () => new Date(),
+});
+
+export const listCompatibleSources = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => listCompatibleCore(linkDeps(context)));
+
+export const linkCandidateSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => validateLinkInput(input))
+  .handler(async ({ data, context }): Promise<LinkResult> => linkCore(data, linkDeps(context)));
+
+export const createSourceForCandidate = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => validateCreateInput(input))
+  .handler(async ({ data, context }): Promise<LinkResult> => createAndLinkCore(data, linkDeps(context)));
+
+export const unlinkCandidateSource = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => validateUnlinkInput(input))
+  .handler(async ({ data, context }): Promise<LinkResult> => unlinkCore(data, linkDeps(context)));
