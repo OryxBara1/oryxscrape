@@ -1,54 +1,47 @@
-# Plan: minimal human triage for discovery candidates
+# Plan — "Approve for collection" (human decision only)
 
-Status: PLAN ONLY. Nothing runs until a separate written build order. [V] verified now, [E] reported earlier, [N] not tested.
+Labels: [V] verified this turn from migrations/code, [E] reported earlier, [N] not tested.
 
-## 1. Current state (read from the real database)
-- 14 candidates, all `stage=lead`, `outcome=open`, `country_code=MT`, `needs_review=false` [V].
-- `outcome` allowed values: `open`, `out_of_scope`, `rejected`, `duplicate` [V].
-- A reason (`outcome_reason`, max 500 chars) is required by the database for `out_of_scope` and `rejected` [V]. `duplicate` requires `same_as_candidate_id`, which can't point to the candidate itself [V].
-- `needs_review=true` requires `review_note` (max 500 chars) [V]. `reviewed_by` and `reviewed_at` columns exist [V].
-- `stage` allowed values go from `lead` to `reviewed_copy`. No database rule limits stage moves [V].
-- Guard trigger `discovery_candidates_guard` [V]:
-  - Fixed after creation: provider, provider_source, provider_source_id, found_url/title/identifier, found_at, run_id, query_id, created_at.
-  - `outcome_history` can only be added to. Each outcome or reason change adds an entry with from/to/reason/user/time.
-  - Changes to `needs_review` / `review_note` are **not** recorded in history.
-- Access: staff can read, insert and update; nobody can delete [V]. Sightings: staff can read and insert, and existing rows can't be changed [V].
+## 1. What `approved_for_collection` means today
+- [V] It is only one allowed value of `discovery_candidates.stage` (CHECK: lead, identified, source_located, approved_for_collection, collected, reviewed_copy). Nothing in the DB reacts to it: no trigger, function or job reads it.
+- Should mean: "a staff member decided this lead is worth fetching later." It must NOT imply: a source exists, a job was created or run, the document is genuine/trusted, the provider values are correct, or anything is published or exposed.
 
-## 2. Transitions (as the database allows today)
-- open -> out_of_scope / rejected (reason required) [V].
-- out_of_scope / rejected -> open (reopen). The database allows this with no extra rule [V].
-- Any outcome -> any other outcome is also allowed by the database. Only the app would restrict it.
+## 2. Transitions
+- [V] DB enforces: stage value list; `prefilled_stages` subset of the same list; lead fields immutable; outcome history append-only (written by the guard trigger). The guard trigger does NOT check stage order and does NOT record stage changes in history.
+- [V] Today the app never changes stage (triage excludes it). All 14 candidates are `lead/open` [E].
+- Proposed, app-enforced only: `lead -> identified -> source_located -> approved_for_collection`, plus `approved_for_collection -> source_located` (withdraw approval, reason required). No skipping, no moves into `collected`/`reviewed_copy` (those belong to the later collection step).
 
-## 3. Gaps (no migration proposed)
-- G1: there are no database transition rules. The slice enforces them in the server function: only open -> out_of_scope/rejected, and those two -> open with a mandatory reopen reason. Duplicate is not part of this slice.
-- G2: `needs_review` / `review_note` changes leave no history; only the last note is kept. This is acceptable for the first slice. Recording them would need a migration (not proposed now).
-- G3: when a candidate is reopened, `outcome_reason` is reused to hold the reopen reason. That reason is kept in history, but "open" then carries text, which is allowed. Stated as a limitation.
-- No schema change is needed for this scope.
+## 3. Minimum preconditions to approve
+- outcome = `open`; `needs_review` = false; stage = `source_located`.
+- `identified` requires `confirmed_title` or `confirmed_identifier` (3-500 / <=300 chars).
+- `source_located` requires `confirmed_source_url` (https, exact as typed, no rewriting, <=4000).
+- Approval requires a reason/note (3-500 chars).
+- New UI fields: inputs for `confirmed_title`, `confirmed_identifier`, `confirmed_source_url` (typed by the human; never copied from provider text), stage buttons, approval note. Columns already exist [V].
+- `confidence` per field (hypothesis/confirmed): set to `confirmed` only for fields the human typed. Optional; can be deferred.
 
-## 4. Proposed files and changes
-- `src/lib/discovery-triage.ts` (new, pure): `validateTriage(current, action)` with the transition rules, a reason of 3–500 characters after trimming, and a note for needs-review.
-- `src/lib/discovery.functions.ts`:
-  - Extend `listDiscoveryCandidates` with stage, outcome and country filters.
-  - Add `getDiscoveryCandidate(id)`, which returns the candidate, its `outcome_history` and its sightings in time order.
-  - Add `triageDiscoveryCandidate({id, action, reason|note})`. It requires a signed-in user and an `is_staff()` check through the user's own database access. It reads the current row, runs `validateTriage`, and updates only `outcome`, `outcome_reason`, `needs_review`, `review_note`, `reviewed_by` and `reviewed_at`, with a guard on the expected current outcome to avoid races.
-- `src/routes/_authenticated/discovery.tsx`: filter selects and a clickable row that opens a detail panel. Reuses `DataTable`, `StatusBadge` and `GlowButton`.
-- The panel shows the found fields, the sightings, the history, and the actions: Reject, Out of scope, Needs review, Clear review, Reopen. The reason or note box is mandatory.
-- Untouched: the LDH client, the search, stage, collection, sources, schema and alerts.
+## 4. Boundary to collection (not designed now)
+- Later, separate step: a human picks an approved candidate, then uses the EXISTING `createSource` (sources.functions.ts) and `startCollectionJob` (collection.functions.ts) flows. Only then would `source_id` / `collection_job_id` / `raw_item_id` be filled. Approval writes none of these, and `retrieval_state` stays `none`.
 
-## 5. Risks
-- Two staff acting on the same candidate at once: handled by the expected-outcome guard. The second person sees a "changed, reload" message.
-- The reopen rule lives only in the app, so a direct database edit by staff could skip it (G1).
-- The 4 candidates with empty provider references are shown as they are and not fixed.
-- None of this has been tested in a real browser session [N].
+## 5. Schema gaps (no migration proposed)
+- G1: stage changes have no history (trigger only logs outcome). Workaround without migration: store the approval note in `review_note`? Rejected — that conflicts with needs_review meaning. Choice: keep current state only, record limitation (same as accepted G2). If the owner wants stage history, exact SQL would be presented separately before any change.
+- G2: no column for approved_by/approved_at; reuse `reviewed_by`/`reviewed_at` (server-set). Limitation: these show the last human action, not specifically the approval.
+- G3: where to keep the approval note: reuse `outcome_reason`? No — only valid with non-open outcome semantics. Therefore approval note is NOT persisted unless G1 is resolved. Decision needed from owner: (a) no note stored, or (b) a migration adding stage history (SQL shown first).
+- No gap blocks a note-free approval.
 
-## 6. Mock tests (`src/lib/discovery-triage.test.ts`)
-1. open -> rejected with a reason passes; an empty or whitespace reason fails.
-2. open -> out_of_scope with no reason fails.
-3. rejected -> open needs a reason; open -> open fails.
-4. Any change to `duplicate` or `stage` is refused.
-5. needs_review=true without a note fails; clearing it keeps the outcome.
-6. A reason over 500 characters is refused.
-7. The update only contains the allowed columns (no lead fields, no history).
-8. A non-staff caller is refused before any write.
-9. A mismatch on the expected outcome produces a conflict and no write.
-- The existing 128 tests stay green, and the type check stays clean.
+## 6. Files, risks, tests
+- `src/lib/discovery-triage.ts`: add actions `confirm_fields`, `mark_identified`, `mark_source_located`, `approve_for_collection`, `withdraw_approval` with validation and explicit patches (only stage, confirmed_*, confidence, reviewed_by, reviewed_at).
+- `src/lib/discovery.functions.ts`: server functions reuse staff check + user's own client; select add stage/confirmed_*.
+- `src/components/discovery-candidate-panel.tsx`: fields + buttons; copy states "Approval does not create a source or start collection."
+- Concurrency: UPDATE ... where id, updated_at = original string, outcome = expected, stage = expected; zero rows = conflict, no retry; reviewer from `context.userId`, time from server.
+- Mock tests: each allowed/forbidden transition; preconditions (needs_review, non-open, missing confirmed fields, bad URL); stale stage/outcome/updated_at gives conflict with no write; browser reviewer ignored; patch never contains source_id/collection_job_id/raw_item_id/retrieval_state/lead fields; no call to createSource/startCollectionJob/LDH.
+- Risks: stage rules are app-only — direct DB writes by staff can skip stages; reviewed_by overwritten by later actions.
+- Not proven without real DB: RLS behaviour, trigger interaction, real concurrency.
+
+## 7. Project constraints check
+- No auto trust promotion: approval changes only stage. OK.
+- LDH metadata/links only: confirmed fields are human-typed; no provider text stored. OK.
+- No sharing DB/schema/credentials with consumer apps: nothing exposed; candidates are not in the public feed. OK.
+- No rule broken by this plan.
+
+## Decision needed
+G3: approval with no stored note (no migration), or stage-history migration (SQL first).
