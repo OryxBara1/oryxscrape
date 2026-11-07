@@ -1,47 +1,65 @@
-# Plan — "Approve for collection" (human decision only)
+# Plan (revised) — "Approve for collection", human decision only
 
-Labels: [V] verified this turn from migrations/code, [E] reported earlier, [N] not tested.
+Replaces the previous approval plan (a26482e). Labels: [V] verified this turn, [E] reported earlier, [N] not tested. Nothing here has been implemented.
 
-## 1. What `approved_for_collection` means today
-- [V] It is only one allowed value of `discovery_candidates.stage` (CHECK: lead, identified, source_located, approved_for_collection, collected, reviewed_copy). Nothing in the DB reacts to it: no trigger, function or job reads it.
-- Should mean: "a staff member decided this lead is worth fetching later." It must NOT imply: a source exists, a job was created or run, the document is genuine/trusted, the provider values are correct, or anything is published or exposed.
+## 1. Search results and classification [V]
+Repo-wide search (src, excluding generated types and migrations) for `discovery_candidates`, `approved_for_collection`, `source_located`, `collection_job_id`:
+- `src/lib/discovery.functions.ts:109,116` — LDH search lookup/insert of candidates. Operational, staff-only (`requireSupabaseAuth` + `assertStaff` via `is_staff`). Does not read or set stage beyond default `lead`.
+- `src/lib/discovery.functions.ts:142,160` — stage list used as a list filter. Display.
+- `src/lib/discovery.functions.ts:204,236,245` — detail read and triage update (staff-only, user's own client). Operational, does not touch stage.
+- `src/routes/_authenticated/discovery.tsx:104` — stage filter dropdown. Display.
+- `src/lib/document-storage.server.ts:449` — `collection_job_id` on document copy sightings, not candidates. Unrelated.
+- `src/integrations/supabase/types.ts` — generated types. Type.
+- Tests: `discovery-triage.test.ts`, `ldh-discovery.server.test.ts`. Test.
 
-## 2. Transitions
-- [V] DB enforces: stage value list; `prefilled_stages` subset of the same list; lead fields immutable; outcome history append-only (written by the guard trigger). The guard trigger does NOT check stage order and does NOT record stage changes in history.
-- [V] Today the app never changes stage (triage excludes it). All 14 candidates are `lead/open` [E].
-- Proposed, app-enforced only: `lead -> identified -> source_located -> approved_for_collection`, plus `approved_for_collection -> source_located` (withdraw approval, reason required). No skipping, no moves into `collected`/`reviewed_copy` (those belong to the later collection step).
+No real conflicts: nothing reacts to stage, nothing links candidates to `source_id`/`collection_job_id` in code, no server route under `src/routes/api` exposes candidates, and the public feed (`api_list_items`) reads only `normalized_items`. Candidate RLS is staff-only [E, Phase 1A].
 
-## 3. Minimum preconditions to approve
-- outcome = `open`; `needs_review` = false; stage = `source_located`.
-- `identified` requires `confirmed_title` or `confirmed_identifier` (3-500 / <=300 chars).
-- `source_located` requires `confirmed_source_url` (https, exact as typed, no rewriting, <=4000).
-- Approval requires a reason/note (3-500 chars).
-- New UI fields: inputs for `confirmed_title`, `confirmed_identifier`, `confirmed_source_url` (typed by the human; never copied from provider text), stage buttons, approval note. Columns already exist [V].
-- `confidence` per field (hypothesis/confirmed): set to `confirmed` only for fields the human typed. Optional; can be deferred.
+## 2. Final transitions (app-enforced; DB only checks the stage value list)
+- `lead | identified | source_located -> approved_for_collection` in ONE guarded update, after the server validates all intermediate requirements. No existing rule forbids skipping: the guard trigger does not inspect stage [V].
+- `approved_for_collection -> source_located` (withdraw): explicit confirmation only, no reason.
+- Nothing else in this slice (no moves to `collected`/`reviewed_copy`, no save of `identified`/`source_located` alone).
 
-## 4. Boundary to collection (not designed now)
-- Later, separate step: a human picks an approved candidate, then uses the EXISTING `createSource` (sources.functions.ts) and `startCollectionJob` (collection.functions.ts) flows. Only then would `source_id` / `collection_job_id` / `raw_item_id` be filled. Approval writes none of these, and `retrieval_state` stays `none`.
+## 3. Preconditions to approve (checked on the server against the current row)
+- outcome = `open`, needs_review = false.
+- confirmed title OR confirmed identifier, and confirmed source URL (https, kept exactly as given, no rewriting; length limits from existing CHECKs).
+- "Confirmed" = the human pressed the explicit confirm control for that field after checking the source. Opening or saving the form never confirms anything.
 
-## 5. Schema gaps (no migration proposed)
-- G1: stage changes have no history (trigger only logs outcome). Workaround without migration: store the approval note in `review_note`? Rejected — that conflicts with needs_review meaning. Choice: keep current state only, record limitation (same as accepted G2). If the owner wants stage history, exact SQL would be presented separately before any change.
-- G2: no column for approved_by/approved_at; reuse `reviewed_by`/`reviewed_at` (server-set). Limitation: these show the last human action, not specifically the approval.
-- G3: where to keep the approval note: reuse `outcome_reason`? No — only valid with non-open outcome semantics. Therefore approval note is NOT persisted unless G1 is resolved. Decision needed from owner: (a) no note stored, or (b) a migration adding stage history (SQL shown first).
-- No gap blocks a note-free approval.
+## 4. Form behaviour
+- Fields pre-filled as an editable PROPOSAL from existing candidate values (`confirmed_*` if set, else `found_title` / `found_identifier` / `found_url`). No retyping required.
+- Each field shows "suggested by provider" or "verified by you". Editing a value resets its confirmation in the form.
+- `confidence`: only keys `title`, `identifier`, `url` change, and only to `confirmed` when explicitly confirmed; all other keys are kept exactly.
 
-## 6. Files, risks, tests
-- `src/lib/discovery-triage.ts`: add actions `confirm_fields`, `mark_identified`, `mark_source_located`, `approve_for_collection`, `withdraw_approval` with validation and explicit patches (only stage, confirmed_*, confidence, reviewed_by, reviewed_at).
-- `src/lib/discovery.functions.ts`: server functions reuse staff check + user's own client; select add stage/confirmed_*.
-- `src/components/discovery-candidate-panel.tsx`: fields + buttons; copy states "Approval does not create a source or start collection."
-- Concurrency: UPDATE ... where id, updated_at = original string, outcome = expected, stage = expected; zero rows = conflict, no retry; reviewer from `context.userId`, time from server.
-- Mock tests: each allowed/forbidden transition; preconditions (needs_review, non-open, missing confirmed fields, bad URL); stale stage/outcome/updated_at gives conflict with no write; browser reviewer ignored; patch never contains source_id/collection_job_id/raw_item_id/retrieval_state/lead fields; no call to createSource/startCollectionJob/LDH.
-- Risks: stage rules are app-only — direct DB writes by staff can skip stages; reviewed_by overwritten by later actions.
-- Not proven without real DB: RLS behaviour, trigger interaction, real concurrency.
+## 5. Exact fields written
+- Approve: `stage`, `confirmed_title`, `confirmed_identifier`, `confirmed_source_url`, `confidence`, `reviewed_by`, `reviewed_at`.
+- Withdraw: `stage`, `reviewed_by`, `reviewed_at`.
+- Guard: `id`, exact original `updated_at` string, expected `outcome`, expected `stage`. Zero rows = not applied, conflict message, no retry.
+- `reviewed_by` from `context.userId`, `reviewed_at` from server clock; browser values ignored. User's own client, no service role.
+- Never written: `source_id`, `collection_job_id`, `raw_item_id`, `retrieval_state`, lead fields, keys, `outcome*`, `needs_review`, `review_note`, `same_as_candidate_id`.
+- No approval/withdrawal note stored. No migration.
 
-## 7. Project constraints check
-- No auto trust promotion: approval changes only stage. OK.
-- LDH metadata/links only: confirmed fields are human-typed; no provider text stored. OK.
-- No sharing DB/schema/credentials with consumer apps: nothing exposed; candidates are not in the public feed. OK.
-- No rule broken by this plan.
+## 6. Files to change
+- `src/lib/discovery-triage.ts` — `approve` / `withdraw` validation, precondition check, patch builder, merged `confidence`.
+- `src/lib/discovery.functions.ts` — two staff-only server functions; detail select adds `confirmed_*`, `confidence`.
+- `src/components/discovery-candidate-panel.tsx` — proposal fields, confirm controls, Approve and Withdraw (with confirm dialog); copy: "Approval does not create a source or start collection. Reviewed by/at shows the last review action only."
+- `src/lib/discovery-triage.test.ts` — new mock tests.
+- `roadmap.md` — limitations.
 
-## Decision needed
-G3: approval with no stored note (no migration), or stage-history migration (SQL first).
+## 7. Mock tests
+- Approve from lead with all fields confirmed -> single update to `approved_for_collection`.
+- Refused: outcome not open; needs_review true; no confirmed title/identifier; URL not confirmed or not https; unconfirmed edited value.
+- Saving or opening never sets `confirmed`; other confidence keys preserved.
+- Stale `updated_at`, outcome or stage -> conflict, no write, no retry.
+- Browser-supplied reviewer/time ignored.
+- Patch keys exactly the allowed list; no createSource / startCollectionJob / LDH call.
+- Withdraw only from `approved_for_collection`; non-staff refused before any write; existing 141 tests stay green.
+
+## 8. Risks and limitations
+- Stage order and preconditions live in the app only; a direct DB write by staff could skip them.
+- No history of approval/withdrawal; `reviewed_by/at` are overwritten by later actions.
+- Approval says nothing about authenticity; trust is unchanged.
+
+## 9. Not proven without real DB tests
+RLS on the update, interaction with the guard trigger and CHECKs, real concurrency between two tabs, `confidence` CHECK acceptance of the merged object.
+
+## 10. Project constraints
+No trust promotion, no provider text stored (only existing metadata/links), nothing shared with consumer apps. No rule broken.
